@@ -129,19 +129,365 @@ const INVESTMENT_ACTIONS = {
   ]
 };
 
-// Dify API placeholder
+// Onboarding category definitions
+const ONBOARDING_CATEGORIES = [
+  { id: 'product_technology', title: 'Product & Technology', icon: '🔧' },
+  { id: 'market_traction', title: 'Market Traction & Revenue', icon: '📈' },
+  { id: 'business_model', title: 'Business Model & Economics', icon: '💡' },
+  { id: 'team_organization', title: 'Team & Organization', icon: '👥' },
+  { id: 'go_to_market', title: 'Go-to-Market', icon: '🚀' },
+  { id: 'financial_health', title: 'Financial Health', icon: '💰' },
+  { id: 'fundraising_capital', title: 'Fundraising & Capital', icon: '🏦' },
+  { id: 'competitive_position', title: 'Competitive Position', icon: '🏆' },
+  { id: 'operations', title: 'Operations', icon: '⚙️' },
+  { id: 'legal_compliance', title: 'Legal & Compliance', icon: '⚖️' },
+];
+
+// Mock onboarding summary for development
+const MOCK_ONBOARDING_SUMMARY = {
+  version: "1.0",
+  companyName: "Acme Corp",
+  generatedAt: new Date().toISOString(),
+  overallCompleteness: 68,
+  categories: [
+    {
+      id: "product_technology",
+      title: "Product & Technology",
+      summary: "SaaS platform with proprietary ML pipeline. Strong technical differentiation but limited IP protection strategy.",
+      completeness: 85,
+      status: "complete",
+      highlights: [
+        "Proprietary ML model with 3x benchmark performance",
+        "API-first architecture enables rapid integration"
+      ],
+      gaps: [
+        "No patent filings documented",
+        "Technical debt assessment missing"
+      ],
+      keyMetrics: { techStackMaturity: "Advanced", ipProtection: "Low", productStage: "Growth" },
+      deepDivePrompt: "Let's dive deeper into your product and technology. Based on what you shared, I'd like to explore your IP strategy, technical debt, and product roadmap in more detail."
+    },
+    {
+      id: "market_traction",
+      title: "Market Traction & Revenue",
+      summary: "Growing MRR with strong net retention. Customer acquisition cost trending down but market size validation needed.",
+      completeness: 72,
+      status: "complete",
+      highlights: [
+        "$45K MRR with 15% month-over-month growth",
+        "Net revenue retention at 120%"
+      ],
+      gaps: [
+        "Total addressable market analysis incomplete",
+        "Competitor market share data missing"
+      ],
+      keyMetrics: { mrr: "$45K", mrrGrowth: "15% MoM", netRetention: "120%" },
+      deepDivePrompt: "Let's explore your market traction in more detail. I'd like to understand your customer acquisition channels, unit economics, and market sizing better."
+    },
+    {
+      id: "business_model",
+      title: "Business Model & Economics",
+      summary: "SaaS subscription model with tiered pricing. Unit economics are promising but need validation at scale.",
+      completeness: 60,
+      status: "needs_attention",
+      highlights: [
+        "Three-tier pricing model with clear value differentiation",
+        "Gross margins above 70%"
+      ],
+      gaps: [
+        "Customer lifetime value calculation incomplete",
+        "Pricing strategy documentation needed"
+      ],
+      keyMetrics: { grossMargin: "72%", pricingModel: "Tiered SaaS", avgContractValue: "$1,200/yr" },
+      deepDivePrompt: "Let's examine your business model more closely. I'd like to understand your pricing strategy, unit economics, and path to profitability."
+    },
+    {
+      id: "team_organization",
+      title: "Team & Organization",
+      summary: "Strong founding team with complementary skills. Key engineering hires needed for next growth phase.",
+      completeness: 78,
+      status: "complete",
+      highlights: [
+        "CEO has 10+ years domain expertise",
+        "CTO previously built systems at scale (100M+ users)"
+      ],
+      gaps: [
+        "VP of Sales position unfilled",
+        "Advisory board composition not discussed"
+      ],
+      keyMetrics: { teamSize: "12", keyHiresNeeded: "3", founderExperience: "Strong" },
+      deepDivePrompt: "Let's discuss your team and organizational structure. I'd like to explore your hiring plan, team gaps, and organizational design for scaling."
+    },
+    {
+      id: "go_to_market",
+      title: "Go-to-Market",
+      summary: "Product-led growth motion with emerging enterprise sales. Channel strategy needs formalization.",
+      completeness: 55,
+      status: "needs_attention",
+      highlights: [
+        "Self-serve funnel converting at 4.2%",
+        "First enterprise deals closing via inbound"
+      ],
+      gaps: [
+        "Enterprise sales playbook not documented",
+        "Partner channel strategy undefined"
+      ],
+      keyMetrics: { primaryMotion: "PLG", conversionRate: "4.2%", salesCycle: "45 days" },
+      deepDivePrompt: "Let's explore your go-to-market strategy. I'd like to understand your sales motion, channel strategy, and customer acquisition approach in more detail."
+    },
+    {
+      id: "financial_health",
+      title: "Financial Health",
+      summary: "18 months of runway remaining. Burn rate manageable but increasing with planned hires.",
+      completeness: 65,
+      status: "needs_attention",
+      highlights: [
+        "18 months runway at current burn",
+        "Revenue covering 40% of monthly expenses"
+      ],
+      gaps: [
+        "Detailed financial projections not provided",
+        "Cash flow forecast needed"
+      ],
+      keyMetrics: { runway: "18 months", burnRate: "$80K/mo", revenueVsBurn: "40%" },
+      deepDivePrompt: "Let's look at your financial health more closely. I'd like to review your burn rate trends, runway projections, and financial planning."
+    },
+    {
+      id: "fundraising_capital",
+      title: "Fundraising & Capital",
+      summary: "Seed round completed. Series A timeline and strategy need clarification.",
+      completeness: 50,
+      status: "needs_attention",
+      highlights: [
+        "$1.5M seed round closed 8 months ago",
+        "Warm introductions to 3 Series A funds"
+      ],
+      gaps: [
+        "Series A target valuation not discussed",
+        "Use of funds breakdown needed",
+        "Investor pipeline details missing"
+      ],
+      keyMetrics: { lastRound: "Seed ($1.5M)", nextRound: "Series A", targetTimeline: "Q3 2026" },
+      deepDivePrompt: "Let's discuss your fundraising strategy. I'd like to understand your capital needs, target investors, and fundraising timeline in detail."
+    },
+    {
+      id: "competitive_position",
+      title: "Competitive Position",
+      summary: "Clear technical moat but competitive landscape analysis is surface-level.",
+      completeness: 45,
+      status: "incomplete",
+      highlights: [
+        "3x performance advantage over nearest competitor",
+        "First-mover advantage in AI-powered segment"
+      ],
+      gaps: [
+        "Detailed competitive matrix not provided",
+        "Barrier to entry analysis missing",
+        "Switching cost evaluation needed"
+      ],
+      keyMetrics: { primaryDifferentiator: "AI Performance", competitorCount: "5 direct", moatStrength: "Moderate" },
+      deepDivePrompt: "Let's analyze your competitive position. I'd like to map out your competitive landscape, understand your moats, and evaluate your defensibility."
+    },
+    {
+      id: "operations",
+      title: "Operations",
+      summary: "Lean operations with strong engineering processes. Customer support and compliance frameworks need attention.",
+      completeness: 40,
+      status: "incomplete",
+      highlights: [
+        "CI/CD pipeline with 99.9% uptime SLA",
+        "Agile development with 2-week sprints"
+      ],
+      gaps: [
+        "Customer support scaling plan not discussed",
+        "Vendor management processes undefined",
+        "Disaster recovery plan not documented"
+      ],
+      keyMetrics: { uptime: "99.9%", deployFrequency: "Daily", supportModel: "Not defined" },
+      deepDivePrompt: "Let's review your operations. I'd like to understand your infrastructure, support processes, and operational scaling plans."
+    },
+    {
+      id: "legal_compliance",
+      title: "Legal & Compliance",
+      summary: "Basic corporate structure in place. Data privacy and regulatory compliance need review.",
+      completeness: 35,
+      status: "incomplete",
+      highlights: [
+        "Delaware C-Corp with clean cap table",
+        "Standard employee agreements in place"
+      ],
+      gaps: [
+        "GDPR/data privacy compliance status unknown",
+        "IP assignment agreements not confirmed",
+        "Regulatory requirements not mapped"
+      ],
+      keyMetrics: { entityType: "Delaware C-Corp", gdprStatus: "Unknown", ipProtection: "Partial" },
+      deepDivePrompt: "Let's discuss your legal and compliance posture. I'd like to review your corporate structure, IP protection, data privacy compliance, and regulatory requirements."
+    }
+  ]
+};
+
+// Summary detection markers for Dify responses
+const SUMMARY_START_MARKER = '[ONBOARDING_SUMMARY]';
+const SUMMARY_END_MARKER = '[/ONBOARDING_SUMMARY]';
+
+function extractOnboardingSummary(responseText) {
+  const startIdx = responseText.indexOf(SUMMARY_START_MARKER);
+  if (startIdx === -1) return null;
+
+  const jsonStart = startIdx + SUMMARY_START_MARKER.length;
+  const endIdx = responseText.indexOf(SUMMARY_END_MARKER, jsonStart);
+  if (endIdx === -1) return null;
+
+  const jsonString = responseText.substring(jsonStart, endIdx).trim();
+
+  try {
+    const parsed = JSON.parse(jsonString);
+    if (parsed.categories && Array.isArray(parsed.categories) && parsed.categories.length === 10) {
+      return parsed;
+    }
+    console.warn('Onboarding summary has unexpected shape:', parsed);
+    return null;
+  } catch (e) {
+    console.error('Failed to parse onboarding summary JSON:', e);
+    return null;
+  }
+}
+
+// Dify API — supports blocking, streaming, and mock fallback modes
 const DifyAPI = {
-  baseUrl: "https://api.dify.ai/v1", // Placeholder
-  apiKey: "YOUR_DIFY_API_KEY", // Placeholder
-  
-  async sendMessage(message, conversationId = null) {
-    // Placeholder - simulate API call
-    console.log("Dify API Call:", { message, conversationId });
-    
-    // Simulate response delay
+  get useStreaming() { return import.meta.env.VITE_DIFY_STREAMING === 'true'; },
+  get isMock() { return import.meta.env.VITE_DIFY_MOCK === 'true'; },
+
+  // Blocking mode: waits for full response
+  async sendMessage(message, conversationId = null, files = [], user = 'default-user') {
+    if (this.isMock) return this.sendMessageMock(message, conversationId);
+
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inputs: {},
+        query: message,
+        response_mode: 'blocking',
+        conversation_id: conversationId || '',
+        user,
+        files: files.map(f => ({
+          type: 'document',
+          transfer_method: 'local_file',
+          upload_file_id: f.fileId,
+        })),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Dify API error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    return {
+      message: data.answer,
+      conversationId: data.conversation_id,
+      messageId: data.message_id,
+    };
+  },
+
+  // Streaming mode: calls onChunk with accumulated text as tokens arrive
+  async sendMessageStreaming(message, conversationId = null, files = [], user = 'default-user', onChunk) {
+    if (this.isMock) return this.sendMessageMock(message, conversationId);
+
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inputs: {},
+        query: message,
+        response_mode: 'streaming',
+        conversation_id: conversationId || '',
+        user,
+        files: files.map(f => ({
+          type: 'document',
+          transfer_method: 'local_file',
+          upload_file_id: f.fileId,
+        })),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Dify API error ${response.status}: ${errorText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullMessage = '';
+    let resultConversationId = conversationId;
+    let resultMessageId = null;
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr) continue;
+
+        try {
+          const event = JSON.parse(jsonStr);
+
+          if (event.event === 'message') {
+            fullMessage += event.answer;
+            if (onChunk) onChunk(fullMessage);
+          } else if (event.event === 'message_end') {
+            resultConversationId = event.conversation_id;
+            resultMessageId = event.message_id;
+          }
+        } catch (e) {
+          // Skip malformed SSE lines
+        }
+      }
+    }
+
+    return {
+      message: fullMessage,
+      conversationId: resultConversationId,
+      messageId: resultMessageId,
+    };
+  },
+
+  // File upload
+  async uploadFile(file, user = 'default-user') {
+    if (this.isMock) return this.uploadFileMock(file);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('user', user);
+
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`File upload error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, fileId: data.id, fileName: data.name };
+  },
+
+  // Mock fallback — used when no API key is configured
+  async sendMessageMock(message, conversationId) {
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Mock response based on message content
+
     const responses = [
       "Thanks for sharing that information. I've recorded your company details. Could you tell me more about your target market and customer segments?",
       "That's helpful context. What stage would you say your product is at? Are you pre-revenue, early revenue, or scaling?",
@@ -149,29 +495,18 @@ const DifyAPI = {
       "I've updated your profile with this information. Based on what you've shared, I can see some interesting patterns emerging. Would you like to discuss your funding strategy next?",
       "Thanks for the details. I've captured this in your company profile. Is there anything specific about your business model or competitive landscape you'd like to elaborate on?"
     ];
-    
+
     return {
-      message: responses[Math.floor(Math.random() * responses.length)],
-      conversationId: conversationId || "conv_" + Date.now(),
-      data: MOCK_EVALUATION_DATA
+      message: '[mock] ' + responses[Math.floor(Math.random() * responses.length)],
+      conversationId: conversationId || 'conv_' + Date.now(),
+      messageId: 'msg_' + Date.now(),
     };
   },
-  
-  async uploadFile(file) {
-    console.log("Dify File Upload:", file.name);
+
+  async uploadFileMock(file) {
     await new Promise(resolve => setTimeout(resolve, 1000));
-    return { success: true, fileId: "file_" + Date.now() };
+    return { success: true, fileId: 'file_' + Date.now(), fileName: file.name };
   },
-  
-  async getEvaluation() {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return MOCK_EVALUATION_DATA;
-  },
-  
-  async getInvestmentMatches() {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return MOCK_INVESTMENT_DATA;
-  }
 };
 
 // Shared data store (simulating a backend)
@@ -311,8 +646,14 @@ export default function StartupPlatform() {
   const [actionItems, setActionItems] = useState(DataStore.actionItems);
   const [selectedInvestments, setSelectedInvestments] = useState([]);
   const [expandedAction, setExpandedAction] = useState(null);
+  const [onboardingPhase, setOnboardingPhase] = useState('chat'); // 'chat' | 'summary' | 'deep-dive'
+  const [onboardingSummary, setOnboardingSummary] = useState(null);
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [categoryConversations, setCategoryConversations] = useState({});
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const deepDiveFileInputRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -320,7 +661,7 @@ export default function StartupPlatform() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, categoryConversations, activeCategory]);
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
@@ -332,45 +673,112 @@ export default function StartupPlatform() {
     }
   };
 
+  // Process a completed Dify response — check for summary, update messages
+  const processCompletedResponse = (response) => {
+    setConversationId(response.conversationId);
+    setUploadedFiles([]);
+
+    const summary = extractOnboardingSummary(response.message);
+
+    if (summary) {
+      const conversationalPart = response.message
+        .substring(0, response.message.indexOf(SUMMARY_START_MARKER))
+        .trim();
+
+      if (conversationalPart) {
+        setMessages(prev => [...prev, { role: 'assistant', content: conversationalPart }]);
+      }
+
+      setOnboardingSummary(summary);
+      setOnboardingPhase('summary');
+    } else {
+      setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
-    
-    const userMessage = { role: 'user', content: inputValue };
-    setMessages(prev => [...prev, userMessage]);
+
+    const currentMessage = inputValue;
+    setMessages(prev => [...prev, { role: 'user', content: currentMessage }]);
     setInputValue('');
-    setIsTyping(true);
-    
-    try {
-      const response = await DifyAPI.sendMessage(inputValue, conversationId);
-      setConversationId(response.conversationId);
-      setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
-      
-      // Update evaluation data from response
-      if (response.data) {
-        setEvaluationData(response.data);
+
+    if (DifyAPI.useStreaming && !DifyAPI.isMock) {
+      // Streaming: add empty assistant message, update as chunks arrive
+      setMessages(prev => [...prev, { role: 'assistant', content: '', isStreaming: true }]);
+
+      try {
+        const response = await DifyAPI.sendMessageStreaming(
+          currentMessage, conversationId, uploadedFiles, 'default-user',
+          (accumulated) => {
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { role: 'assistant', content: accumulated, isStreaming: true };
+              return updated;
+            });
+          }
+        );
+
+        // Finalize: remove streaming flag, check for summary
+        setConversationId(response.conversationId);
+        setUploadedFiles([]);
+        const summary = extractOnboardingSummary(response.message);
+
+        if (summary) {
+          const conversationalPart = response.message
+            .substring(0, response.message.indexOf(SUMMARY_START_MARKER))
+            .trim();
+          setMessages(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: 'assistant', content: conversationalPart || response.message };
+            return updated;
+          });
+          setOnboardingSummary(summary);
+          setOnboardingPhase('summary');
+        } else {
+          setMessages(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: 'assistant', content: response.message };
+            return updated;
+          });
+        }
+      } catch (error) {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: 'assistant', content: 'I apologize, but I encountered an error. Please try again.' };
+          return updated;
+        });
       }
-    } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "I apologize, but I encountered an error. Please try again." }]);
+    } else {
+      // Blocking: show typing indicator, wait for full response
+      setIsTyping(true);
+      try {
+        const response = await DifyAPI.sendMessage(currentMessage, conversationId, uploadedFiles);
+        processCompletedResponse(response);
+      } catch (error) {
+        setMessages(prev => [...prev, { role: 'assistant', content: "I apologize, but I encountered an error. Please try again." }]);
+      }
+      setIsTyping(false);
     }
-    
-    setIsTyping(false);
   };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    setMessages(prev => [...prev, { role: 'user', content: `📎 Uploaded: ${file.name}`, isFile: true }]);
+
+    setMessages(prev => [...prev, { role: 'user', content: `Uploaded: ${file.name}`, isFile: true }]);
     setIsTyping(true);
-    
+
     try {
-      await DifyAPI.uploadFile(file);
-      setMessages(prev => [...prev, { role: 'assistant', content: `I've received "${file.name}". I'll analyze this document and incorporate the insights into your evaluation. Is there anything specific in this document you'd like me to focus on?` }]);
+      const result = await DifyAPI.uploadFile(file);
+      setUploadedFiles(prev => [...prev, { fileId: result.fileId, fileName: file.name }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: `I've received "${file.name}". I'll incorporate this into your evaluation. You can continue sharing information or send a message to discuss the document.` }]);
     } catch (error) {
       setMessages(prev => [...prev, { role: 'assistant', content: "There was an issue uploading your file. Please try again." }]);
     }
-    
+
     setIsTyping(false);
+    e.target.value = '';
   };
 
   const handleActionFileUpload = (actionId, e) => {
@@ -419,6 +827,154 @@ export default function StartupPlatform() {
     });
   };
 
+  const getCategoryStatusColor = (status) => {
+    switch (status) {
+      case 'complete': return '#10b981';
+      case 'needs_attention': return '#f59e0b';
+      case 'incomplete': return '#ef4444';
+      default: return '#64748b';
+    }
+  };
+
+  const handleCategoryClick = (categoryId) => {
+    setActiveCategory(categoryId);
+    setOnboardingPhase('deep-dive');
+
+    // Initialize conversation for this category if it doesn't exist
+    if (!categoryConversations[categoryId]) {
+      const category = onboardingSummary.categories.find(c => c.id === categoryId);
+      setCategoryConversations(prev => ({
+        ...prev,
+        [categoryId]: {
+          messages: [{ role: 'assistant', content: category.deepDivePrompt }],
+          conversationId: null,
+        }
+      }));
+    }
+  };
+
+  const handleDeepDiveSendMessage = async () => {
+    if (!inputValue.trim() || !activeCategory) return;
+
+    const categoryId = activeCategory;
+    const convState = categoryConversations[categoryId];
+    const currentMessage = inputValue;
+
+    setCategoryConversations(prev => ({
+      ...prev,
+      [categoryId]: {
+        ...prev[categoryId],
+        messages: [...prev[categoryId].messages, { role: 'user', content: currentMessage }],
+      }
+    }));
+
+    setInputValue('');
+
+    // Helper to append an assistant message to this category's conversation
+    const appendAssistant = (content, extra = {}) => {
+      setCategoryConversations(prev => ({
+        ...prev,
+        [categoryId]: {
+          ...prev[categoryId],
+          ...extra,
+          messages: [...prev[categoryId].messages, { role: 'assistant', content, ...extra }],
+        }
+      }));
+    };
+
+    // Helper to update the last message in this category's conversation
+    const updateLastMessage = (content, extra = {}) => {
+      setCategoryConversations(prev => {
+        const msgs = [...prev[categoryId].messages];
+        msgs[msgs.length - 1] = { role: 'assistant', content, ...extra };
+        return {
+          ...prev,
+          [categoryId]: { ...prev[categoryId], ...extra, messages: msgs },
+        };
+      });
+    };
+
+    if (DifyAPI.useStreaming && !DifyAPI.isMock) {
+      // Streaming: add empty assistant message, update as chunks arrive
+      appendAssistant('', { isStreaming: true });
+
+      try {
+        const response = await DifyAPI.sendMessageStreaming(
+          currentMessage, convState.conversationId, uploadedFiles, 'default-user',
+          (accumulated) => updateLastMessage(accumulated, { isStreaming: true })
+        );
+
+        setUploadedFiles([]);
+        updateLastMessage(response.message, { conversationId: response.conversationId });
+      } catch (error) {
+        updateLastMessage('I apologize, but I encountered an error. Please try again.');
+      }
+    } else {
+      // Blocking: show typing indicator, wait for full response
+      setIsTyping(true);
+      try {
+        const response = await DifyAPI.sendMessage(
+          currentMessage, convState.conversationId, uploadedFiles,
+        );
+
+        setUploadedFiles([]);
+
+        setCategoryConversations(prev => ({
+          ...prev,
+          [categoryId]: {
+            conversationId: response.conversationId,
+            messages: [
+              ...prev[categoryId].messages,
+              { role: 'assistant', content: response.message }
+            ],
+          }
+        }));
+      } catch (error) {
+        appendAssistant('I apologize, but I encountered an error. Please try again.');
+      }
+      setIsTyping(false);
+    }
+  };
+
+  const handleDeepDiveFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !activeCategory) return;
+
+    const categoryId = activeCategory;
+
+    setCategoryConversations(prev => ({
+      ...prev,
+      [categoryId]: {
+        ...prev[categoryId],
+        messages: [...prev[categoryId].messages, { role: 'user', content: `Uploaded: ${file.name}`, isFile: true }],
+      }
+    }));
+    setIsTyping(true);
+
+    try {
+      const result = await DifyAPI.uploadFile(file);
+      setUploadedFiles(prev => [...prev, { fileId: result.fileId, fileName: file.name }]);
+      setCategoryConversations(prev => ({
+        ...prev,
+        [categoryId]: {
+          ...prev[categoryId],
+          messages: [...prev[categoryId].messages, { role: 'assistant', content: `I've received "${file.name}". I'll incorporate this into our discussion.` }],
+        }
+      }));
+    } catch (error) {
+      setCategoryConversations(prev => ({
+        ...prev,
+        [categoryId]: {
+          ...prev[categoryId],
+          messages: [...prev[categoryId].messages, { role: 'assistant', content: "There was an issue uploading your file. Please try again." }],
+        }
+      }));
+    }
+
+    setIsTyping(false);
+    e.target.value = '';
+  };
+
   const getSuitabilityColor = (score) => {
     if (score >= 75) return '#10b981';
     if (score >= 50) return '#f59e0b';
@@ -443,8 +999,37 @@ export default function StartupPlatform() {
     }
   };
 
-  // Window 1: Chat Onboarding
-  const renderChatWindow = () => (
+  // Window 1: Chat Onboarding — phase dispatcher
+  const renderChatWindow = () => {
+    switch (onboardingPhase) {
+      case 'summary':
+        return renderOnboardingSummary();
+      case 'deep-dive':
+        return renderDeepDive();
+      case 'chat':
+      default:
+        return renderOnboardingChat();
+    }
+  };
+
+  // Phase 1: Conversational onboarding chat
+  // Render message content with mock badge and file support
+  const renderMessageContent = (msg) => {
+    if (msg.isFile) {
+      return <div className="file-message">{msg.content}</div>;
+    }
+    if (msg.content.startsWith('[mock] ')) {
+      return (
+        <>
+          <span className="mock-badge">mock</span>
+          {msg.content.slice(7)}
+        </>
+      );
+    }
+    return msg.content;
+  };
+
+  const renderOnboardingChat = () => (
     <div className="chat-window">
       <div className="chat-header">
         <div className="chat-title">
@@ -454,22 +1039,25 @@ export default function StartupPlatform() {
             <span>Share your company information through conversation</span>
           </div>
         </div>
-        <div className="chat-status">
-          <span className="status-dot"></span>
-          Connected to Dify
+        <div className="chat-header-right">
+          {onboardingSummary && (
+            <button className="view-summary-btn" onClick={() => setOnboardingPhase('summary')}>
+              View Summary
+            </button>
+          )}
+          <div className="chat-status">
+            <span className="status-dot"></span>
+            Connected to Dify
+          </div>
         </div>
       </div>
-      
+
       <div className="chat-messages">
         {messages.map((msg, idx) => (
           <div key={idx} className={`message ${msg.role}`}>
             {msg.role === 'assistant' && <div className="message-avatar">S</div>}
             <div className="message-content">
-              {msg.isFile ? (
-                <div className="file-message">{msg.content}</div>
-              ) : (
-                msg.content
-              )}
+              {renderMessageContent(msg)}
             </div>
           </div>
         ))}
@@ -483,7 +1071,7 @@ export default function StartupPlatform() {
         )}
         <div ref={messagesEndRef} />
       </div>
-      
+
       <div className="chat-input-area">
         <input
           type="file"
@@ -509,6 +1097,202 @@ export default function StartupPlatform() {
       </div>
     </div>
   );
+
+  // Phase 2: Onboarding summary cards
+  const renderOnboardingSummary = () => {
+    const summary = onboardingSummary || MOCK_ONBOARDING_SUMMARY;
+
+    return (
+      <div className="chat-window summary-window">
+        <div className="summary-back-bar">
+          <button className="back-to-chat-btn" onClick={() => setOnboardingPhase('chat')}>
+            ← Back to conversation
+          </button>
+        </div>
+        <div className="chat-header">
+          <div className="chat-title">
+            <div className="chat-avatar">📋</div>
+            <div>
+              <h2>{summary.companyName} — Onboarding Summary</h2>
+              <span>Click a category to explore in detail</span>
+            </div>
+          </div>
+          <div className="chat-header-right">
+            <div className="overall-completeness">
+              <svg width="48" height="48" viewBox="0 0 48 48">
+                <circle cx="24" cy="24" r="20" fill="none"
+                  stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+                <circle cx="24" cy="24" r="20" fill="none"
+                  stroke="#6366f1" strokeWidth="4"
+                  strokeDasharray={`${(summary.overallCompleteness / 100) * 125.66} 125.66`}
+                  strokeLinecap="round" transform="rotate(-90 24 24)" />
+                <text x="24" y="28" textAnchor="middle" fill="#fff"
+                  fontSize="12" fontWeight="600" fontFamily="DM Sans, sans-serif">
+                  {summary.overallCompleteness}%
+                </text>
+              </svg>
+              <span className="completeness-label">Overall</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="category-grid-container">
+          <div className="category-grid">
+            {summary.categories.map(category => {
+              const catDef = ONBOARDING_CATEGORIES.find(c => c.id === category.id);
+              const statusColor = getCategoryStatusColor(category.status);
+              const circumference = 2 * Math.PI * 18; // r=18
+
+              return (
+                <div
+                  key={category.id}
+                  className={`category-card ${category.status}`}
+                  onClick={() => handleCategoryClick(category.id)}
+                >
+                  <div className="category-card-header">
+                    <div className="category-info">
+                      <span className="category-icon">{catDef?.icon}</span>
+                      <h3>{category.title}</h3>
+                    </div>
+                    <div className="category-ring">
+                      <svg width="44" height="44" viewBox="0 0 44 44">
+                        <circle cx="22" cy="22" r="18" fill="none"
+                          stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
+                        <circle cx="22" cy="22" r="18" fill="none"
+                          stroke={statusColor} strokeWidth="3"
+                          strokeDasharray={`${(category.completeness / 100) * circumference} ${circumference}`}
+                          strokeLinecap="round" transform="rotate(-90 22 22)" />
+                        <text x="22" y="26" textAnchor="middle" fill="#fff"
+                          fontSize="11" fontWeight="600" fontFamily="DM Sans, sans-serif">
+                          {category.completeness}%
+                        </text>
+                      </svg>
+                    </div>
+                  </div>
+
+                  <p className="category-summary">{category.summary}</p>
+
+                  {category.highlights.length > 0 && (
+                    <div className="category-highlights">
+                      {category.highlights.slice(0, 2).map((h, i) => (
+                        <span key={i} className="highlight-chip">{h}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {category.gaps.length > 0 && (
+                    <div className="category-gaps">
+                      <span className="gaps-label">
+                        {category.gaps.length} area{category.gaps.length > 1 ? 's' : ''} to explore
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="category-action">
+                    <span>Deep dive</span>
+                    <span className="category-arrow">→</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+      </div>
+    );
+  };
+
+  // Phase 3: Deep-dive category chat
+  const renderDeepDive = () => {
+    const category = onboardingSummary
+      ? onboardingSummary.categories.find(c => c.id === activeCategory)
+      : MOCK_ONBOARDING_SUMMARY.categories.find(c => c.id === activeCategory);
+    const catDef = ONBOARDING_CATEGORIES.find(c => c.id === activeCategory);
+    const convState = categoryConversations[activeCategory] || { messages: [], conversationId: null };
+    const statusColor = getCategoryStatusColor(category?.status || 'incomplete');
+    const circumference = 2 * Math.PI * 18;
+
+    return (
+      <div className="chat-window">
+        <div className="chat-header">
+          <div className="chat-title">
+            <button className="back-btn" onClick={() => setOnboardingPhase('summary')}>←</button>
+            <div className="chat-avatar" style={{ fontSize: '1rem' }}>
+              {catDef?.icon}
+            </div>
+            <div>
+              <h2>{category?.title || 'Deep Dive'}</h2>
+              <span>Deep-dive conversation</span>
+            </div>
+          </div>
+          <div className="chat-header-right">
+            <div className="category-ring">
+              <svg width="44" height="44" viewBox="0 0 44 44">
+                <circle cx="22" cy="22" r="18" fill="none"
+                  stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
+                <circle cx="22" cy="22" r="18" fill="none"
+                  stroke={statusColor} strokeWidth="3"
+                  strokeDasharray={`${((category?.completeness || 0) / 100) * circumference} ${circumference}`}
+                  strokeLinecap="round" transform="rotate(-90 22 22)" />
+                <text x="22" y="26" textAnchor="middle" fill="#fff"
+                  fontSize="11" fontWeight="600" fontFamily="DM Sans, sans-serif">
+                  {category?.completeness || 0}%
+                </text>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="chat-messages">
+          {convState.messages.map((msg, idx) => (
+            <div key={idx} className={`message ${msg.role}`}>
+              {msg.role === 'assistant' && <div className="message-avatar">S</div>}
+              <div className="message-content">
+                {msg.isFile ? (
+                  <div className="file-message">{msg.content}</div>
+                ) : (
+                  msg.content
+                )}
+              </div>
+            </div>
+          ))}
+          {isTyping && (
+            <div className="message assistant">
+              <div className="message-avatar">S</div>
+              <div className="message-content typing">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="chat-input-area">
+          <input
+            type="file"
+            ref={deepDiveFileInputRef}
+            onChange={handleDeepDiveFileUpload}
+            style={{ display: 'none' }}
+            accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.pptx"
+          />
+          <button className="attach-btn" onClick={() => deepDiveFileInputRef.current.click()}>
+            <span>📎</span>
+          </button>
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleDeepDiveSendMessage()}
+            placeholder={`Ask about ${category?.title || 'this category'}...`}
+            className="chat-input"
+          />
+          <button className="send-btn" onClick={handleDeepDiveSendMessage} disabled={!inputValue.trim()}>
+            <span>→</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   // Window 2: Evaluation & Actions
   const renderEvaluationWindow = () => (
@@ -1081,6 +1865,230 @@ export default function StartupPlatform() {
           color: rgba(255,255,255,0.4);
         }
         
+        .mock-badge {
+          display: inline-block;
+          padding: 0.125rem 0.375rem;
+          background: rgba(251, 191, 36, 0.15);
+          border: 1px solid rgba(251, 191, 36, 0.3);
+          border-radius: 4px;
+          font-size: 0.6875rem;
+          color: #fbbf24;
+          margin-right: 0.5rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          font-weight: 600;
+          vertical-align: middle;
+        }
+
+        /* Summary & Deep-Dive Styles */
+        .chat-header-right {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .view-summary-btn {
+          padding: 0.5rem 1rem;
+          background: rgba(99, 102, 241, 0.15);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          border-radius: 8px;
+          color: #a5b4fc;
+          font-size: 0.8125rem;
+          font-family: inherit;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .view-summary-btn:hover {
+          background: rgba(99, 102, 241, 0.25);
+          border-color: rgba(99, 102, 241, 0.5);
+          color: white;
+        }
+
+        .overall-completeness {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.25rem;
+        }
+
+        .completeness-label {
+          font-size: 0.6875rem;
+          color: rgba(255,255,255,0.5);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+
+        .summary-window {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .category-grid-container {
+          flex: 1;
+          overflow-y: auto;
+          padding: 1.5rem;
+        }
+
+        .category-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 1rem;
+        }
+
+        .category-card {
+          background: rgba(255,255,255,0.02);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 16px;
+          padding: 1.25rem;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          border-left: 3px solid rgba(255,255,255,0.1);
+        }
+
+        .category-card:hover {
+          background: rgba(255,255,255,0.04);
+          border-color: rgba(255,255,255,0.12);
+          transform: translateY(-2px);
+        }
+
+        .category-card.complete {
+          border-left-color: #10b981;
+        }
+
+        .category-card.needs_attention {
+          border-left-color: #f59e0b;
+        }
+
+        .category-card.incomplete {
+          border-left-color: #ef4444;
+        }
+
+        .category-card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+        }
+
+        .category-info {
+          display: flex;
+          align-items: center;
+          gap: 0.625rem;
+          flex: 1;
+          min-width: 0;
+        }
+
+        .category-icon {
+          font-size: 1.25rem;
+          flex-shrink: 0;
+        }
+
+        .category-info h3 {
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 0.9375rem;
+          font-weight: 600;
+          color: #e8e8ed;
+        }
+
+        .category-ring {
+          flex-shrink: 0;
+        }
+
+        .category-summary {
+          font-size: 0.8125rem;
+          color: rgba(255,255,255,0.6);
+          line-height: 1.5;
+        }
+
+        .category-highlights {
+          display: flex;
+          flex-direction: column;
+          gap: 0.375rem;
+        }
+
+        .highlight-chip {
+          font-size: 0.75rem;
+          color: #6ee7b7;
+          padding: 0.25rem 0.5rem;
+          background: rgba(16, 185, 129, 0.08);
+          border-radius: 6px;
+          line-height: 1.4;
+        }
+
+        .category-gaps {
+          padding-top: 0.25rem;
+        }
+
+        .gaps-label {
+          font-size: 0.75rem;
+          color: #fbbf24;
+        }
+
+        .category-action {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-top: 0.5rem;
+          border-top: 1px solid rgba(255,255,255,0.06);
+          font-size: 0.8125rem;
+          color: #a5b4fc;
+          font-weight: 500;
+        }
+
+        .category-arrow {
+          transition: transform 0.2s ease;
+        }
+
+        .category-card:hover .category-arrow {
+          transform: translateX(4px);
+        }
+
+        .summary-back-bar {
+          padding: 0.625rem 1.5rem;
+          background: rgba(0,0,0,0.3);
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .back-to-chat-btn {
+          background: none;
+          border: none;
+          color: rgba(255,255,255,0.5);
+          font-size: 0.8125rem;
+          font-family: inherit;
+          cursor: pointer;
+          padding: 0.5rem 0;
+          transition: color 0.2s ease;
+        }
+
+        .back-to-chat-btn:hover {
+          color: white;
+        }
+
+        .back-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.1);
+          background: rgba(255,255,255,0.05);
+          color: rgba(255,255,255,0.7);
+          font-size: 1.125rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+          flex-shrink: 0;
+        }
+
+        .back-btn:hover {
+          background: rgba(255,255,255,0.1);
+          border-color: rgba(255,255,255,0.2);
+          color: white;
+        }
+
         /* Evaluation Window Styles */
         .evaluation-window {
           height: calc(100vh - 140px);
