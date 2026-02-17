@@ -296,6 +296,9 @@ const RadarChart = ({ data, size = 300 }) => {
 
 // Main App Component
 export default function StartupPlatform() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [activeWindow, setActiveWindow] = useState(0);
   const [messages, setMessages] = useState([
     { role: 'assistant', content: "Welcome to Startup Evaluator! I'm here to help understand your business and provide tailored insights. Let's start with the basics — what's your company name and what problem are you solving?" }
@@ -318,6 +321,16 @@ export default function StartupPlatform() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    if (passwordInput === 'fundy2026') {
+      setIsAuthenticated(true);
+      setPasswordError('');
+    } else {
+      setPasswordError('Incorrect password');
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -1731,8 +1744,113 @@ export default function StartupPlatform() {
             min-width: 100px;
           }
         }
+        .password-screen {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #08080c;
+        }
+
+        .password-box {
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 16px;
+          padding: 2.5rem;
+          width: 100%;
+          max-width: 380px;
+          text-align: center;
+          backdrop-filter: blur(20px);
+        }
+
+        .password-box .logo-mark {
+          width: 48px;
+          height: 48px;
+          margin: 0 auto 1.5rem;
+          font-size: 1.375rem;
+        }
+
+        .password-box h2 {
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 1.25rem;
+          font-weight: 700;
+          margin-bottom: 0.5rem;
+          color: #e8e8ed;
+        }
+
+        .password-box p {
+          font-size: 0.875rem;
+          color: rgba(255,255,255,0.5);
+          margin-bottom: 1.5rem;
+        }
+
+        .password-input {
+          width: 100%;
+          padding: 0.75rem 1rem;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 8px;
+          color: #e8e8ed;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.9375rem;
+          outline: none;
+          transition: border-color 0.2s;
+        }
+
+        .password-input:focus {
+          border-color: #6366f1;
+        }
+
+        .password-input.error {
+          border-color: #ef4444;
+        }
+
+        .password-error {
+          color: #ef4444;
+          font-size: 0.8125rem;
+          margin-top: 0.5rem;
+          min-height: 1.25rem;
+        }
+
+        .password-submit {
+          width: 100%;
+          padding: 0.75rem;
+          margin-top: 1rem;
+          background: linear-gradient(135deg, #6366f1, #a855f7);
+          border: none;
+          border-radius: 8px;
+          color: white;
+          font-family: 'DM Sans', sans-serif;
+          font-weight: 600;
+          font-size: 0.9375rem;
+          cursor: pointer;
+          transition: opacity 0.2s;
+        }
+
+        .password-submit:hover {
+          opacity: 0.9;
+        }
       `}</style>
-      
+
+      {!isAuthenticated ? (
+        <div className="password-screen">
+          <form className="password-box" onSubmit={handlePasswordSubmit}>
+            <div className="logo-mark">S</div>
+            <h2>Startup Evaluator</h2>
+            <p>Enter the password to continue</p>
+            <input
+              type="password"
+              className={`password-input${passwordError ? ' error' : ''}`}
+              placeholder="Password"
+              value={passwordInput}
+              onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(''); }}
+              autoFocus
+            />
+            <div className="password-error">{passwordError}</div>
+            <button type="submit" className="password-submit">Enter</button>
+          </form>
+        </div>
+      ) : (
       <div className="app-container">
         <header className="main-header">
           <div className="logo">
@@ -1771,6 +1889,7 @@ export default function StartupPlatform() {
           {activeWindow === 2 && renderInvestmentWindow()}
         </main>
       </div>
+      )}
     </>
   );
 }
