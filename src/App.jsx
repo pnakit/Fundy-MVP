@@ -360,13 +360,14 @@ const DifyAPI = {
   get isMock() { return import.meta.env.VITE_DIFY_MOCK === 'true'; },
 
   // Blocking mode: waits for full response
-  async sendMessage(message, conversationId = null, files = [], user = 'default-user') {
+  async sendMessage(message, conversationId = null, files = [], user = 'default-user', workflow = 'onboarding') {
     if (this.isMock) return this.sendMessageMock(message, conversationId);
 
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        workflow,
         inputs: {},
         query: message,
         response_mode: 'blocking',
@@ -390,17 +391,19 @@ const DifyAPI = {
       message: data.answer,
       conversationId: data.conversation_id,
       messageId: data.message_id,
+      fallback: data._fallback || false,
     };
   },
 
   // Streaming mode: calls onChunk with accumulated text as tokens arrive
-  async sendMessageStreaming(message, conversationId = null, files = [], user = 'default-user', onChunk) {
+  async sendMessageStreaming(message, conversationId = null, files = [], user = 'default-user', onChunk, workflow = 'onboarding') {
     if (this.isMock) return this.sendMessageMock(message, conversationId);
 
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        workflow,
         inputs: {},
         query: message,
         response_mode: 'streaming',
@@ -419,6 +422,7 @@ const DifyAPI = {
       throw new Error(`Dify API error ${response.status}: ${errorText}`);
     }
 
+    const fallback = response.headers.get('X-Dify-Fallback') === 'true';
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullMessage = '';
@@ -459,18 +463,19 @@ const DifyAPI = {
       message: fullMessage,
       conversationId: resultConversationId,
       messageId: resultMessageId,
+      fallback,
     };
   },
 
   // File upload
-  async uploadFile(file, user = 'default-user') {
+  async uploadFile(file, user = 'default-user', workflow = 'onboarding') {
     if (this.isMock) return this.uploadFileMock(file);
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('user', user);
 
-    const response = await fetch('/api/upload', {
+    const response = await fetch(`/api/upload?workflow=${workflow}`, {
       method: 'POST',
       body: formData,
     });
@@ -484,7 +489,7 @@ const DifyAPI = {
     return { success: true, fileId: data.id, fileName: data.name };
   },
 
-  // Mock fallback — used when no API key is configured
+  // Mock fallback — used when VITE_DIFY_MOCK=true
   async sendMessageMock(message, conversationId) {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
@@ -500,6 +505,7 @@ const DifyAPI = {
       message: '[mock] ' + responses[Math.floor(Math.random() * responses.length)],
       conversationId: conversationId || 'conv_' + Date.now(),
       messageId: 'msg_' + Date.now(),
+      fallback: false,
     };
   },
 
@@ -901,11 +907,13 @@ export default function StartupPlatform() {
       try {
         const response = await DifyAPI.sendMessageStreaming(
           currentMessage, convState.conversationId, uploadedFiles, 'default-user',
-          (accumulated) => updateLastMessage(accumulated, { isStreaming: true })
+          (accumulated) => updateLastMessage(accumulated, { isStreaming: true }),
+          'deepdive'
         );
 
         setUploadedFiles([]);
-        updateLastMessage(response.message, { conversationId: response.conversationId });
+        const prefix = response.fallback ? '[onboarding] ' : '';
+        updateLastMessage(prefix + response.message, { conversationId: response.conversationId });
       } catch (error) {
         updateLastMessage('I apologize, but I encountered an error. Please try again.');
       }
@@ -914,10 +922,11 @@ export default function StartupPlatform() {
       setIsTyping(true);
       try {
         const response = await DifyAPI.sendMessage(
-          currentMessage, convState.conversationId, uploadedFiles,
+          currentMessage, convState.conversationId, uploadedFiles, 'default-user', 'deepdive'
         );
 
         setUploadedFiles([]);
+        const prefix = response.fallback ? '[onboarding] ' : '';
 
         setCategoryConversations(prev => ({
           ...prev,
@@ -925,7 +934,7 @@ export default function StartupPlatform() {
             conversationId: response.conversationId,
             messages: [
               ...prev[categoryId].messages,
-              { role: 'assistant', content: response.message }
+              { role: 'assistant', content: prefix + response.message }
             ],
           }
         }));
@@ -952,7 +961,7 @@ export default function StartupPlatform() {
     setIsTyping(true);
 
     try {
-      const result = await DifyAPI.uploadFile(file);
+      const result = await DifyAPI.uploadFile(file, 'default-user', 'deepdive');
       setUploadedFiles(prev => [...prev, { fileId: result.fileId, fileName: file.name }]);
       setCategoryConversations(prev => ({
         ...prev,
@@ -1023,6 +1032,14 @@ export default function StartupPlatform() {
         <>
           <span className="mock-badge">mock</span>
           {msg.content.slice(7)}
+        </>
+      );
+    }
+    if (msg.content.startsWith('[onboarding] ')) {
+      return (
+        <>
+          <span className="onboarding-badge">onboarding</span>
+          {msg.content.slice(13)}
         </>
       );
     }
@@ -1873,6 +1890,21 @@ export default function StartupPlatform() {
           border-radius: 4px;
           font-size: 0.6875rem;
           color: #fbbf24;
+          margin-right: 0.5rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          font-weight: 600;
+          vertical-align: middle;
+        }
+
+        .onboarding-badge {
+          display: inline-block;
+          padding: 0.125rem 0.375rem;
+          background: rgba(99, 102, 241, 0.15);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          border-radius: 4px;
+          font-size: 0.6875rem;
+          color: #818cf8;
           margin-right: 0.5rem;
           text-transform: uppercase;
           letter-spacing: 0.05em;

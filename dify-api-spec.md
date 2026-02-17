@@ -816,3 +816,83 @@ Returns the app's configured input parameters, file upload settings, and system 
 | `unsupported_file_type` | File type not allowed |
 | `file_too_large` | File exceeds size limit |
 | `s3_connection_failed` | Storage connection error |
+
+---
+
+## 11. Environment Variable & Production Verification
+
+This section defines a process for keeping local development, the codebase, and the Vercel production environment in sync. The specific variable names and values will change as the app evolves — what matters is the process.
+
+### How Environment Variables Work in This App
+
+The app uses two categories of environment variables:
+
+- **Server-side only** — Read by serverless functions at runtime. These never appear in client code and never have a `VITE_` prefix. Used for secrets (API keys, tokens, service URLs).
+- **Client-side** — Prefixed with `VITE_`. Vite inlines these into the JavaScript bundle at build time. Never put secrets here — anything with `VITE_` is publicly visible.
+
+Environment variables must exist in three places to be fully operational:
+
+| Location | File/System | Who reads it | When |
+|----------|-------------|--------------|------|
+| Local dev | `.env` | Vite dev server + proxy | `npm run dev` |
+| Production | Vercel Dashboard > Settings > Environment Variables | Serverless functions + Vite build | Every deploy |
+| Documentation | This file (source of truth for what's expected) | Developers | Code review, onboarding |
+
+### Discovering Required Variables from the Codebase
+
+To find every environment variable the codebase currently depends on:
+
+1. **Server-side variables** — Search the `api/` directory for `process.env.`:
+   ```
+   grep -r "process.env\." api/
+   ```
+2. **Client-side variables** — Search `src/` for `import.meta.env.`:
+   ```
+   grep -r "import.meta.env\." src/
+   ```
+3. **Build-time / dev proxy variables** — Search `vite.config.js` for `env.`:
+   ```
+   grep "env\." vite.config.js
+   ```
+
+The union of these results is the complete set of variables the app needs to function.
+
+### Verification Process
+
+Run after every deployment, env var change, or when adding/removing a workflow:
+
+1. **Collect expected variables** — Run the grep commands above to get the current list from the codebase
+2. **Check `.env` locally** — Every variable from step 1 should have an entry in `.env` (value can be empty for not-yet-configured features)
+3. **Check Vercel dashboard** — Every variable from step 1 should exist in Vercel Dashboard > Settings > Environment Variables, for the appropriate environments (Production, Preview, Development)
+4. **Build succeeds** — `npm run build` completes without errors
+5. **No secrets in bundle** — Search the `dist/` output for any server-side variable names or API key patterns. Only `VITE_`-prefixed variables should appear:
+   ```
+   grep -r "process.env" dist/        # should return nothing
+   grep -r "app-" dist/               # should return nothing (no API keys)
+   ```
+6. **Smoke test** — Visit the production URL and exercise each feature that depends on an external service. Verify real responses (not mock/fallback)
+
+### Fallback Behavior
+
+When a workflow's API key is not set, the serverless functions fall back to the primary workflow key. The client signals this with a visual badge on affected messages so developers can distinguish real responses from fallback responses. This is by design — it allows the app to function with partially configured keys during development.
+
+### Adding or Changing Environment Variables
+
+When the codebase adds, renames, or removes an environment variable:
+
+1. Update `.env` locally with the new variable (and `.env.example` if one exists)
+2. Update Vercel Dashboard with the new variable for all relevant environments
+3. If removing a variable, check that no code still references it before deleting from Vercel
+4. Redeploy (push a commit or use Vercel's Redeploy button) for changes to take effect
+5. Run the verification process above
+
+### Key Rotation
+
+When rotating a secret:
+
+1. Generate the new key in the external service (e.g., Dify Cloud)
+2. Update `.env` locally
+3. Update Vercel Dashboard
+4. Redeploy
+5. Verify the feature still works in production
+6. Revoke the old key in the external service
