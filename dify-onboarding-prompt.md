@@ -46,6 +46,7 @@ You MUST wrap the JSON in these exact delimiters on their own lines:
       "status": "<complete|needs_attention|incomplete>",
       "highlights": ["<key finding 1>", "<key finding 2>"],
       "gaps": ["<missing info 1>", "<missing info 2>"],
+      "keyMetrics": { "<metric_name>": "<metric_value>" },
       "deepDivePrompt": "<opening message for a follow-up deep-dive conversation>"
     }
   ]
