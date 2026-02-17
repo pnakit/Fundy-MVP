@@ -339,19 +339,81 @@ function extractOnboardingSummary(responseText) {
   const endIdx = responseText.indexOf(SUMMARY_END_MARKER, jsonStart);
   if (endIdx === -1) return null;
 
-  const jsonString = responseText.substring(jsonStart, endIdx).trim();
+  let jsonString = responseText.substring(jsonStart, endIdx).trim();
 
+  // Fix trailing commas — most common LLM JSON error
+  jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
+
+  let parsed;
   try {
-    const parsed = JSON.parse(jsonString);
-    if (parsed.categories && Array.isArray(parsed.categories) && parsed.categories.length === 10) {
-      return parsed;
-    }
-    console.warn('Onboarding summary has unexpected shape:', parsed);
-    return null;
+    parsed = JSON.parse(jsonString);
   } catch (e) {
     console.error('Failed to parse onboarding summary JSON:', e);
-    return null;
+    return { error: 'parse_error', message: 'The summary data could not be parsed.' };
   }
+
+  if (!parsed.categories || !Array.isArray(parsed.categories)) {
+    console.warn('Onboarding summary missing categories array:', parsed);
+    return { error: 'missing_categories', message: 'The summary is missing category data.' };
+  }
+
+  if (parsed.categories.length < 5) {
+    console.warn(`Onboarding summary has only ${parsed.categories.length} categories`);
+    return { error: 'too_few_categories', message: `Only ${parsed.categories.length} categories were returned.` };
+  }
+
+  const validIds = new Set(ONBOARDING_CATEGORIES.map(c => c.id));
+
+  // Normalize each category: coerce types, derive status, ensure required fields
+  parsed.categories = parsed.categories
+    .filter(cat => cat && typeof cat === 'object' && validIds.has(cat.id))
+    .map(cat => {
+      const completeness = Math.max(0, Math.min(100, Math.round(Number(cat.completeness) || 0)));
+      const status = completeness >= 70 ? 'complete' : completeness >= 40 ? 'needs_attention' : 'incomplete';
+      const catDef = ONBOARDING_CATEGORIES.find(c => c.id === cat.id);
+
+      return {
+        ...cat,
+        completeness,
+        status,
+        title: cat.title || catDef?.title || cat.id,
+        highlights: Array.isArray(cat.highlights) ? cat.highlights.filter(h => typeof h === 'string') : [],
+        gaps: Array.isArray(cat.gaps) ? cat.gaps.filter(g => typeof g === 'string') : [],
+        keyMetrics: (cat.keyMetrics && typeof cat.keyMetrics === 'object') ? cat.keyMetrics : {},
+        deepDivePrompt: typeof cat.deepDivePrompt === 'string' ? cat.deepDivePrompt
+          : `Let's explore ${catDef?.title || 'this area'} in more detail.`,
+      };
+    });
+
+  // Fill missing categories with placeholders
+  const presentIds = new Set(parsed.categories.map(c => c.id));
+  for (const catDef of ONBOARDING_CATEGORIES) {
+    if (!presentIds.has(catDef.id)) {
+      parsed.categories.push({
+        id: catDef.id,
+        title: catDef.title,
+        summary: 'This area was not covered during the onboarding conversation.',
+        completeness: 0,
+        status: 'incomplete',
+        highlights: [],
+        gaps: ['Not yet discussed — click to explore this topic'],
+        keyMetrics: {},
+        deepDivePrompt: `We haven't discussed ${catDef.title} yet. Let's start by understanding your current situation in this area.`,
+      });
+    }
+  }
+
+  // Sort to match ONBOARDING_CATEGORIES order
+  const orderMap = Object.fromEntries(ONBOARDING_CATEGORIES.map((c, i) => [c.id, i]));
+  parsed.categories.sort((a, b) => (orderMap[a.id] ?? 99) - (orderMap[b.id] ?? 99));
+
+  // Recalculate overall completeness
+  parsed.overallCompleteness = Math.round(
+    parsed.categories.reduce((sum, c) => sum + c.completeness, 0) / parsed.categories.length
+  );
+  parsed.companyName = parsed.companyName || 'Your Company';
+
+  return parsed;
 }
 
 // Dify API — supports blocking, streaming, and mock fallback modes
@@ -492,6 +554,18 @@ const DifyAPI = {
   // Mock fallback — used when VITE_DIFY_MOCK=true
   async sendMessageMock(message, conversationId) {
     await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Trigger summary generation when user types "summary" or "finish"
+    const lower = message.toLowerCase();
+    if (lower.includes('summary') || lower.includes('finish')) {
+      const summaryJson = JSON.stringify(MOCK_ONBOARDING_SUMMARY);
+      return {
+        message: `Great, I've compiled everything you've shared into a comprehensive evaluation across 10 key dimensions.\n\n${SUMMARY_START_MARKER}\n${summaryJson}\n${SUMMARY_END_MARKER}`,
+        conversationId: conversationId || 'conv_' + Date.now(),
+        messageId: 'msg_' + Date.now(),
+        fallback: false,
+      };
+    }
 
     const responses = [
       "Thanks for sharing that information. I've recorded your company details. Could you tell me more about your target market and customer segments?",
@@ -684,9 +758,24 @@ export default function StartupPlatform() {
     setConversationId(response.conversationId);
     setUploadedFiles([]);
 
-    const summary = extractOnboardingSummary(response.message);
+    const result = extractOnboardingSummary(response.message);
 
-    if (summary) {
+    if (result && result.error) {
+      // Summary markers found but extraction failed
+      const conversationalPart = response.message
+        .substring(0, response.message.indexOf(SUMMARY_START_MARKER))
+        .trim();
+
+      if (conversationalPart) {
+        setMessages(prev => [...prev, { role: 'assistant', content: conversationalPart }]);
+      }
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `I prepared your summary but encountered a formatting issue: ${result.message} Let me try generating it again.`,
+        isError: true,
+      }]);
+    } else if (result) {
+      // Valid summary — transition to summary phase
       const conversationalPart = response.message
         .substring(0, response.message.indexOf(SUMMARY_START_MARKER))
         .trim();
@@ -695,9 +784,10 @@ export default function StartupPlatform() {
         setMessages(prev => [...prev, { role: 'assistant', content: conversationalPart }]);
       }
 
-      setOnboardingSummary(summary);
+      setOnboardingSummary(result);
       setOnboardingPhase('summary');
     } else {
+      // No summary markers — normal chat message
       setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
     }
   };
@@ -728,9 +818,26 @@ export default function StartupPlatform() {
         // Finalize: remove streaming flag, check for summary
         setConversationId(response.conversationId);
         setUploadedFiles([]);
-        const summary = extractOnboardingSummary(response.message);
+        const result = extractOnboardingSummary(response.message);
 
-        if (summary) {
+        if (result && result.error) {
+          // Summary markers found but extraction failed
+          const conversationalPart = response.message
+            .substring(0, response.message.indexOf(SUMMARY_START_MARKER))
+            .trim();
+          setMessages(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              role: 'assistant',
+              content: conversationalPart || 'I tried to prepare your summary but encountered an issue.',
+            };
+            return [...updated, {
+              role: 'assistant',
+              content: `Formatting issue: ${result.message} Let me try again.`,
+              isError: true,
+            }];
+          });
+        } else if (result) {
           const conversationalPart = response.message
             .substring(0, response.message.indexOf(SUMMARY_START_MARKER))
             .trim();
@@ -739,7 +846,7 @@ export default function StartupPlatform() {
             updated[updated.length - 1] = { role: 'assistant', content: conversationalPart || response.message };
             return updated;
           });
-          setOnboardingSummary(summary);
+          setOnboardingSummary(result);
           setOnboardingPhase('summary');
         } else {
           setMessages(prev => {
@@ -1026,6 +1133,14 @@ export default function StartupPlatform() {
   const renderMessageContent = (msg) => {
     if (msg.isFile) {
       return <div className="file-message">{msg.content}</div>;
+    }
+    if (msg.isError) {
+      return (
+        <div className="message-error">
+          <span className="error-badge">error</span>
+          {msg.content}
+        </div>
+      );
     }
     if (msg.content.startsWith('[mock] ')) {
       return (
@@ -1910,6 +2025,26 @@ export default function StartupPlatform() {
           letter-spacing: 0.05em;
           font-weight: 600;
           vertical-align: middle;
+        }
+
+        .error-badge {
+          display: inline-block;
+          padding: 0.125rem 0.375rem;
+          background: rgba(245, 158, 11, 0.15);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+          border-radius: 4px;
+          font-size: 0.6875rem;
+          color: #f59e0b;
+          margin-right: 0.5rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          font-weight: 600;
+          vertical-align: middle;
+        }
+
+        .message-error {
+          border-left: 3px solid #f59e0b;
+          padding-left: 0.75rem;
         }
 
         /* Summary & Deep-Dive Styles */
