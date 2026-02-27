@@ -1,32 +1,18 @@
-const WORKFLOW_KEYS = {
-  onboarding: () => process.env.DIFY_ONBOARDING_API_KEY,
-  deepdive: () => process.env.DIFY_DEEPDIVE_API_KEY,
-};
-
-function resolveApiKey(workflow) {
-  const getter = WORKFLOW_KEYS[workflow];
-  const requestedKey = getter ? getter() : undefined;
-  const fallbackKey = WORKFLOW_KEYS.onboarding();
-  const apiKey = requestedKey || fallbackKey;
-  const usingFallback = !requestedKey && workflow !== 'onboarding';
-  return { apiKey, usingFallback };
-}
+import { resolveApiKey, getDifyBaseUrl } from './_shared.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const DIFY_BASE_URL = process.env.DIFY_BASE_URL || 'https://api.dify.ai/v1';
   const { workflow, query, conversation_id, user, files, response_mode, inputs } = req.body;
-
   const { apiKey, usingFallback } = resolveApiKey(workflow || 'onboarding');
 
   if (!apiKey) {
     return res.status(500).json({ error: 'No Dify API keys configured' });
   }
 
-  const difyResponse = await fetch(`${DIFY_BASE_URL}/chat-messages`, {
+  const difyResponse = await fetch(`${getDifyBaseUrl()}/chat-messages`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
