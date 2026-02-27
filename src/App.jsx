@@ -6,15 +6,27 @@ import {
   ONBOARDING_CATEGORIES,
   MOCK_ONBOARDING_SUMMARY,
   INITIAL_ACTION_ITEMS,
+  EVALUATION_DIMENSIONS,
+  MATURITY_STAGES,
 } from './data/mockData';
 import DifyAPI from './api/difyApi';
 import { extractOnboardingSummary, SUMMARY_START_MARKER } from './utils/extractSummary';
-import { getSuitabilityColor, getStatusColor, getPriorityColor, getCategoryStatusColor } from './utils/colors';
+import {
+  getSuitabilityColor,
+  getStatusColor,
+  getPriorityColor,
+  getCategoryStatusColor,
+  getMaturityColor,
+  getPerformanceColor,
+  getPerformanceLabel,
+  getMaturityLabel,
+} from './utils/colors';
 import RadarChart from './components/RadarChart';
 import ProgressRing from './components/ProgressRing';
 import ChatPanel from './components/ChatPanel';
 import PasswordScreen from './components/PasswordScreen';
 import ErrorBoundary from './components/ErrorBoundary';
+import { addInvestmentActions, removeInvestmentActions } from './utils/actionItems';
 
 let nextActionId = 100;
 function generateActionId() {
@@ -42,6 +54,7 @@ export default function StartupPlatform() {
   const [activeCategory, setActiveCategory] = useState(null);
   const [categoryConversations, setCategoryConversations] = useState({});
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [expandedDimension, setExpandedDimension] = useState(null);
 
   // Process a completed Dify response — check for summary, update messages
   const processCompletedResponse = (response) => {
@@ -272,26 +285,14 @@ export default function StartupPlatform() {
   };
 
   const toggleInvestment = (investmentId) => {
-    setSelectedInvestments(prev => {
+    setSelectedInvestments((prev) => {
       const isSelected = prev.includes(investmentId);
       if (isSelected) {
-        // Remove investment and its associated actions
-        setActionItems(prevActions => prevActions.filter(a => a.source !== investmentId));
-        return prev.filter(id => id !== investmentId);
+        setActionItems((prevActions) => removeInvestmentActions(prevActions, investmentId));
+        return prev.filter((id) => id !== investmentId);
       } else {
-        // Add investment and its actions
-        const newActions = INVESTMENT_ACTIONS[investmentId] || [];
-        setActionItems(prevActions => [
-          ...prevActions,
-          ...newActions.map(action => ({
-            ...action,
-            id: generateActionId(),
-            status: "pending",
-            files: [],
-            inputs: {},
-            source: investmentId
-          }))
-        ]);
+        const rawActions = INVESTMENT_ACTIONS[investmentId] || [];
+        setActionItems((prevActions) => addInvestmentActions(prevActions, investmentId, rawActions, generateActionId));
         return [...prev, investmentId];
       }
     });
@@ -737,153 +738,285 @@ export default function StartupPlatform() {
   };
 
   // Window 2: Evaluation & Actions
-  const renderEvaluationWindow = () => (
-    <div className="evaluation-window">
-      <div className="eval-header">
-        <h2>Evaluation & Actions</h2>
-        <p>Your company's performance analysis and required actions</p>
-      </div>
+  const renderEvaluationWindow = () => {
+    const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 
-      <div className="eval-content">
-        {/* Maturity Stage */}
-        <div className="maturity-section">
-          <div className="maturity-card">
-            <div className="maturity-badge">
-              <span className="maturity-level">Stage {evaluationData.maturityLevel}</span>
-              <span className="maturity-name">{evaluationData.maturityStage}</span>
-            </div>
-            <p className="maturity-desc">{evaluationData.maturityDescription}</p>
-            <div className="maturity-track">
-              {['Ideation', 'Validation', 'Growth', 'Scale', 'Mature'].map((stage, idx) => (
-                <div key={stage} className={`track-step ${idx < evaluationData.maturityLevel ? 'completed' : ''} ${idx === evaluationData.maturityLevel - 1 ? 'current' : ''}`}>
-                  <div className="track-dot"></div>
-                  <span>{stage}</span>
-                </div>
-              ))}
-            </div>
+    // Enrich dimensions with metadata, sorted by performance ascending (worst first)
+    const enrichedDimensions = evaluationData.dimensions
+      .map((d) => ({
+        ...d,
+        ...EVALUATION_DIMENSIONS.find((ed) => ed.id === d.id),
+      }))
+      .sort((a, b) => a.performanceScore - b.performanceScore);
+
+    // Radar chart data: maturity levels scaled to 0-100
+    const radarData = evaluationData.dimensions.map((d) => {
+      const def = EVALUATION_DIMENSIONS.find((ed) => ed.id === d.id);
+      return { name: def?.shortTitle || d.id, score: d.maturityLevel * 20 };
+    });
+
+    // Group evaluation action items by dimension, sorted worst-performing first
+    const evaluationActions = actionItems.filter((a) => a.sourceType === 'evaluation');
+    const actionsByDimension = enrichedDimensions
+      .filter((d) => evaluationActions.some((a) => a.dimensionId === d.id))
+      .map((d) => ({
+        dimension: d,
+        actions: evaluationActions
+          .filter((a) => a.dimensionId === d.id)
+          .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 4) - (PRIORITY_ORDER[b.priority] ?? 4)),
+      }));
+
+    // Investment-sourced actions (shown after evaluation groups)
+    const investmentActions = actionItems.filter((a) => a.sourceType === 'investment');
+
+    return (
+      <div className="evaluation-window">
+        <div className="eval-header">
+          <div>
+            <h2>Evaluation & Actions</h2>
+            <p>Your company&apos;s evaluation across key business dimensions</p>
           </div>
         </div>
 
-        {/* Charts Section */}
-        <div className="charts-section">
-          <div className="chart-card radar-card">
-            <h3>Performance Dimensions</h3>
-            <div className="radar-container">
-              <RadarChart data={evaluationData.dimensions} size={320} />
-            </div>
-          </div>
-
-          <div className="chart-card bars-card">
-            <h3>Performance Metrics</h3>
-            <div className="bar-charts">
-              {evaluationData.performance.map((item, idx) => (
-                <div key={idx} className="bar-item">
-                  <div className="bar-label">
-                    <span>{item.metric}</span>
-                    <span className="bar-value">{item.value}%</span>
-                  </div>
-                  <div className="bar-track">
+        <div className="eval-content">
+          {/* Overall Assessment */}
+          <div className="eval-overall-card">
+            <div className="eval-overall-row">
+              <div className="eval-overall-box">
+                <span className="eval-overall-label">Stage</span>
+                <span className="eval-overall-value">{evaluationData.overallMaturity.name}</span>
+                <div className="maturity-track">
+                  {MATURITY_STAGES.map((stage) => (
                     <div
-                      className="bar-fill"
-                      style={{
-                        width: `${item.value}%`,
-                        background: item.value >= item.benchmark ? '#10b981' : '#f59e0b'
-                      }}
-                    ></div>
-                    <div
-                      className="bar-benchmark"
-                      style={{ left: `${item.benchmark}%` }}
-                      title={`Benchmark: ${item.benchmark}%`}
-                    ></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="bar-legend">
-              <span><i className="legend-line"></i> Your Performance</span>
-              <span><i className="legend-dot"></i> Industry Benchmark</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Items */}
-        <div className="actions-section">
-          <div className="actions-header">
-            <h3>Action Items</h3>
-            <span className="action-count">{actionItems.filter(a => a.status !== 'completed').length} pending</span>
-          </div>
-
-          <div className="action-cards">
-            {actionItems.map(action => (
-              <div
-                key={action.id}
-                className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
-              >
-                <div className="action-card-header" onClick={() => setExpandedAction(expandedAction === action.id ? null : action.id)}>
-                  <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
-                  <div className="action-info">
-                    <h4>{action.title}</h4>
-                    <p>{action.description}</p>
-                  </div>
-                  <div className="action-meta">
-                    {action.source && (
-                      <span className="action-source">{MOCK_INVESTMENT_DATA.investments.find(i => i.id === action.source)?.type}</span>
-                    )}
-                    <span className={`action-status ${action.status}`}>
-                      {action.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
-                </div>
-
-                {expandedAction === action.id && (
-                  <div className="action-card-body">
-                    <div className="action-input-group">
-                      <label>Notes / Response</label>
-                      <textarea
-                        value={action.inputs.notes || ''}
-                        onChange={(e) => handleActionInput(action.id, 'notes', e.target.value)}
-                        placeholder="Add your notes or response here..."
-                      />
+                      key={stage.level}
+                      className={`track-step ${stage.level <= evaluationData.overallMaturity.level ? 'completed' : ''} ${stage.level === evaluationData.overallMaturity.level ? 'current' : ''}`}
+                    >
+                      <div className="track-dot"></div>
+                      <span>{stage.name}</span>
                     </div>
+                  ))}
+                </div>
+              </div>
+              <div className="eval-overall-box">
+                <span className="eval-overall-label">Progress</span>
+                <span className="eval-overall-value">
+                  {evaluationData.overallPerformance.score} <span className="eval-overall-unit">/ 5</span>
+                </span>
+                <span className="eval-overall-sublabel" style={{ color: getPerformanceColor(evaluationData.overallPerformance.score) }}>
+                  {evaluationData.overallPerformance.label}
+                </span>
+              </div>
+            </div>
+            <p className="eval-description">{evaluationData.description}</p>
+          </div>
 
-                    <div className="action-files">
-                      <label>Attachments</label>
-                      <div className="file-upload-zone">
-                        <input
-                          type="file"
-                          id={`file-${action.id}`}
-                          onChange={(e) => handleActionFileUpload(action.id, e)}
-                          style={{ display: 'none' }}
-                        />
-                        <label htmlFor={`file-${action.id}`} className="file-upload-btn">
-                          <span>📎</span> Upload File
-                        </label>
-                        {action.files.map((file, idx) => (
-                          <div key={idx} className="uploaded-file-chip">
-                            📄 {file.name}
-                          </div>
+          {/* Dimension Analysis — radar + progress details side by side */}
+          <div className="dimension-analysis">
+            <div className="dimension-analysis-chart">
+              <h3>Maturity</h3>
+              <div className="radar-container">
+                <RadarChart data={radarData} size={300} />
+              </div>
+            </div>
+            <div className="dimension-analysis-details">
+              <h3>Progress Details</h3>
+              <div className="dimension-grid">
+                {enrichedDimensions.map((dim) => (
+                  <div
+                    key={dim.id}
+                    className={`dimension-card ${expandedDimension === dim.id ? 'expanded' : ''}`}
+                    onClick={() => setExpandedDimension(expandedDimension === dim.id ? null : dim.id)}
+                  >
+                    <div className="dimension-card-top">
+                      <span className="dimension-icon">{dim.icon}</span>
+                      <span className="dimension-title">{dim.title}</span>
+                    </div>
+                    <span className="perf-label" style={{ color: getPerformanceColor(dim.performanceScore) }}>
+                      {dim.performanceScore}/5 {getPerformanceLabel(dim.performanceScore)}
+                    </span>
+                    <div className="dimension-card-perf">
+                      <div className="perf-bar">
+                        {[1, 2, 3, 4, 5].map((seg) => (
+                          <div
+                            key={seg}
+                            className={`perf-bar-segment ${seg <= dim.performanceScore ? 'filled' : ''}`}
+                            style={seg <= dim.performanceScore ? { background: getPerformanceColor(dim.performanceScore) } : undefined}
+                          />
                         ))}
                       </div>
                     </div>
-
-                    <div className="action-buttons">
-                      <button
-                        className="btn-complete"
-                        onClick={() => setActionItems(prev => prev.map(a => a.id === action.id ? {...a, status: 'completed'} : a))}
-                      >
-                        Mark Complete
-                      </button>
-                    </div>
+                    <span className="dimension-expand-hint">
+                      {expandedDimension === dim.id ? 'Details ▴' : 'Details ▾'}
+                    </span>
+                    {expandedDimension === dim.id && (
+                      <div className="dimension-description">{dim.description}</div>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
+            </div>
+          </div>
+
+          {/* Action Items */}
+          <div className="actions-section">
+            <div className="actions-header">
+              <h3>Action Items <span className="action-count">{actionItems.filter((a) => a.status !== 'completed').length} pending</span></h3>
+            </div>
+
+            <div className="action-cards">
+              {actionsByDimension.map(({ dimension, actions }) => (
+                <div key={dimension.id} className="action-dimension-group">
+                  <div className="action-dimension-header">
+                    <span>{dimension.icon}</span>
+                    <span className="action-dimension-name">{dimension.title}</span>
+                    <span className="action-dimension-perf-badge" style={{ background: `${getPerformanceColor(dimension.performanceScore)}20`, color: getPerformanceColor(dimension.performanceScore), borderColor: `${getPerformanceColor(dimension.performanceScore)}40` }}>
+                      {getPerformanceLabel(dimension.performanceScore)}
+                    </span>
+                  </div>
+                  {actions.map((action) => (
+                    <div
+                      key={action.id}
+                      className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
+                    >
+                      <div className="action-card-header" onClick={() => setExpandedAction(expandedAction === action.id ? null : action.id)}>
+                        <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
+                        <div className="action-info">
+                          <h4>{action.title}</h4>
+                          <p>{action.description}</p>
+                        </div>
+                        <div className="action-meta">
+                          <span className={`action-status ${action.status}`}>
+                            {action.status.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
+                      </div>
+
+                      {expandedAction === action.id && (
+                        <div className="action-card-body">
+                          <div className="action-input-group">
+                            <label>Notes / Response</label>
+                            <textarea
+                              value={action.inputs.notes || ''}
+                              onChange={(e) => handleActionInput(action.id, 'notes', e.target.value)}
+                              placeholder="Add your notes or response here..."
+                            />
+                          </div>
+
+                          <div className="action-files">
+                            <label>Attachments</label>
+                            <div className="file-upload-zone">
+                              <input
+                                type="file"
+                                id={`file-${action.id}`}
+                                onChange={(e) => handleActionFileUpload(action.id, e)}
+                                style={{ display: 'none' }}
+                              />
+                              <label htmlFor={`file-${action.id}`} className="file-upload-btn">
+                                <span>📎</span> Upload File
+                              </label>
+                              {action.files.map((file, idx) => (
+                                <div key={idx} className="uploaded-file-chip">
+                                  📄 {file.name}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="action-buttons">
+                            <button
+                              className="btn-complete"
+                              onClick={() => setActionItems((prev) => prev.map((a) => (a.id === action.id ? { ...a, status: 'completed' } : a)))}
+                            >
+                              Mark Complete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              {investmentActions.length > 0 && (
+                <div className="action-dimension-group">
+                  <div className="action-dimension-header">
+                    <span>💰</span>
+                    <span className="action-dimension-name">Investment Actions</span>
+                  </div>
+                  {investmentActions.map((action) => (
+                    <div
+                      key={action.id}
+                      className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
+                    >
+                      <div className="action-card-header" onClick={() => setExpandedAction(expandedAction === action.id ? null : action.id)}>
+                        <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
+                        <div className="action-info">
+                          <h4>{action.title}</h4>
+                          <p>{action.description}</p>
+                        </div>
+                        <div className="action-meta">
+                          {action.sourceId && (
+                            <span className="action-source">{MOCK_INVESTMENT_DATA.investments.find((i) => i.id === action.sourceId)?.type}</span>
+                          )}
+                          <span className={`action-status ${action.status}`}>
+                            {action.status.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
+                      </div>
+
+                      {expandedAction === action.id && (
+                        <div className="action-card-body">
+                          <div className="action-input-group">
+                            <label>Notes / Response</label>
+                            <textarea
+                              value={action.inputs.notes || ''}
+                              onChange={(e) => handleActionInput(action.id, 'notes', e.target.value)}
+                              placeholder="Add your notes or response here..."
+                            />
+                          </div>
+
+                          <div className="action-files">
+                            <label>Attachments</label>
+                            <div className="file-upload-zone">
+                              <input
+                                type="file"
+                                id={`file-${action.id}`}
+                                onChange={(e) => handleActionFileUpload(action.id, e)}
+                                style={{ display: 'none' }}
+                              />
+                              <label htmlFor={`file-${action.id}`} className="file-upload-btn">
+                                <span>📎</span> Upload File
+                              </label>
+                              {action.files.map((file, idx) => (
+                                <div key={idx} className="uploaded-file-chip">
+                                  📄 {file.name}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="action-buttons">
+                            <button
+                              className="btn-complete"
+                              onClick={() => setActionItems((prev) => prev.map((a) => (a.id === action.id ? { ...a, status: 'completed' } : a)))}
+                            >
+                              Mark Complete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Window 3: Investment Matching
   const renderInvestmentWindow = () => (
@@ -904,7 +1037,7 @@ export default function StartupPlatform() {
             <span className="summary-label">Selected</span>
           </div>
           <div className="summary-card">
-            <span className="summary-value">{actionItems.filter(a => a.source).length}</span>
+            <span className="summary-value">{actionItems.filter(a => a.sourceType === 'investment').length}</span>
             <span className="summary-label">Actions Added</span>
           </div>
         </div>

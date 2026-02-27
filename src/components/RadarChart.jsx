@@ -20,7 +20,7 @@ const RadarChart = React.memo(function RadarChart({ data, size = 300 }) {
   const pathD = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
 
   return (
-    <svg width={size} height={size} className="radar-chart">
+    <svg width={size} height={size} className="radar-chart" style={{ overflow: 'visible' }}>
       {/* Grid circles */}
       {gridLevels.map(level => (
         <polygon
@@ -74,7 +74,7 @@ const RadarChart = React.memo(function RadarChart({ data, size = 300 }) {
 
       {/* Labels */}
       {data.map((d, i) => {
-        const labelRadius = radius + 30;
+        const labelRadius = radius + 35;
         const angle = angleStep * i - Math.PI / 2;
         const x = center + labelRadius * Math.cos(angle);
         const y = center + labelRadius * Math.sin(angle);

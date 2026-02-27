@@ -1,24 +1,110 @@
+export const EVALUATION_DIMENSIONS = [
+  { id: 'product_technology', title: 'Product & Technology', shortTitle: 'Product', icon: '🔧' },
+  { id: 'market_traction', title: 'Market Traction & Revenue', shortTitle: 'Market', icon: '📈' },
+  { id: 'business_model', title: 'Business Model & Economics', shortTitle: 'Business', icon: '💡' },
+  { id: 'team_organization', title: 'Team & Organization', shortTitle: 'Team', icon: '👥' },
+  { id: 'go_to_market', title: 'Go-to-Market', shortTitle: 'GTM', icon: '🚀' },
+  { id: 'financial_health', title: 'Financial Health', shortTitle: 'Finance', icon: '💰' },
+  { id: 'fundraising_capital', title: 'Fundraising & Capital', shortTitle: 'Fundraising', icon: '🏦' },
+  { id: 'competitive_position', title: 'Competitive Position', shortTitle: 'Competition', icon: '🏆' },
+  { id: 'operations', title: 'Operations', shortTitle: 'Ops', icon: '⚙️' },
+  { id: 'legal_compliance', title: 'Legal & Compliance', shortTitle: 'Legal', icon: '⚖️' },
+];
+
+export const MATURITY_STAGES = [
+  { level: 1, name: 'Concept' },
+  { level: 2, name: 'Early' },
+  { level: 3, name: 'Validated' },
+  { level: 4, name: 'Scaling' },
+  { level: 5, name: 'Leader' },
+];
+
+export const PERFORMANCE_RATINGS = [
+  { score: 1, label: 'Poor' },
+  { score: 2, label: 'Fair' },
+  { score: 3, label: 'Average' },
+  { score: 4, label: 'Good' },
+  { score: 5, label: 'Exceptional' },
+];
+
 export const MOCK_EVALUATION_DATA = {
-  maturityStage: "Growth",
-  maturityLevel: 3,
-  maturityDescription: "Your company has established product-market fit and is scaling operations",
+  overallMaturity: { level: 3, name: 'Validated' },
+  overallPerformance: { score: 3.2, label: 'Average' },
+  description:
+    'Your company has validated its core offering and is building toward scale, with strong product execution but gaps in legal readiness and financial planning.',
+
   dimensions: [
-    { name: "Team", score: 78 },
-    { name: "Product", score: 85 },
-    { name: "Market", score: 72 },
-    { name: "Traction", score: 68 },
-    { name: "Financials", score: 55 },
-    { name: "Strategy", score: 80 },
-    { name: "Operations", score: 65 },
-    { name: "Technology", score: 88 }
+    {
+      id: 'product_technology',
+      maturityLevel: 4,
+      performanceScore: 4,
+      description:
+        'Strong technical foundation with proprietary ML pipeline and API-first architecture. Good scalability but IP protection strategy needs attention. Technical debt is manageable.',
+    },
+    {
+      id: 'market_traction',
+      maturityLevel: 3,
+      performanceScore: 3,
+      description:
+        'Growing MRR with strong net retention. Customer acquisition cost trending down. Total addressable market analysis and competitor market share data still needed.',
+    },
+    {
+      id: 'business_model',
+      maturityLevel: 3,
+      performanceScore: 3,
+      description:
+        'SaaS subscription model with tiered pricing and gross margins above 70%. Unit economics promising but need validation at scale. Customer lifetime value calculation incomplete.',
+    },
+    {
+      id: 'team_organization',
+      maturityLevel: 4,
+      performanceScore: 4,
+      description:
+        'Strong founding team with complementary skills. CEO has deep domain expertise, CTO has scaled systems before. Key hires needed: VP Sales, 2 senior engineers.',
+    },
+    {
+      id: 'go_to_market',
+      maturityLevel: 3,
+      performanceScore: 3,
+      description:
+        'Product-led growth motion with emerging enterprise sales. Self-serve funnel converting at 4.2%. Enterprise playbook and partner channel strategy need formalization.',
+    },
+    {
+      id: 'financial_health',
+      maturityLevel: 2,
+      performanceScore: 2,
+      description:
+        '18 months runway at current burn. Revenue covers 40% of expenses. Detailed financial projections and cash flow forecasting not yet provided.',
+    },
+    {
+      id: 'fundraising_capital',
+      maturityLevel: 2,
+      performanceScore: 3,
+      description:
+        'Seed round closed 8 months ago. Warm introductions to 3 Series A funds. Target valuation and detailed use of funds breakdown still needed.',
+    },
+    {
+      id: 'competitive_position',
+      maturityLevel: 3,
+      performanceScore: 4,
+      description:
+        'Clear technical moat with 3x performance advantage. First-mover in AI-powered segment. Competitive matrix and barrier-to-entry analysis would strengthen positioning narrative.',
+    },
+    {
+      id: 'operations',
+      maturityLevel: 2,
+      performanceScore: 2,
+      description:
+        'Lean operations with strong engineering processes. CI/CD with 99.9% uptime. Customer support scaling plan, vendor management, and disaster recovery all need attention.',
+    },
+    {
+      id: 'legal_compliance',
+      maturityLevel: 1,
+      performanceScore: 1,
+      description:
+        'Basic corporate structure in place (Delaware C-Corp). GDPR compliance unknown, IP assignments not confirmed, regulatory requirements not mapped for target markets.',
+    },
   ],
-  performance: [
-    { metric: "Revenue Growth", value: 82, benchmark: 70 },
-    { metric: "Customer Retention", value: 75, benchmark: 80 },
-    { metric: "Burn Efficiency", value: 60, benchmark: 65 },
-    { metric: "Team Velocity", value: 88, benchmark: 75 },
-    { metric: "Market Penetration", value: 45, benchmark: 50 }
-  ]
 };
 
 export const MOCK_INVESTMENT_DATA = {
@@ -323,7 +409,14 @@ export const MOCK_ONBOARDING_SUMMARY = {
 };
 
 export const INITIAL_ACTION_ITEMS = [
-  { id: 1, title: "Complete Company Profile", description: "Finish entering basic company information in the onboarding chat", priority: "high", status: "in_progress", files: [], inputs: {} },
-  { id: 2, title: "Upload Pitch Deck", description: "Share your current investor presentation", priority: "high", status: "pending", files: [], inputs: {} },
-  { id: 3, title: "Financial Statements", description: "Provide last 12 months of financial data", priority: "medium", status: "pending", files: [], inputs: {} }
+  { id: 1, actionKey: 'gdpr-compliance', title: 'GDPR Compliance Audit', description: 'Review data handling practices for EU regulatory compliance', priority: 'critical', status: 'pending', sourceType: 'evaluation', sourceId: null, dimensionId: 'legal_compliance', files: [], inputs: {} },
+  { id: 2, actionKey: 'ip-assignments', title: 'IP Assignment Review', description: 'Confirm IP assignment agreements for all contributors and contractors', priority: 'high', status: 'pending', sourceType: 'evaluation', sourceId: null, dimensionId: 'legal_compliance', files: [], inputs: {} },
+  { id: 3, actionKey: 'regulatory-mapping', title: 'Regulatory Requirements Mapping', description: 'Identify and document all regulatory requirements for target markets', priority: 'medium', status: 'pending', sourceType: 'evaluation', sourceId: null, dimensionId: 'legal_compliance', files: [], inputs: {} },
+  { id: 4, actionKey: 'cash-flow-forecast', title: 'Cash Flow Forecast', description: 'Build 12-month cash flow projection with scenario modeling', priority: 'high', status: 'pending', sourceType: 'evaluation', sourceId: null, dimensionId: 'financial_health', files: [], inputs: {} },
+  { id: 5, actionKey: 'financial-projections', title: 'Financial Projections', description: 'Provide last 12 months of financial data and 3-year projections', priority: 'medium', status: 'pending', sourceType: 'evaluation', sourceId: null, dimensionId: 'financial_health', files: [], inputs: {} },
+  { id: 6, actionKey: 'disaster-recovery', title: 'Disaster Recovery Plan', description: 'Document disaster recovery and business continuity procedures', priority: 'high', status: 'pending', sourceType: 'evaluation', sourceId: null, dimensionId: 'operations', files: [], inputs: {} },
+  { id: 7, actionKey: 'support-scaling', title: 'Customer Support Scaling Plan', description: 'Define support model and scaling strategy for next growth phase', priority: 'medium', status: 'pending', sourceType: 'evaluation', sourceId: null, dimensionId: 'operations', files: [], inputs: {} },
+  { id: 8, actionKey: 'series-a-strategy', title: 'Series A Strategy', description: 'Define target valuation, investor pipeline, and fundraising timeline', priority: 'high', status: 'pending', sourceType: 'evaluation', sourceId: null, dimensionId: 'fundraising_capital', files: [], inputs: {} },
+  { id: 9, actionKey: 'gtm-playbook', title: 'Enterprise Sales Playbook', description: 'Document enterprise sales motion, pricing, and channel strategy', priority: 'medium', status: 'pending', sourceType: 'evaluation', sourceId: null, dimensionId: 'go_to_market', files: [], inputs: {} },
+  { id: 10, actionKey: 'patent-filings', title: 'Provisional Patent Filings', description: 'Protect core IP with provisional patent applications', priority: 'medium', status: 'pending', sourceType: 'evaluation', sourceId: null, dimensionId: 'product_technology', files: [], inputs: {} },
 ];

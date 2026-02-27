@@ -680,8 +680,12 @@ body {
 
 /* Evaluation Window Styles */
 .evaluation-window {
-  height: calc(100vh - 140px);
-  overflow-y: auto;
+  min-height: calc(100vh - 140px);
+}
+
+.eval-content {
+  display: flex;
+  flex-direction: column;
 }
 
 .eval-header, .invest-header {
@@ -699,44 +703,62 @@ body {
   color: rgba(255,255,255,0.5);
 }
 
-.maturity-section {
+/* Overall Assessment Card */
+.eval-overall-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  padding: 1.5rem;
   margin-bottom: 2rem;
 }
 
-.maturity-card {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.05));
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  border-radius: 16px;
-  padding: 1.5rem;
-}
-
-.maturity-badge {
+.eval-overall-row {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
 }
 
-.maturity-level {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  padding: 0.375rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
+.eval-overall-box {
+  flex: 1;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.eval-overall-label {
+  font-size: 0.6875rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.4);
 }
 
-.maturity-name {
+.eval-overall-value {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 1.5rem;
+  font-size: 2rem;
   font-weight: 700;
+  color: #e8e8ed;
 }
 
-.maturity-desc {
-  color: rgba(255,255,255,0.6);
+.eval-overall-unit {
+  font-size: 1rem;
+  font-weight: 400;
+  color: rgba(255,255,255,0.4);
+}
+
+.eval-overall-sublabel {
   font-size: 0.9375rem;
-  margin-bottom: 1.5rem;
+  font-weight: 600;
+}
+
+.eval-description {
+  color: rgba(255,255,255,0.55);
+  font-size: 0.875rem;
+  line-height: 1.6;
 }
 
 .maturity-track {
@@ -794,108 +816,174 @@ body {
   color: rgba(255,255,255,0.9);
 }
 
-.charts-section {
-  display: grid;
-  grid-template-columns: 380px 1fr;
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.chart-card {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px;
-  padding: 1.5rem;
-}
-
-.chart-card h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: 1.5rem;
-}
-
 .radar-container {
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
-.bar-charts {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+/* Dimension Analysis — radar + progress details side by side */
+.dimension-analysis {
+  display: grid;
+  grid-template-columns: 1fr 3fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
 }
 
-.bar-item {
+.dimension-analysis-chart,
+.dimension-analysis-details {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.dimension-analysis-chart h3,
+.dimension-analysis-details h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.dimension-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.75rem;
+}
+
+.dimension-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-height: 110px;
 }
 
-.bar-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.875rem;
+.dimension-card:hover {
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
 }
 
-.bar-label span:first-child {
-  color: rgba(255,255,255,0.7);
+.dimension-card.expanded {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.05);
 }
 
-.bar-value {
-  font-weight: 600;
-}
-
-.bar-track {
-  height: 8px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 4px;
-  position: relative;
-  overflow: visible;
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 1s ease-out;
-}
-
-.bar-benchmark {
-  position: absolute;
-  top: -4px;
-  width: 2px;
-  height: 16px;
-  background: rgba(255,255,255,0.5);
-  transform: translateX(-50%);
-}
-
-.bar-legend {
-  display: flex;
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(255,255,255,0.06);
-  font-size: 0.8125rem;
-  color: rgba(255,255,255,0.5);
-}
-
-.bar-legend span {
+.dimension-card-top {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.legend-line {
-  width: 16px;
-  height: 4px;
-  background: linear-gradient(90deg, #10b981, #f59e0b);
-  border-radius: 2px;
+.dimension-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
 }
 
-.legend-dot {
-  width: 2px;
-  height: 12px;
-  background: rgba(255,255,255,0.5);
+.dimension-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #e8e8ed;
+  line-height: 1.2;
+}
+
+.dimension-maturity-badge {
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+.dimension-card-perf {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dimension-expand-hint {
+  font-size: 0.6875rem;
+  color: rgba(255,255,255,0.3);
+  text-align: center;
+  transition: color 0.2s ease;
+  margin-top: auto;
+}
+
+.dimension-card:hover .dimension-expand-hint {
+  color: rgba(255,255,255,0.5);
+}
+
+.dimension-description {
+  padding-top: 0.375rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.5;
+  animation: expandIn 0.2s ease;
+}
+
+/* Performance bar (5-segment) */
+.perf-bar {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+
+.perf-bar-segment {
+  height: 5px;
+  flex: 1;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.08);
+  transition: background 0.3s ease;
+}
+
+.perf-score {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  white-space: nowrap;
+}
+
+.perf-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+/* Action Items — Dimension Groups */
+.action-dimension-group {
+  margin-bottom: 1rem;
+}
+
+.action-dimension-group .action-card {
+  margin-left: 1.5rem;
+  width: 90%;
+}
+
+.action-dimension-header {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 0.5rem;
+}
+
+.action-dimension-name {
+  margin-right: 0.25rem;
+}
+
+.action-dimension-perf-badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.2rem 0.625rem;
+  border-radius: 100px;
+  border: 1px solid;
 }
 
 .actions-section {
@@ -1133,8 +1221,7 @@ body {
 
 /* Investment Window Styles */
 .investment-window {
-  height: calc(100vh - 140px);
-  overflow-y: auto;
+  min-height: calc(100vh - 140px);
 }
 
 .invest-summary {
@@ -1380,14 +1467,18 @@ body {
 }
 
 @media (max-width: 1024px) {
-  .charts-section {
+  .dimension-analysis {
     grid-template-columns: 1fr;
   }
 
-  .radar-card {
+  .dimension-analysis-chart {
     display: flex;
     flex-direction: column;
     align-items: center;
+  }
+
+  .eval-overall-row {
+    flex-direction: column;
   }
 }
 

@@ -38,3 +38,29 @@ export function getCategoryStatusColor(status) {
     default: return COLORS.muted;
   }
 }
+
+export function getMaturityColor(level) {
+  if (level >= 5) return '#8b5cf6';
+  if (level >= 4) return COLORS.success;
+  if (level >= 3) return COLORS.primary;
+  if (level >= 2) return COLORS.warning;
+  return COLORS.danger;
+}
+
+export function getPerformanceColor(score) {
+  if (score >= 5) return '#8b5cf6';
+  if (score >= 4) return COLORS.success;
+  if (score >= 3) return COLORS.primary;
+  if (score >= 2) return COLORS.warning;
+  return COLORS.danger;
+}
+
+export function getPerformanceLabel(score) {
+  const labels = { 1: 'Poor', 2: 'Fair', 3: 'Average', 4: 'Good', 5: 'Exceptional' };
+  return labels[Math.round(score)] || 'N/A';
+}
+
+export function getMaturityLabel(level) {
+  const labels = { 1: 'Concept', 2: 'Early', 3: 'Validated', 4: 'Scaling', 5: 'Leader' };
+  return labels[level] || 'N/A';
+}

@@ -71,6 +71,38 @@ Build evaluation and investments features first, then implement the architecture
 5. Vector search (pgvector)
 6. Dify proxy endpoints
 
+## v2.0 — Evaluation Page Redesign (Feb 2026)
+
+Complete redesign of the Evaluation & Actions page from the original 8-dimension, 0-100 scoring model to a 10-dimension maturity + performance framework.
+
+### What changed
+
+**New Data Model:**
+- 10 evaluation dimensions (Product & Tech, Market Traction, Business Model, Team, GTM, Financial Health, Fundraising, Competitive Position, Operations, Legal & Compliance)
+- Each dimension has a maturity level (1-5: Concept → Early → Validated → Scaling → Leader) and a performance score (1-5: Poor → Fair → Average → Good → Exceptional)
+- Each dimension includes a description paragraph (shown on card click)
+- Action items now have `sourceType` ('evaluation' | 'investment'), `sourceId`, `dimensionId`, and `actionKey` fields
+
+**New UI Layout (3 sections):**
+1. **Overall Assessment** — Stage card (maturity name + 5-dot tracker) + Progress card (score + label) + description paragraph
+2. **Dimension Analysis** — radar chart (maturity levels, left) + progress details card grid (5 columns, right). Cards are clickable to reveal descriptions. Sorted worst-performing first.
+3. **Action Items** — grouped by dimension (worst-performing first), with performance badges. Action cards indented under group headers at 90% width.
+
+**New Files:**
+- `src/utils/actionItems.js` — `addInvestmentActions()` and `removeInvestmentActions()` pure functions, used by both App.jsx and tests
+- `src/utils/actionItems.test.js` — 12 tests covering add/remove, metadata, immutability, edge cases
+
+**Updated Files:**
+- `src/data/mockData.js` — added `EVALUATION_DIMENSIONS`, `MATURITY_STAGES`, `PERFORMANCE_RATINGS` constants; replaced `MOCK_EVALUATION_DATA` and `INITIAL_ACTION_ITEMS` with new schemas
+- `src/utils/colors.js` — added `getMaturityColor()`, `getPerformanceColor()`, `getPerformanceLabel()`, `getMaturityLabel()`
+- `src/utils/colors.test.js` — added 15 new tests for the 4 new helpers (21 total, up from 6)
+- `src/components/RadarChart.jsx` — label radius increased for 10-axis spacing, SVG overflow visible
+- `src/components/InvestmentToggle.test.jsx` — fixed test harness to use real `sourceType`/`sourceId` logic via shared utility functions (was using stale `a.source` field); added 6th test
+- `src/App.jsx` — rewrote `renderEvaluationWindow()`, added `expandedDimension` state, `toggleInvestment` refactored to use `actionItems.js` utility
+- `src/styles/app.css` — removed old maturity/bar chart styles, added evaluation layout styles (overall card, dimension analysis grid, dimension cards, performance bars, action dimension groups)
+
+**Test totals:** 73 tests across 6 files (up from 45 across 5 files)
+
 ### Decisions explicitly deferred
 
 - **Server-side auth** — client-side password gate is acceptable for MVP demo. Revisit when real users need access control.
