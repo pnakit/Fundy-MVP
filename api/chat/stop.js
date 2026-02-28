@@ -1,8 +1,14 @@
 import { resolveApiKey, getDifyBaseUrl } from '../_shared.js';
+import { verifyAuth } from '../_auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await verifyAuth(req);
+  if (auth.error) {
+    return res.status(auth.status).json({ error: auth.error });
   }
 
   const { workflow, task_id, user } = req.body;
@@ -23,7 +29,7 @@ export default async function handler(req, res) {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ user: user || 'default-user' }),
+    body: JSON.stringify({ user: user || auth.user.sub }),
   });
 
   const data = await response.json();

@@ -1,8 +1,14 @@
 import { resolveApiKey, getDifyBaseUrl } from './_shared.js';
+import { verifyAuth } from './_auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await verifyAuth(req);
+  if (auth.error) {
+    return res.status(auth.status).json({ error: auth.error });
   }
 
   const { workflow, query, conversation_id, user, files, response_mode, inputs } = req.body;
@@ -23,7 +29,7 @@ export default async function handler(req, res) {
       query,
       response_mode: response_mode || 'blocking',
       conversation_id: conversation_id || '',
-      user: user || 'default-user',
+      user: user || auth.user.sub,
       files: files || [],
     }),
   });

@@ -103,9 +103,43 @@ Complete redesign of the Evaluation & Actions page from the original 8-dimension
 
 **Test totals:** 73 tests across 6 files (up from 45 across 5 files)
 
+## v2.1 — Supabase Auth (Feb 2026)
+
+Replaced the client-side password gate with Supabase email + OTP authentication.
+
+### What changed
+
+**New Files:**
+- `src/api/supabaseClient.js` — initializes Supabase client from `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`
+- `src/api/dataAccess.js` — auth methods: `signInWithOtp`, `verifyOtp`, `signOut`, `getSession`, `getUser`, `onAuthStateChange`
+- `src/components/LoginScreen.jsx` — two-step email → OTP login flow (8-digit code)
+- `src/components/LoginScreen.test.jsx` — 8 tests covering email + OTP steps
+- `api/_auth.js` — JWT validation middleware using `jose` (JWKS verification against Supabase)
+- `vercel.json` — security headers (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
+
+**Modified Files:**
+- `src/App.jsx` — replaced `PasswordScreen` with `LoginScreen`, added `session`/`authLoading` state, `onAuthStateChange` listener, sign-out button in header
+- `src/api/difyApi.js` — all API calls now include JWT in `Authorization` header via `getAuthHeaders()`
+- `api/chat.js`, `api/upload.js`, `api/chat/stop.js` — all serverless endpoints now validate JWT via `_auth.js` middleware
+- `.env.example` — added `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `src/styles/app.css` — added login/auth styles (`.login-back-btn`, `.header-actions`, `.header-email`, `.sign-out-btn`, `.password-submit:disabled`)
+
+**Test totals:** 81 tests across 7 files (up from 73 across 6 files)
+
+**Supabase dashboard config:**
+- Email OTP enabled (8-digit codes)
+- Custom email templates (dark-themed, using `{{ .Token }}` for OTP)
+- OTP uses "Magic Link" template for returning users, "Confirm Signup" template for new users
+- Site URL: `http://localhost:5173` for local dev (change to `https://app.nusuai.com` for production)
+
 ### Decisions explicitly deferred
 
-- **Server-side auth** — client-side password gate is acceptable for MVP demo. Revisit when real users need access control.
+- **Resend custom SMTP** — Supabase built-in SMTP limited to 2 emails/hr. Before going live with external users: configure Resend (host `smtp.resend.com`, port `465`, username `resend`, password = Resend API key, sender `auth@nusuai.com`). Requires domain verification (DNS records) in Resend dashboard first.
+- **OTP expiry tuning** — currently using Supabase defaults. Adjust later based on user feedback.
+- **CAPTCHA / bot protection** — not yet enabled. Enable before public launch.
+- **PasswordScreen** — still exists with passing tests but is no longer imported by App.jsx. Can be removed in a future cleanup.
+
+### Decisions from v2.0 still deferred
 - **Window components as separate files** — the three window render functions stay in App.jsx because they share too much state. Extracting would require Context or massive prop drilling, which is over-engineering for now.
 - **Full component test coverage** — only password gate and investment toggle tested. More component tests should be added after the architecture stabilizes.
 - **Integration test with mock HTTP server for Dify** — deferred until real Dify integration goes live.

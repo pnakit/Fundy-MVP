@@ -1,5 +1,13 @@
 import { MOCK_ONBOARDING_SUMMARY } from '../data/mockData';
 import { SUMMARY_START_MARKER, parseSSELine } from '../utils/extractSummary';
+import { supabase } from './supabaseClient';
+
+// Get the current JWT for authenticated API calls
+async function getAuthHeaders() {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 // Dify API — supports blocking, streaming, and mock fallback modes
 const DifyAPI = {
@@ -10,9 +18,10 @@ const DifyAPI = {
   async sendMessage(message, conversationId = null, files = [], user = 'default-user', workflow = 'onboarding') {
     if (this.isMock) return this.sendMessageMock(message, conversationId);
 
+    const authHeaders = await getAuthHeaders();
     const response = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify({
         workflow,
         inputs: {},
@@ -46,9 +55,10 @@ const DifyAPI = {
   async sendMessageStreaming(message, conversationId = null, files = [], user = 'default-user', onChunk, workflow = 'onboarding', onProgress) {
     if (this.isMock) return this.sendMessageMock(message, conversationId);
 
+    const authHeaders = await getAuthHeaders();
     const response = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify({
         workflow,
         inputs: {},
@@ -119,12 +129,14 @@ const DifyAPI = {
   async uploadFile(file, user = 'default-user', workflow = 'onboarding') {
     if (this.isMock) return this.uploadFileMock(file);
 
+    const authHeaders = await getAuthHeaders();
     const formData = new FormData();
     formData.append('file', file);
     formData.append('user', user);
 
     const response = await fetch(`/api/upload?workflow=${workflow}`, {
       method: 'POST',
+      headers: { ...authHeaders },
       body: formData,
     });
 

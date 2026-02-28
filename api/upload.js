@@ -1,4 +1,5 @@
 import { resolveApiKey, getDifyBaseUrl } from './_shared.js';
+import { verifyAuth } from './_auth.js';
 
 export const config = {
   api: {
@@ -9,6 +10,11 @@ export const config = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const auth = await verifyAuth(req);
+  if (auth.error) {
+    return res.status(auth.status).json({ error: auth.error });
   }
 
   const workflow = req.query.workflow || req.headers['x-dify-workflow'] || 'onboarding';

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   MOCK_EVALUATION_DATA,
   MOCK_INVESTMENT_DATA,
@@ -24,7 +24,8 @@ import {
 import RadarChart from './components/RadarChart';
 import ProgressRing from './components/ProgressRing';
 import ChatPanel from './components/ChatPanel';
-import PasswordScreen from './components/PasswordScreen';
+import LoginScreen from './components/LoginScreen';
+import { getSession, signOut, onAuthStateChange } from './api/dataAccess';
 import ErrorBoundary from './components/ErrorBoundary';
 import { addInvestmentActions, removeInvestmentActions } from './utils/actionItems';
 
@@ -34,9 +35,8 @@ function generateActionId() {
 }
 
 export default function StartupPlatform() {
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => sessionStorage.getItem('fundy_authenticated') === 'true'
-  );
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [activeWindow, setActiveWindow] = useState(0);
   const [messages, setMessages] = useState([
     { role: 'assistant', content: "Welcome to Startup Evaluator! I'm here to help understand your business and provide tailored insights. Let's start with the basics — what's your company name and what problem are you solving?" }
@@ -55,6 +55,27 @@ export default function StartupPlatform() {
   const [categoryConversations, setCategoryConversations] = useState({});
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [expandedDimension, setExpandedDimension] = useState(null);
+
+  // Auth: check existing session + listen for changes
+  useEffect(() => {
+    getSession().then((s) => {
+      setSession(s);
+      setAuthLoading(false);
+    }).catch(() => {
+      setAuthLoading(false);
+    });
+
+    const unsubscribe = onAuthStateChange((_event, s) => {
+      setSession(s);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const handleSignOut = async () => {
+    await signOut();
+    setSession(null);
+  };
 
   // Process a completed Dify response — check for summary, update messages
   const processCompletedResponse = (response) => {
@@ -1101,8 +1122,19 @@ export default function StartupPlatform() {
     </div>
   );
 
-  if (!isAuthenticated) {
-    return <PasswordScreen onAuthenticated={() => setIsAuthenticated(true)} />;
+  if (authLoading) {
+    return (
+      <div className="password-screen">
+        <div className="password-box">
+          <div className="logo-mark">S</div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginScreen onAuthenticated={() => {}} />;
   }
 
   return (
@@ -1135,6 +1167,11 @@ export default function StartupPlatform() {
             <span className="window-tab-icon">💰</span>
             <span className="window-tab-text">Investments</span>
           </button>
+        </div>
+
+        <div className="header-actions">
+          <span className="header-email">{session.user?.email}</span>
+          <button className="sign-out-btn" onClick={handleSignOut}>Sign out</button>
         </div>
       </header>
 
