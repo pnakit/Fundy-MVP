@@ -16,10 +16,8 @@ import {
   getStatusColor,
   getPriorityColor,
   getCategoryStatusColor,
-  getMaturityColor,
   getPerformanceColor,
   getPerformanceLabel,
-  getMaturityLabel,
 } from './utils/colors';
 import RadarChart from './components/RadarChart';
 import ProgressRing from './components/ProgressRing';
@@ -28,10 +26,20 @@ import LoginScreen from './components/LoginScreen';
 import { getSession, signOut, onAuthStateChange } from './api/dataAccess';
 import ErrorBoundary from './components/ErrorBoundary';
 import { addInvestmentActions, removeInvestmentActions } from './utils/actionItems';
+import { uploadFiles, buildUploadMessages } from './utils/fileUpload';
 
 let nextActionId = 100;
 function generateActionId() {
   return nextActionId++;
+}
+
+const CHAT_ERROR_MESSAGE = 'I apologize, but I encountered an error. Please try again.';
+
+/** Replace the last message in a messages array. Returns a new array. */
+function replaceLastMessage(messages, newMsg) {
+  const updated = [...messages];
+  updated[updated.length - 1] = newMsg;
+  return updated;
 }
 
 export default function StartupPlatform() {
@@ -39,7 +47,7 @@ export default function StartupPlatform() {
   const [authLoading, setAuthLoading] = useState(true);
   const [activeWindow, setActiveWindow] = useState(0);
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Welcome to Startup Evaluator! I'm here to help understand your business and provide tailored insights. Let's start with the basics — what's your company name and what problem are you solving?" }
+    { role: 'assistant', content: "Welcome to Fundy MVP! I'm here to help understand your business and provide tailored insights. Let's start with the basics — what's your company name and what problem are you solving?" }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -129,36 +137,26 @@ export default function StartupPlatform() {
           (accumulated) => {
             const markerIdx = accumulated.indexOf(SUMMARY_START_MARKER);
             if (markerIdx === -1) {
-              setMessages(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1] = { role: 'assistant', content: accumulated, isStreaming: true };
-                return updated;
-              });
+              setMessages(prev => replaceLastMessage(prev, { role: 'assistant', content: accumulated, isStreaming: true }));
             } else {
               const conversational = accumulated.substring(0, markerIdx).trim();
               const jsonPart = accumulated.substring(markerIdx);
               const idMatches = jsonPart.match(/"id"\s*:\s*"([^"]+)"/g) || [];
               const categoriesFound = idMatches.length;
-              // Extract the last category ID to look up its title
-              const lastIdMatch = jsonPart.match(/"id"\s*:\s*"([^"]+)"/g);
               let currentCategoryTitle = '';
-              if (lastIdMatch && lastIdMatch.length > 0) {
-                const lastId = lastIdMatch[lastIdMatch.length - 1].match(/"id"\s*:\s*"([^"]+)"/)[1];
+              if (idMatches.length > 0) {
+                const lastId = idMatches[idMatches.length - 1].match(/"id"\s*:\s*"([^"]+)"/)[1];
                 const catDef = ONBOARDING_CATEGORIES.find(c => c.id === lastId);
                 currentCategoryTitle = catDef ? catDef.title : lastId;
               }
-              setMessages(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  role: 'assistant',
-                  content: conversational,
-                  isStreaming: true,
-                  isSummaryGenerating: true,
-                  categoriesFound,
-                  currentCategoryTitle,
-                };
-                return updated;
-              });
+              setMessages(prev => replaceLastMessage(prev, {
+                role: 'assistant',
+                content: conversational,
+                isStreaming: true,
+                isSummaryGenerating: true,
+                categoriesFound,
+                currentCategoryTitle,
+              }));
             }
           },
           'onboarding',
@@ -166,9 +164,7 @@ export default function StartupPlatform() {
             setMessages(prev => {
               const last = prev[prev.length - 1];
               if (last?.isStreaming && !last?.content && !last?.isSummaryGenerating) {
-                const updated = [...prev];
-                updated[updated.length - 1] = { ...last, workflowNode: progress.title };
-                return updated;
+                return replaceLastMessage(prev, { ...last, workflowNode: progress.title });
               }
               return prev;
             });
@@ -183,42 +179,25 @@ export default function StartupPlatform() {
           const conversationalPart = response.message
             .substring(0, response.message.indexOf(SUMMARY_START_MARKER))
             .trim();
-          setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1] = {
+          setMessages(prev => [
+            ...replaceLastMessage(prev, {
               role: 'assistant',
               content: conversationalPart || 'I tried to prepare your summary but encountered an issue.',
-            };
-            return [...updated, {
-              role: 'assistant',
-              content: `Formatting issue: ${result.message} Let me try again.`,
-              isError: true,
-            }];
-          });
+            }),
+            { role: 'assistant', content: `Formatting issue: ${result.message} Let me try again.`, isError: true },
+          ]);
         } else if (result) {
           const conversationalPart = response.message
             .substring(0, response.message.indexOf(SUMMARY_START_MARKER))
             .trim();
-          setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1] = { role: 'assistant', content: conversationalPart || response.message };
-            return updated;
-          });
+          setMessages(prev => replaceLastMessage(prev, { role: 'assistant', content: conversationalPart || response.message }));
           setOnboardingSummary(result);
           setOnboardingPhase('summary');
         } else {
-          setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1] = { role: 'assistant', content: response.message };
-            return updated;
-          });
+          setMessages(prev => replaceLastMessage(prev, { role: 'assistant', content: response.message }));
         }
       } catch (_error) {
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: 'I apologize, but I encountered an error. Please try again.' };
-          return updated;
-        });
+        setMessages(prev => replaceLastMessage(prev, { role: 'assistant', content: CHAT_ERROR_MESSAGE }));
       }
     } else {
       setIsTyping(true);
@@ -226,7 +205,7 @@ export default function StartupPlatform() {
         const response = await DifyAPI.sendMessage(currentMessage, conversationId, uploadedFiles);
         processCompletedResponse(response);
       } catch (_error) {
-        setMessages(prev => [...prev, { role: 'assistant', content: "I apologize, but I encountered an error. Please try again." }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: CHAT_ERROR_MESSAGE }]);
       }
       setIsTyping(false);
     }
@@ -236,48 +215,20 @@ export default function StartupPlatform() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
-    const fileNames = files.map((f) => f.name);
-    setMessages((prev) => [...prev, { role: 'user', content: `Uploaded: ${fileNames.join(', ')}`, isFile: true }]);
+    setMessages((prev) => [...prev, { role: 'user', content: `Uploaded: ${files.map((f) => f.name).join(', ')}`, isFile: true }]);
     setIsTyping(true);
 
-    const succeeded = [];
-    const failed = [];
-
-    for (const file of files) {
-      try {
-        const result = await DifyAPI.uploadFile(file);
-        setUploadedFiles((prev) => [...prev, { fileId: result.fileId, fileName: file.name }]);
-        succeeded.push(file.name);
-      } catch (_error) {
-        failed.push(file.name);
-      }
-    }
+    const { succeeded, failed, uploadedFiles: newFiles } = await uploadFiles(files);
+    setUploadedFiles((prev) => [...prev, ...newFiles]);
 
     if (succeeded.length > 0) {
-      const namesStr = succeeded.map((n) => `"${n}"`).join(', ');
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `I've received ${namesStr}. Send a message to incorporate ${succeeded.length === 1 ? 'it' : 'them'} into your evaluation.`,
-        },
-      ]);
-      const prompt =
-        succeeded.length === 1
-          ? `I've uploaded "${succeeded[0]}". Please review it and ask me any relevant questions.`
-          : `I've uploaded ${succeeded.length} files (${succeeded.join(', ')}). Please review them and ask me any relevant questions.`;
+      const { message, prompt } = buildUploadMessages(succeeded, 'evaluation');
+      setMessages((prev) => [...prev, { role: 'assistant', content: message }]);
       setInputValue(prompt);
     }
 
     if (failed.length > 0) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `There was an issue uploading: ${failed.join(', ')}. Please try again.`,
-          isError: true,
-        },
-      ]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `There was an issue uploading: ${failed.join(', ')}. Please try again.`, isError: true }]);
     }
 
     setIsTyping(false);
@@ -353,18 +304,22 @@ export default function StartupPlatform() {
     setInputValue('');
 
     const appendAssistant = (content, extra = {}) => {
-      setCategoryConversations(prev => ({
-        ...prev,
-        [categoryId]: {
-          ...prev[categoryId],
-          ...extra,
-          messages: [...prev[categoryId].messages, { role: 'assistant', content, ...extra }],
-        }
-      }));
+      setCategoryConversations(prev => {
+        if (!prev[categoryId]) return prev;
+        return {
+          ...prev,
+          [categoryId]: {
+            ...prev[categoryId],
+            ...extra,
+            messages: [...prev[categoryId].messages, { role: 'assistant', content, ...extra }],
+          },
+        };
+      });
     };
 
     const updateLastMessage = (content, extra = {}) => {
       setCategoryConversations(prev => {
+        if (!prev[categoryId]) return prev;
         const msgs = [...prev[categoryId].messages];
         msgs[msgs.length - 1] = { role: 'assistant', content, ...extra };
         return {
@@ -401,7 +356,7 @@ export default function StartupPlatform() {
         const prefix = response.fallback ? '[onboarding] ' : '';
         updateLastMessage(prefix + response.message, { conversationId: response.conversationId });
       } catch (_error) {
-        updateLastMessage('I apologize, but I encountered an error. Please try again.');
+        updateLastMessage(CHAT_ERROR_MESSAGE);
       }
     } else {
       setIsTyping(true);
@@ -413,18 +368,21 @@ export default function StartupPlatform() {
         setUploadedFiles([]);
         const prefix = response.fallback ? '[onboarding] ' : '';
 
-        setCategoryConversations(prev => ({
-          ...prev,
-          [categoryId]: {
-            conversationId: response.conversationId,
-            messages: [
-              ...prev[categoryId].messages,
-              { role: 'assistant', content: prefix + response.message }
-            ],
-          }
-        }));
+        setCategoryConversations(prev => {
+          if (!prev[categoryId]) return prev;
+          return {
+            ...prev,
+            [categoryId]: {
+              conversationId: response.conversationId,
+              messages: [
+                ...prev[categoryId].messages,
+                { role: 'assistant', content: prefix + response.message }
+              ],
+            },
+          };
+        });
       } catch (_error) {
-        appendAssistant('I apologize, but I encountered an error. Please try again.');
+        appendAssistant(CHAT_ERROR_MESSAGE);
       }
       setIsTyping(false);
     }
@@ -435,67 +393,48 @@ export default function StartupPlatform() {
     if (files.length === 0 || !activeCategory) return;
 
     const categoryId = activeCategory;
-    const fileNames = files.map((f) => f.name);
 
-    setCategoryConversations((prev) => ({
-      ...prev,
-      [categoryId]: {
-        ...prev[categoryId],
-        messages: [...prev[categoryId].messages, { role: 'user', content: `Uploaded: ${fileNames.join(', ')}`, isFile: true }],
-      },
-    }));
-    setIsTyping(true);
-
-    const succeeded = [];
-    const failed = [];
-
-    for (const file of files) {
-      try {
-        const result = await DifyAPI.uploadFile(file, 'default-user', 'deepdive');
-        setUploadedFiles((prev) => [...prev, { fileId: result.fileId, fileName: file.name }]);
-        succeeded.push(file.name);
-      } catch (_error) {
-        failed.push(file.name);
-      }
-    }
-
-    if (succeeded.length > 0) {
-      const namesStr = succeeded.map((n) => `"${n}"`).join(', ');
-      setCategoryConversations((prev) => ({
+    setCategoryConversations((prev) => {
+      if (!prev[categoryId]) return prev;
+      return {
         ...prev,
         [categoryId]: {
           ...prev[categoryId],
-          messages: [
-            ...prev[categoryId].messages,
-            {
-              role: 'assistant',
-              content: `I've received ${namesStr}. Send a message to incorporate ${succeeded.length === 1 ? 'it' : 'them'} into our discussion.`,
-            },
-          ],
+          messages: [...prev[categoryId].messages, { role: 'user', content: `Uploaded: ${files.map((f) => f.name).join(', ')}`, isFile: true }],
         },
-      }));
-      const prompt =
-        succeeded.length === 1
-          ? `I've uploaded "${succeeded[0]}". Please incorporate this into our discussion.`
-          : `I've uploaded ${succeeded.length} files (${succeeded.join(', ')}). Please incorporate them into our discussion.`;
+      };
+    });
+    setIsTyping(true);
+
+    const { succeeded, failed, uploadedFiles: newFiles } = await uploadFiles(files, 'default-user', 'deepdive');
+    setUploadedFiles((prev) => [...prev, ...newFiles]);
+
+    if (succeeded.length > 0) {
+      const { message, prompt } = buildUploadMessages(succeeded, 'discussion');
+      setCategoryConversations((prev) => {
+        if (!prev[categoryId]) return prev;
+        return {
+          ...prev,
+          [categoryId]: {
+            ...prev[categoryId],
+            messages: [...prev[categoryId].messages, { role: 'assistant', content: message }],
+          },
+        };
+      });
       setInputValue(prompt);
     }
 
     if (failed.length > 0) {
-      setCategoryConversations((prev) => ({
-        ...prev,
-        [categoryId]: {
-          ...prev[categoryId],
-          messages: [
-            ...prev[categoryId].messages,
-            {
-              role: 'assistant',
-              content: `There was an issue uploading: ${failed.join(', ')}. Please try again.`,
-              isError: true,
-            },
-          ],
-        },
-      }));
+      setCategoryConversations((prev) => {
+        if (!prev[categoryId]) return prev;
+        return {
+          ...prev,
+          [categoryId]: {
+            ...prev[categoryId],
+            messages: [...prev[categoryId].messages, { role: 'assistant', content: `There was an issue uploading: ${failed.join(', ')}. Please try again.`, isError: true }],
+          },
+        };
+      });
     }
 
     setIsTyping(false);
@@ -566,23 +505,6 @@ export default function StartupPlatform() {
           {msg.content.slice(13)}
         </>
       );
-    }
-    return msg.content;
-  };
-
-  const renderDeepDiveMessageContent = (msg) => {
-    if (msg.isStreaming && !msg.content) {
-      return (
-        <div className="workflow-progress">
-          <span className="workflow-progress-icon">&#10022;</span>
-          <span className="workflow-progress-text">
-            {msg.workflowNode || 'Starting'}<span className="spaced-ellipsis"><span> .</span><span> .</span><span> .</span></span>
-          </span>
-        </div>
-      );
-    }
-    if (msg.isFile) {
-      return <div className="file-message">{msg.content}</div>;
     }
     return msg.content;
   };
@@ -734,7 +656,7 @@ export default function StartupPlatform() {
         onSend={handleDeepDiveSendMessage}
         onFileUpload={handleDeepDiveFileUpload}
         placeholder={`Ask about ${category?.title || 'this category'}...`}
-        renderMessageContent={renderDeepDiveMessageContent}
+        renderMessageContent={renderMessageContent}
         headerContent={
           <div className="chat-header">
             <div className="chat-title">
@@ -1142,7 +1064,7 @@ export default function StartupPlatform() {
       <header className="main-header">
         <div className="logo">
           <div className="logo-mark">S</div>
-          <span className="logo-text">Startup Evaluator</span>
+          <span className="logo-text">Fundy MVP</span>
         </div>
 
         <div className="window-tabs">

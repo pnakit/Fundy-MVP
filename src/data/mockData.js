@@ -19,14 +19,6 @@ export const MATURITY_STAGES = [
   { level: 5, name: 'Leader' },
 ];
 
-export const PERFORMANCE_RATINGS = [
-  { score: 1, label: 'Poor' },
-  { score: 2, label: 'Fair' },
-  { score: 3, label: 'Average' },
-  { score: 4, label: 'Good' },
-  { score: 5, label: 'Exceptional' },
-];
-
 export const MOCK_EVALUATION_DATA = {
   overallMaturity: { level: 3, name: 'Validated' },
   overallPerformance: { score: 3.2, label: 'Average' },

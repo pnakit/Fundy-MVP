@@ -23,12 +23,17 @@ src/
   App.jsx                   # Main orchestrator — state, handlers, render dispatch
   styles/app.css            # All CSS (extracted from inline styles)
   data/mockData.js          # Mock data constants (evaluation, investments, onboarding)
-  api/difyApi.js            # Dify API client (blocking, streaming, mock modes)
+  api/
+    supabaseClient.js       # Supabase client init (VITE_SUPABASE_URL + anon key)
+    dataAccess.js            # Data access layer — auth methods (Phase 1), persistence (future)
+    difyApi.js               # Dify API client (blocking, streaming, mock modes)
   utils/
     extractSummary.js       # LLM response parser — extracts onboarding summary JSON
     colors.js               # Shared color constants and status/priority color helpers
+    actionItems.js          # Pure functions for investment action item add/remove
+    fileUpload.js           # File upload helpers (uploadFiles, buildUploadMessages)
   components/
-    PasswordScreen.jsx      # Auth gate (password from VITE_APP_PASSWORD env var, sessionStorage)
+    LoginScreen.jsx         # Auth gate — email + OTP via Supabase Auth
     ChatPanel.jsx           # Reusable chat UI (messages + typing indicator + input)
     RadarChart.jsx          # SVG radar/spider chart (React.memo)
     ProgressRing.jsx        # SVG circular progress indicator (React.memo)
@@ -46,13 +51,18 @@ See `.env.example` for the full list. Key variables:
 | `DIFY_DEEPDIVE_API_KEY` | Server | API key for the deep-dive Dify workflow |
 | `VITE_DIFY_MOCK` | Client | Set `true` to use mock responses instead of real API |
 | `VITE_DIFY_STREAMING` | Client | Set `true` to use SSE streaming mode |
-| `VITE_APP_PASSWORD` | Client | Password for the auth gate (default: `fundy2026`) |
+| `VITE_SUPABASE_URL` | Client | Supabase project URL (safe to expose, RLS enforced) |
+| `VITE_SUPABASE_ANON_KEY` | Client | Supabase publishable anon key |
+| `SUPABASE_URL` | Server | Supabase project URL (for serverless functions) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server | Supabase service role key (NEVER expose to client) |
 
 Server-side vars are used by Vercel serverless functions and the Vite dev proxy. `VITE_`-prefixed vars are bundled into the client build.
 
 ## Architecture
 
 **Target Architecture**: See `Architecture.md` for the planned multi-tenancy, persistence, and auth architecture (Supabase unified stack). Consult that document when planning any work related to authentication, data persistence, file storage, vector search, or Dify integration updates. The current app uses mock/ephemeral state — the architecture document describes the production target.
+
+**Data Structure & Workflow Contracts**: See `datastructure.md` for the exact input/output contracts for all Dify workflows (onboarding, deep-dive, evaluation generation, investment matching), the data that flows between them, client-side validation rules, and database schema alignment. Consult that document when building or modifying Dify workflows, parsers, or persistence logic.
 
 React 18 single-page app built with Vite. No routing library, no state management library.
 
@@ -68,7 +78,7 @@ React 18 single-page app built with Vite. No routing library, no state managemen
 - `VITE_DIFY_STREAMING=true` → SSE streaming mode with `parseSSELine()` buffer management
 - Default → blocking mode via `/api/chat` proxy
 
-**Password protection** reads from `VITE_APP_PASSWORD` env var (defaults to `fundy2026`). Uses `sessionStorage` to persist across page refreshes within a session.
+**Authentication** uses Supabase Auth with email + OTP (8-digit codes). `LoginScreen` handles the two-step flow (email entry → OTP verification). `App.jsx` listens for auth state changes via `onAuthStateChange` and stores the session. All API calls include the JWT in the `Authorization` header. Serverless functions validate JWTs via `api/_auth.js` using Supabase JWKS.
 
 ### Serverless Functions (Vercel)
 
@@ -77,6 +87,7 @@ Production API routing lives in `/api`. These are Vercel serverless functions, n
 ```
 api/
   _shared.js          # resolveApiKey(workflow) + getDifyBaseUrl() — shared by all endpoints
+  _auth.js            # JWT validation middleware (Supabase JWKS via jose)
   chat.js             # POST /api/chat → Dify /chat-messages (blocking + streaming)
   upload.js           # POST /api/upload → Dify /files/upload (bodyParser disabled for multipart)
   chat/stop.js        # POST /api/chat/stop → Dify /chat-messages/{task_id}/stop
@@ -95,8 +106,9 @@ api/
 - `ProgressRing` component replaces all hand-rolled SVG circle progress indicators
 - `ChatPanel` component is shared between onboarding chat and deep-dive chat
 - Action item IDs use an incrementing counter (`generateActionId()`) — not `Date.now() + Math.random()`
-- Investment toggle properly cleans up associated action items on deselect
+- Investment toggle properly cleans up associated action items on deselect (via `actionItems.js` utility)
 - Each window is wrapped in `<ErrorBoundary name="...">` for crash isolation
+- Action items use `sourceType` ('evaluation' | 'investment'), `sourceId`, and `dimensionId` metadata
 
 ### Message Structure
 
@@ -119,10 +131,11 @@ Test files live alongside their source files (`*.test.js` / `*.test.jsx`).
 
 Current test coverage:
 - `extractSummary.test.js` — 22 tests: JSON parsing, validation, normalization, edge cases, SSE parser
-- `colors.test.js` — 6 tests: all color helper functions
+- `colors.test.js` — 21 tests: all color helper functions including maturity/performance helpers
 - `difyApi.test.js` — 7 tests: mock response structure, summary triggers, file upload
-- `PasswordScreen.test.jsx` — 5 tests: render, auth flow, error display, error clearing
-- `InvestmentToggle.test.jsx` — 5 tests: select/deselect, action cleanup, multi-investment
+- `LoginScreen.test.jsx` — 8 tests: email + OTP flow, error handling, back navigation
+- `InvestmentToggle.test.jsx` — 6 tests: select/deselect, action cleanup, multi-investment, metadata
+- `actionItems.test.js` — 12 tests: add/remove investment actions, metadata, immutability, edge cases
 
 Run a single test file: `npx vitest run src/utils/colors.test.js`
 

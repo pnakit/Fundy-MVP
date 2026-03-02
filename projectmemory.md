@@ -137,12 +137,45 @@ Replaced the client-side password gate with Supabase email + OTP authentication.
 - **Resend custom SMTP** — Supabase built-in SMTP limited to 2 emails/hr. Before going live with external users: configure Resend (host `smtp.resend.com`, port `465`, username `resend`, password = Resend API key, sender `auth@nusuai.com`). Requires domain verification (DNS records) in Resend dashboard first.
 - **OTP expiry tuning** — currently using Supabase defaults. Adjust later based on user feedback.
 - **CAPTCHA / bot protection** — not yet enabled. Enable before public launch.
-- **PasswordScreen** — still exists with passing tests but is no longer imported by App.jsx. Can be removed in a future cleanup.
-
 ### Decisions from v2.0 still deferred
 - **Window components as separate files** — the three window render functions stay in App.jsx because they share too much state. Extracting would require Context or massive prop drilling, which is over-engineering for now.
-- **Full component test coverage** — only password gate and investment toggle tested. More component tests should be added after the architecture stabilizes.
+- **Full component test coverage** — only LoginScreen and InvestmentToggle have component tests. More should be added after the architecture stabilizes.
 - **Integration test with mock HTTP server for Dify** — deferred until real Dify integration goes live.
 - **CSS Modules / styled-components** — static CSS file is sufficient for current scope.
 - **Message list virtualization (react-window)** — not needed until conversations exceed 100+ messages.
 - **Dev proxy deep-dive routing** — Vite dev proxy always uses the onboarding API key. Deep-dive workflow routing only works in production (Vercel serverless). Acceptable for now since mock mode is the primary dev workflow.
+
+## v2.2 — Code Quality Cleanup (Feb 2026)
+
+Codebase audit and cleanup pass before continuing architecture phases.
+
+### What changed
+
+**Dead code removed:**
+- Deleted `PasswordScreen.jsx` + `PasswordScreen.test.jsx` (replaced by LoginScreen in v2.1)
+- Removed unused `PERFORMANCE_RATINGS` constant from `mockData.js`
+- Removed `VITE_APP_PASSWORD` from `.env.example` (password gate replaced by Supabase auth)
+- Removed unused `getMaturityColor` and `getMaturityLabel` imports from App.jsx
+
+**DRY improvements:**
+- Extracted `src/utils/fileUpload.js` — `uploadFiles()` and `buildUploadMessages()` replace ~70 lines of duplicated file upload logic between `handleFileUpload` and `handleDeepDiveFileUpload`
+- Merged `renderDeepDiveMessageContent` into `renderMessageContent` — deep-dive was a strict subset, no need for a separate function
+- Extracted `replaceLastMessage()` helper — replaces 8+ instances of the `const updated = [...prev]; updated[updated.length - 1] = {...}; return updated;` pattern
+- Extracted `CHAT_ERROR_MESSAGE` constant — replaces 4 identical error strings
+
+**Bug fixes:**
+- Added null guards to `appendAssistant` and `updateLastMessage` closures in deep-dive handler — prevents crash if `categoryConversations[categoryId]` is undefined
+- Added null guards to all `setCategoryConversations` callbacks in `handleDeepDiveFileUpload`
+
+**Docs updated:**
+- Updated CLAUDE.md: project structure (LoginScreen, dataAccess, supabaseClient, actionItems), env vars (Supabase), auth description, serverless functions (_auth.js), test counts
+
+**New files:**
+- `src/utils/fileUpload.js` — pure upload utility functions
+- `src/utils/fileUpload.test.js` — 9 tests covering upload, failure, mixed results, message building
+
+**Test totals:** 85 tests across 7 files (up from 81; PasswordScreen's 5 tests removed, 9 fileUpload tests added)
+
+### DRY analysis: streaming handlers
+
+The onboarding and deep-dive streaming handlers share a similar skeleton but diverge significantly in details: onboarding has ~50 lines of summary-detection and progress-tracking logic, while deep-dive targets a nested state structure via closures. A full unification would create a complex abstraction with many callback parameters — over-engineering for the actual similarity. The `replaceLastMessage` helper and shared `CHAT_ERROR_MESSAGE` constant capture the real shared pieces.

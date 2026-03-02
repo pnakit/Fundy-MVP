@@ -5,7 +5,8 @@
       "Bash(npx eslint:*)",
       "Bash(npm run build:*)",
       "Bash(npx vite build:*)",
-      "Bash(npx vitest run)"
+      "Bash(npx vitest run)",
+      "Bash(git status -u)"
     ]
   }
 }

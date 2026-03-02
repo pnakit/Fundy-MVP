@@ -19,7 +19,7 @@ describe('LoginScreen — email step', () => {
   it('renders the email form', () => {
     render(<LoginScreen onAuthenticated={() => {}} />);
 
-    expect(screen.getByText('Startup Evaluator')).toBeInTheDocument();
+    expect(screen.getByText('Fundy MVP')).toBeInTheDocument();
     expect(screen.getByText('Enter your email to get started')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('you@company.com')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue with email' })).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe('LoginScreen — OTP step', () => {
 
     fireEvent.click(screen.getByText('Use a different email'));
 
-    expect(screen.getByText('Startup Evaluator')).toBeInTheDocument();
+    expect(screen.getByText('Fundy MVP')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('you@company.com')).toBeInTheDocument();
   });
 });

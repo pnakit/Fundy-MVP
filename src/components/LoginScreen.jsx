@@ -89,7 +89,7 @@ export default function LoginScreen({ onAuthenticated }) {
     <div className="password-screen">
       <form className="password-box" onSubmit={handleEmailSubmit}>
         <div className="logo-mark">S</div>
-        <h2>Startup Evaluator</h2>
+        <h2>Fundy MVP</h2>
         <p>Enter your email to get started</p>
         <input
           type="email"

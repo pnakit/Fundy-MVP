@@ -1,4 +1,4 @@
-# Startup Evaluator Platform
+# Fundy MVP
 
 A three-window startup evaluation platform with AI-powered analysis.
 
