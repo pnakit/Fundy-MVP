@@ -1,18 +1,33 @@
 import { verifyWebhook } from '../_webhookAuth.js';
 import { getSupabaseAdmin } from '../_supabase.js';
+import { generateEmbeddings } from './embeddings.js';
+import { semanticSearch } from './knowledgeBase.js';
 
 /**
  * GET/POST /api/knowledge/context
  *
  * Returns assembled per-category context for evaluation.
- * Called by Dify HTTP Request node.
+ * Called by Dify HTTP Request node or by our evaluation endpoint.
  *
- * Auth: webhook secret via X-Webhook-Secret header
+ * Auth: webhook secret via X-Webhook-Secret header or ?secret= query param
  *
- * GET:  /api/knowledge/context?user_id=UUID&secret=WEBHOOK_SECRET
- * POST: /api/knowledge/context  { user_id: "UUID" }
+ * POST body (JSON):
+ * {
+ *   "user_id": "UUID",
+ *   "queries": {                          // Optional — Dify controls what to search for
+ *     "product_technology": "working product MVP demo technical architecture",
+ *     "market_traction": "revenue MRR growth customers retention",
+ *     ...
+ *   }
+ * }
  *
- * The GET variant also accepts the secret as a query param for simpler Dify config.
+ * If queries are provided: generates embeddings → searches pgvector → returns KB results + onboarding data
+ * If queries are omitted: returns onboarding data only (no vector search)
+ *
+ * This means:
+ * - Dify controls the search terms (editable in Dify Studio, no code deploy)
+ * - Different workflows can send different queries to the same endpoint
+ * - Falls back gracefully if embeddings fail (returns onboarding-only context)
  */
 
 const CATEGORY_IDS = [
@@ -29,7 +44,6 @@ const CATEGORY_IDS = [
 ];
 
 export default async function handler(req, res) {
-  // Accept both GET and POST
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -46,8 +60,9 @@ export default async function handler(req, res) {
     return res.status(auth.status).json({ error: auth.error });
   }
 
-  // Get user_id from query params (GET) or body (POST)
+  // Parse params from query (GET) or body (POST)
   let user_id;
+  let queries;
   if (req.method === 'GET') {
     user_id = req.query?.user_id;
   } else {
@@ -56,18 +71,20 @@ export default async function handler(req, res) {
       try { body = JSON.parse(body); } catch (_e) { body = {}; }
     }
     user_id = body?.user_id || req.query?.user_id;
+    queries = body?.queries;
   }
 
   if (!user_id) {
     return res.status(400).json({
       error: 'user_id is required',
-      usage: 'GET /api/knowledge/context?user_id=UUID&secret=WEBHOOK_SECRET',
+      usage: 'POST with { "user_id": "UUID", "queries": { "category_id": "search terms" } }',
     });
   }
 
   try {
     const supabase = getSupabaseAdmin();
 
+    // Fetch onboarding summary
     const { data: summaryRow, error: summaryErr } = await supabase
       .from('onboarding_summaries')
       .select('summary_data')
@@ -79,7 +96,14 @@ export default async function handler(req, res) {
     }
 
     const onboardingSummary = summaryRow?.summary_data || null;
-    const contexts = buildContexts(onboardingSummary);
+
+    // If Dify sent queries, do vector search; otherwise return onboarding-only
+    let kbResults = {};
+    if (queries && typeof queries === 'object' && Object.keys(queries).length > 0) {
+      kbResults = await searchKnowledgeBase(queries, user_id);
+    }
+
+    const contexts = buildContexts(onboardingSummary, kbResults);
 
     return res.status(200).json(contexts);
   } catch (err) {
@@ -87,7 +111,42 @@ export default async function handler(req, res) {
   }
 }
 
-function buildContexts(onboardingSummary) {
+/**
+ * Search the knowledge base using queries provided by Dify.
+ * Returns { category_id: [results] } for each query that was provided.
+ */
+async function searchKnowledgeBase(queries, userId) {
+  const categoryIds = Object.keys(queries);
+  const queryTexts = categoryIds.map((id) => queries[id]);
+
+  let embeddings;
+  try {
+    embeddings = await generateEmbeddings(queryTexts);
+  } catch (err) {
+    console.error('Embedding generation failed, skipping KB search:', err.message);
+    return {};
+  }
+
+  const results = {};
+  const searchPromises = embeddings.map((embedding, i) =>
+    semanticSearch(embedding, { topK: 5, threshold: 0.5, userId }).catch((err) => {
+      console.error(`KB search failed for ${categoryIds[i]}: ${err.message}`);
+      return [];
+    }),
+  );
+
+  const searchResults = await Promise.all(searchPromises);
+  for (let i = 0; i < categoryIds.length; i++) {
+    results[categoryIds[i]] = searchResults[i];
+  }
+
+  return results;
+}
+
+/**
+ * Build per-category context combining onboarding data + KB search results.
+ */
+function buildContexts(onboardingSummary, kbResults) {
   const categoriesMap = {};
   if (onboardingSummary?.categories) {
     for (const cat of onboardingSummary.categories) {
@@ -98,7 +157,10 @@ function buildContexts(onboardingSummary) {
   const contexts = {};
   for (const categoryId of CATEGORY_IDS) {
     const cat = categoriesMap[categoryId];
-    const sections = ['## Onboarding Data'];
+    const sections = [];
+
+    // Section 1: Onboarding data
+    sections.push('## Onboarding Data');
     if (cat) {
       sections.push(`Summary: ${cat.summary}`);
       sections.push(`Completeness: ${cat.completeness}%`);
@@ -118,6 +180,19 @@ function buildContexts(onboardingSummary) {
     } else {
       sections.push('No onboarding data available for this category.');
     }
+
+    // Section 2: KB search results (if queries were provided and returned results)
+    const categoryResults = kbResults[categoryId];
+    if (categoryResults && categoryResults.length > 0) {
+      sections.push('\n## Retrieved Context');
+      categoryResults.forEach((result, idx) => {
+        const source = result.source_type || 'unknown';
+        sections.push(`[Source ${idx + 1} — ${source}, relevance: ${(result.score * 100).toFixed(0)}%]`);
+        sections.push(result.content);
+        if (idx < categoryResults.length - 1) sections.push('---');
+      });
+    }
+
     contexts[`context_${categoryId}`] = sections.join('\n');
   }
 
