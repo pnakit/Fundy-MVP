@@ -49,10 +49,19 @@ describe('getPriorityColor', () => {
 });
 
 describe('getCategoryStatusColor', () => {
-  it('maps category status strings to correct colors', () => {
+  it('maps onboarding completeness status to correct colors', () => {
     expect(getCategoryStatusColor('complete')).toBe(COLORS.success);
     expect(getCategoryStatusColor('needs_attention')).toBe(COLORS.warning);
     expect(getCategoryStatusColor('incomplete')).toBe(COLORS.danger);
+  });
+
+  it('maps evaluation evidence status to correct colors', () => {
+    expect(getCategoryStatusColor('proven')).toBe(COLORS.success);
+    expect(getCategoryStatusColor('partial')).toBe(COLORS.warning);
+    expect(getCategoryStatusColor('unproven')).toBe(COLORS.danger);
+  });
+
+  it('returns muted for unknown status', () => {
     expect(getCategoryStatusColor('unknown')).toBe(COLORS.muted);
   });
 });

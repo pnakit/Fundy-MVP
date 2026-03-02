@@ -32,9 +32,14 @@ export function getPriorityColor(priority) {
 
 export function getCategoryStatusColor(status) {
   switch (status) {
+    // Onboarding completeness: did the user provide the info?
     case 'complete': return COLORS.success;
     case 'needs_attention': return COLORS.warning;
     case 'incomplete': return COLORS.danger;
+    // Evaluation evidence: how well does the info prove the claim?
+    case 'proven': return COLORS.success;
+    case 'partial': return COLORS.warning;
+    case 'unproven': return COLORS.danger;
     default: return COLORS.muted;
   }
 }

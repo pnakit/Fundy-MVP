@@ -179,3 +179,97 @@ Codebase audit and cleanup pass before continuing architecture phases.
 ### DRY analysis: streaming handlers
 
 The onboarding and deep-dive streaming handlers share a similar skeleton but diverge significantly in details: onboarding has ~50 lines of summary-detection and progress-tracking logic, while deep-dive targets a nested state structure via closures. A full unification would create a complex abstraction with many callback parameters — over-engineering for the actual similarity. The `replaceLastMessage` helper and shared `CHAT_ERROR_MESSAGE` constant capture the real shared pieces.
+
+## v3.0 — Knowledge Retrieval + Streaming Evaluation Pipeline (Mar 2026)
+
+Built the plumbing for Dify workflows to pull user data from Supabase, plus a streaming evaluation pipeline.
+
+### Architecture decisions
+
+- **Retrieval in our API, not Dify**: Dify's Knowledge Retrieval node is statically configured. Our API queries the KB, assembles per-category context, and passes pre-retrieved content to Dify as input variables. This allows swapping between internal Supabase pgvector and external partner databases.
+- **Knowledge base abstraction**: Config-driven adapter pattern with unified `semanticSearch()` interface. Default from `ACTIVE_KNOWLEDGE_BASE` env var, per-request override.
+- **Embedding model**: OpenAI `text-embedding-3-small` (1536 dimensions). Config stored in `app_config` table for future swapability.
+- **Extracted file text in Supabase Storage**: Raw extracted text stored as `.txt` files alongside originals, tracked via `file_metadata.extracted_text_path`. Not in database.
+- **Full 12-table schema in one migration**: All planned tables from Architecture.md + datastructure.md updates, plus pgvector `document_embeddings` table. Avoids multiple migrations.
+- **Webhook auth separate from JWT auth**: `_webhookAuth.js` for future Dify → Vercel callbacks. Evaluation endpoint uses JWT auth (frontend-facing).
+
+### What changed
+
+**Database (supabase/migrations/001_initial_schema.sql):**
+- 12 tables: user_profiles, conversations, messages, onboarding_summaries, evaluations, action_items (updated schema), investment_selections, investment_recommendations (new), file_metadata (+extracted_text_path), app_config, deletion_audit, document_embeddings (new/pgvector)
+- Full RLS policies, indexes, trigger (enforce message user_id), HNSW vector index
+- `search_embeddings()` Postgres function for cosine similarity search
+- Seeded `app_config` with embedding model config
+- Supabase CLI initialized (`supabase/` directory)
+
+**Knowledge base layer (api/knowledge/):**
+- `knowledgeBase.js` — KB abstraction with internal Supabase pgvector adapter
+- `embeddings.js` — OpenAI embedding client (batch + single)
+- `embed.js` — `POST /api/knowledge/embed` ingestion endpoint (webhook auth)
+
+**Evaluation pipeline (api/evaluation/):**
+- `generate.js` — `POST /api/evaluation/generate` (JWT auth, SSE streaming)
+- `_categoryContext.js` — builds context for 10 categories: onboarding data + 10 parallel KB searches
+- `_difyWorkflow.js` — calls Dify `/workflows/run` (streaming), transforms `node_finished` → `category_complete`
+
+**Infrastructure (api/):**
+- `_supabase.js` — server-side Supabase admin client (service_role, cached)
+- `_webhookAuth.js` — webhook secret validation (constant-time comparison)
+- `_chunking.js` — text chunking (conversations: message-pair windows, summaries: per-category, files: fixed windows with overlap)
+- `_shared.js` — added `evaluation` to WORKFLOW_KEYS
+
+**Frontend:**
+- `src/api/evaluationApi.js` — streaming evaluation client (SSE → progressive callbacks)
+- `src/App.jsx` — new state hooks (evaluationLoading, evaluationProgress, evaluationStatus, evaluationError), `handleGenerateEvaluation()`, "Generate Evaluation" button with progress indicator
+- `src/styles/app.css` — evaluation button, progress indicator, error banner styles
+
+**Test data:**
+- `scripts/seed-test-data.js` — seeds conversations, summary, files, embeddings (`--real` or `--fake` mode)
+
+**New files (15):**
+- `supabase/migrations/001_initial_schema.sql`
+- `api/_supabase.js`, `api/_webhookAuth.js`, `api/_chunking.js`, `api/_chunking.test.js`
+- `api/knowledge/knowledgeBase.js`, `api/knowledge/embeddings.js`, `api/knowledge/embed.js`
+- `api/evaluation/generate.js`, `api/evaluation/_categoryContext.js`, `api/evaluation/_difyWorkflow.js`
+- `src/api/evaluationApi.js`
+- `scripts/seed-test-data.js`
+
+**Test totals:** 98 tests across 8 files (up from 85; 13 chunking tests added)
+
+### Infrastructure completed
+
+- pgvector enabled in Supabase Dashboard
+- Supabase CLI linked (`npx supabase link --project-ref jzenlaqfxnqfpcqsdwwt`)
+- Migration pushed (`001_initial_schema.sql` + `002_repair_vector_and_policies.sql`) — all 12 tables, RLS, indexes, pgvector, search function live
+- Test data seeded with fake embeddings (17 chunks: 4 onboarding + 3 deep-dive + 10 summary)
+- OpenAI API key set (quota-limited; real embeddings deferred)
+
+### v3.1 — Evaluation UX Polish (Mar 2026)
+
+**Changes:**
+- `evaluationData` starts as `null`, `actionItems` starts as `[]` — no more misleading mock data on load
+- Evaluation page shows placeholder: "Complete onboarding to begin" or "Ready to evaluate" depending on onboarding state
+- "Use Sample Data" button loads `MOCK_ONBOARDING_SUMMARY` for testing without completing onboarding
+- Client-side mock mode in `evaluationApi.js`: `VITE_DIFY_MOCK=true` runs evaluation entirely client-side; 404 fallback auto-mocks in dev without Vercel
+- Server-side mock mode in `generate.js`: when `DIFY_EVALUATION_API_KEY` is not set, returns simulated evaluation from onboarding summary
+- OpenAI quota fallback: if KB retrieval fails, falls back to onboarding-only context with yellow warning banner
+- `evaluationWarning` state + yellow banner for non-fatal issues (KB unavailable, mock mode)
+- Optional chaining on all `evaluationData.*` references to handle partial streaming state
+- `dify-evaluation-workflow.md` created — full setup guide for the Dify evaluation workflow
+
+**Test totals:** 98 tests across 8 files (unchanged)
+
+### Next steps
+
+1. Create Dify evaluation Workflow in Dify Studio (see `dify-evaluation-workflow.md`)
+2. Set `DIFY_EVALUATION_API_KEY` in `.env` and Vercel
+3. Set remaining Vercel env vars: `DIFY_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `ACTIVE_KNOWLEDGE_BASE`
+4. Re-seed with real embeddings: `node scripts/seed-test-data.js --real` (after OpenAI quota is available)
+
+### Decisions deferred
+
+- **Real embedding test** — OpenAI API key has quota limit; re-run seed with `--real` when billing is sorted
+- **External KB adapter** — config-driven but only internal Supabase adapter implemented
+- **File text extraction pipeline** — `extracted_text_path` column exists but no extraction logic yet
+- **Conversation persistence from client** — tables exist but client doesn't write to them yet (Phase 2)
+- **Additional serverless tests** — webhook auth, KB search, category context tests planned but not yet written

@@ -27,6 +27,7 @@ src/
     supabaseClient.js       # Supabase client init (VITE_SUPABASE_URL + anon key)
     dataAccess.js            # Data access layer — auth methods (Phase 1), persistence (future)
     difyApi.js               # Dify API client (blocking, streaming, mock modes)
+    evaluationApi.js         # Streaming evaluation client (SSE → progressive category rendering)
   utils/
     extractSummary.js       # LLM response parser — extracts onboarding summary JSON
     colors.js               # Shared color constants and status/priority color helpers
@@ -38,6 +39,13 @@ src/
     RadarChart.jsx          # SVG radar/spider chart (React.memo)
     ProgressRing.jsx        # SVG circular progress indicator (React.memo)
     ErrorBoundary.jsx       # Error boundary wrapper (per-window crash isolation)
+
+supabase/
+  migrations/
+    001_initial_schema.sql  # Full DB schema (12 tables + RLS + pgvector + search fn)
+
+scripts/
+  seed-test-data.js         # Seeds test conversations, summary, files, embeddings
 ```
 
 ## Environment Variables
@@ -55,6 +63,10 @@ See `.env.example` for the full list. Key variables:
 | `VITE_SUPABASE_ANON_KEY` | Client | Supabase publishable anon key |
 | `SUPABASE_URL` | Server | Supabase project URL (for serverless functions) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server | Supabase service role key (NEVER expose to client) |
+| `DIFY_EVALUATION_API_KEY` | Server | API key for the evaluation Dify Workflow |
+| `DIFY_WEBHOOK_SECRET` | Server + Dify | Shared secret for Dify → Vercel webhook auth |
+| `OPENAI_API_KEY` | Server | Embedding generation (text-embedding-3-small) |
+| `ACTIVE_KNOWLEDGE_BASE` | Server | KB selection — `internal` (Supabase pgvector) or partner ID |
 
 Server-side vars are used by Vercel serverless functions and the Vite dev proxy. `VITE_`-prefixed vars are bundled into the client build.
 
@@ -66,7 +78,7 @@ Server-side vars are used by Vercel serverless functions and the Vite dev proxy.
 
 React 18 single-page app built with Vite. No routing library, no state management library.
 
-**`App.jsx`** is the orchestrator — it owns all app state (~13 `useState` hooks) and passes it down to extracted components. The three main views (Onboarding, Evaluation, Investments) are render functions inside App.jsx because they share state (e.g., `actionItems` is used by both Evaluation and Investment windows).
+**`App.jsx`** is the orchestrator — it owns all app state (~18 `useState` hooks) and passes it down to extracted components. The three main views (Onboarding, Evaluation, Investments) are render functions inside App.jsx because they share state (e.g., `actionItems` is used by both Evaluation and Investment windows).
 
 **Onboarding** has three phases dispatched by `onboardingPhase` state:
 - `'chat'` → `renderOnboardingChat()` — conversational AI onboarding via ChatPanel
@@ -86,19 +98,31 @@ Production API routing lives in `/api`. These are Vercel serverless functions, n
 
 ```
 api/
-  _shared.js          # resolveApiKey(workflow) + getDifyBaseUrl() — shared by all endpoints
-  _auth.js            # JWT validation middleware (Supabase JWKS via jose)
-  chat.js             # POST /api/chat → Dify /chat-messages (blocking + streaming)
-  upload.js           # POST /api/upload → Dify /files/upload (bodyParser disabled for multipart)
-  chat/stop.js        # POST /api/chat/stop → Dify /chat-messages/{task_id}/stop
+  _shared.js              # resolveApiKey(workflow) + getDifyBaseUrl() — shared by all endpoints
+  _auth.js                # JWT validation middleware (Supabase JWKS via jose)
+  _supabase.js            # Supabase admin client (service_role key, cached)
+  _webhookAuth.js         # Webhook secret validation (Dify → Vercel auth)
+  _chunking.js            # Text chunking utilities (conversations, summaries, files)
+  chat.js                 # POST /api/chat → Dify /chat-messages (blocking + streaming)
+  upload.js               # POST /api/upload → Dify /files/upload (bodyParser disabled for multipart)
+  chat/stop.js            # POST /api/chat/stop → Dify /chat-messages/{task_id}/stop
+  knowledge/
+    knowledgeBase.js      # KB abstraction layer (swappable internal/external pgvector)
+    embeddings.js         # OpenAI embedding client (text-embedding-3-small)
+    embed.js              # POST /api/knowledge/embed — embedding ingestion endpoint
+  evaluation/
+    generate.js           # POST /api/evaluation/generate — orchestrates retrieval + Dify + SSE
+    _categoryContext.js   # Per-category context assembly (10 parallel KB searches)
+    _difyWorkflow.js      # Dify Workflow API + SSE stream transformation
 ```
 
-**Workflow routing**: request body includes a `workflow` field (`'onboarding'` or `'deepdive'`). `resolveApiKey()` maps this to the correct `DIFY_*_API_KEY` env var, falling back to the onboarding key if the requested workflow key is missing.
+**Workflow routing**: request body includes a `workflow` field (`'onboarding'`, `'deepdive'`, or `'evaluation'`). `resolveApiKey()` maps this to the correct `DIFY_*_API_KEY` env var, falling back to the onboarding key if the requested workflow key is missing.
 
 ### Dev vs Production API Routing
 
 - **Production (Vercel)**: `/api/chat` hits the serverless function in `api/chat.js`, which reads the `workflow` field from the request body and routes to the correct Dify API key.
 - **Development (Vite)**: `vite.config.js` proxies `/api/chat` → Dify directly, but always uses the onboarding key (the proxy can't easily parse the request body). Deep-dive workflow routing only works fully in production.
+- **Evaluation in dev**: No Vite proxy for `/api/evaluation/generate`. The client-side `evaluationApi.js` detects the 404 and automatically falls back to client-side mock mode.
 
 ### Key Patterns
 
@@ -109,6 +133,30 @@ api/
 - Investment toggle properly cleans up associated action items on deselect (via `actionItems.js` utility)
 - Each window is wrapped in `<ErrorBoundary name="...">` for crash isolation
 - Action items use `sourceType` ('evaluation' | 'investment'), `sourceId`, and `dimensionId` metadata
+
+### Knowledge Retrieval & Evaluation Pipeline
+
+**Architecture**: Retrieval happens in our API, not Dify. The `/api/evaluation/generate` endpoint queries the knowledge base, assembles per-category context, and passes pre-retrieved content to Dify as input variables. This lets us swap between internal Supabase pgvector and external partner databases without changing the Dify workflow.
+
+**Knowledge base abstraction** (`api/knowledge/knowledgeBase.js`): Config-driven adapter pattern with a unified `semanticSearch()` interface. Default KB from `ACTIVE_KNOWLEDGE_BASE` env var.
+
+**Evaluation flow**: Frontend → `/api/evaluation/generate` (JWT auth) → 10 parallel KB searches → context assembly → Dify Workflow API (streaming) → SSE events → frontend progressive rendering. See `dify-evaluation-workflow.md` for the Dify workflow setup guide.
+
+**Evaluation state**: `evaluationData` and `actionItems` start as `null`/`[]`. The evaluation page shows a placeholder until the user runs "Generate Evaluation". A "Use Sample Data" button loads `MOCK_ONBOARDING_SUMMARY` for testing without completing onboarding.
+
+**Evaluation mock mode**: Three fallback layers:
+1. `VITE_DIFY_MOCK=true` → client-side mock (never hits server)
+2. `/api/evaluation/generate` returns 404 in dev → client auto-falls back to mock
+3. Server has no `DIFY_EVALUATION_API_KEY` → server-side mock from onboarding data
+4. OpenAI quota exceeded → falls back to onboarding-only context (no KB search)
+
+**Dify node naming**: `eval_product_technology`, `eval_market_traction`, etc. — parsed from `node_finished` events to map to category IDs.
+
+**Chunking** (`api/_chunking.js`): Conversations chunked as message-pair windows with overlap; summaries chunked as one chunk per category; files chunked as ~2000 char windows with 400 char overlap.
+
+**Database**: 12 tables in `supabase/migrations/001_initial_schema.sql`. Includes pgvector `document_embeddings` table with HNSW index and `search_embeddings()` Postgres function.
+
+**Webhook auth** (`api/_webhookAuth.js`): Separate from JWT auth — for future Dify → Vercel callbacks. Validates `DIFY_WEBHOOK_SECRET` with timing-safe comparison.
 
 ### Message Structure
 
@@ -136,6 +184,8 @@ Current test coverage:
 - `LoginScreen.test.jsx` — 8 tests: email + OTP flow, error handling, back navigation
 - `InvestmentToggle.test.jsx` — 6 tests: select/deselect, action cleanup, multi-investment, metadata
 - `actionItems.test.js` — 12 tests: add/remove investment actions, metadata, immutability, edge cases
+- `fileUpload.test.js` — 9 tests: upload, failure, mixed results, message building
+- `_chunking.test.js` — 13 tests: conversation/summary/file chunking, overlap, edge cases
 
 Run a single test file: `npx vitest run src/utils/colors.test.js`
 

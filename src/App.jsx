@@ -27,6 +27,7 @@ import { getSession, signOut, onAuthStateChange } from './api/dataAccess';
 import ErrorBoundary from './components/ErrorBoundary';
 import { addInvestmentActions, removeInvestmentActions } from './utils/actionItems';
 import { uploadFiles, buildUploadMessages } from './utils/fileUpload';
+import { generateEvaluation } from './api/evaluationApi';
 
 let nextActionId = 100;
 function generateActionId() {
@@ -52,9 +53,14 @@ export default function StartupPlatform() {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState(null);
-  const [evaluationData, _setEvaluationData] = useState(MOCK_EVALUATION_DATA);
+  const [evaluationData, setEvaluationData] = useState(null);
+  const [evaluationLoading, setEvaluationLoading] = useState(false);
+  const [evaluationProgress, setEvaluationProgress] = useState(new Set());
+  const [evaluationStatus, setEvaluationStatus] = useState(null);
+  const [evaluationError, setEvaluationError] = useState(null);
+  const [evaluationWarning, setEvaluationWarning] = useState(null);
   const [investmentData, _setInvestmentData] = useState(MOCK_INVESTMENT_DATA);
-  const [actionItems, setActionItems] = useState(INITIAL_ACTION_ITEMS);
+  const [actionItems, setActionItems] = useState([]);
   const [selectedInvestments, setSelectedInvestments] = useState([]);
   const [expandedAction, setExpandedAction] = useState(null);
   const [onboardingPhase, setOnboardingPhase] = useState('chat');
@@ -680,23 +686,118 @@ export default function StartupPlatform() {
     );
   };
 
+  // Load sample onboarding data for evaluation testing
+  const handleLoadSampleData = () => {
+    setOnboardingSummary(MOCK_ONBOARDING_SUMMARY);
+  };
+
+  // Generate evaluation via streaming API
+  const handleGenerateEvaluation = async () => {
+    if (evaluationLoading) return;
+    if (!onboardingSummary?.categories) {
+      setEvaluationError('Complete onboarding first to generate an evaluation.');
+      return;
+    }
+
+    setEvaluationLoading(true);
+    setEvaluationError(null);
+    setEvaluationWarning(null);
+    setEvaluationStatus('Starting evaluation...');
+    setEvaluationProgress(new Set());
+
+    // Start with a blank evaluation shell
+    setEvaluationData({
+      overallMaturity: { level: 0, name: '—' },
+      overallPerformance: { score: 0, label: '—' },
+      description: '',
+      dimensions: [],
+    });
+
+    const companyName = onboardingSummary.companyName || 'Unknown Company';
+
+    const result = await generateEvaluation(companyName, onboardingSummary, {
+      onCategoryStarted: (categoryId) => {
+        setEvaluationProgress((prev) => new Set([...prev, categoryId]));
+        const dim = EVALUATION_DIMENSIONS.find((d) => d.id === categoryId);
+        setEvaluationStatus(`Evaluating ${dim?.title || categoryId}...`);
+      },
+      onCategoryComplete: (categoryData) => {
+        setEvaluationData((prev) => {
+          const dimensions = [...(prev.dimensions || [])];
+          const existingIdx = dimensions.findIndex((d) => d.id === categoryData.category_id);
+          const dim = {
+            id: categoryData.category_id,
+            maturityLevel: categoryData.completeness >= 70 ? 4 : categoryData.completeness >= 40 ? 3 : categoryData.completeness >= 20 ? 2 : 1,
+            performanceScore: Math.round(categoryData.completeness / 20),
+            description: categoryData.summary,
+          };
+          if (existingIdx >= 0) {
+            dimensions[existingIdx] = dim;
+          } else {
+            dimensions.push(dim);
+          }
+
+          // Recalculate overall scores
+          const avgPerformance = dimensions.reduce((sum, d) => sum + d.performanceScore, 0) / dimensions.length;
+          const avgMaturity = dimensions.reduce((sum, d) => sum + d.maturityLevel, 0) / dimensions.length;
+          const maturityLevel = Math.round(avgMaturity);
+          const maturityNames = ['', 'Concept', 'Early', 'Validated', 'Scaling', 'Leader'];
+          const perfLabels = ['', 'Poor', 'Fair', 'Average', 'Good', 'Exceptional'];
+
+          return {
+            ...prev,
+            dimensions,
+            overallMaturity: { level: maturityLevel, name: maturityNames[maturityLevel] || '—' },
+            overallPerformance: {
+              score: Math.round(avgPerformance * 10) / 10,
+              label: perfLabels[Math.round(avgPerformance)] || '—',
+            },
+            description: prev.description || `Evaluation in progress — ${dimensions.length}/10 dimensions complete.`,
+          };
+        });
+      },
+      onStatus: (message) => {
+        setEvaluationStatus(message);
+        if (message.includes('unavailable') || message.includes('Mock mode')) {
+          setEvaluationWarning(message);
+        }
+      },
+      onError: (message) => setEvaluationError(message),
+    });
+
+    setEvaluationLoading(false);
+    setEvaluationStatus(null);
+
+    if (result.success) {
+      setEvaluationData((prev) => ({
+        ...prev,
+        description: `Your company has been evaluated across ${prev.dimensions.length} key business dimensions.`,
+      }));
+    }
+  };
+
   // Window 2: Evaluation & Actions
   const renderEvaluationWindow = () => {
     const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+    const hasEvaluation = evaluationData && evaluationData.dimensions && evaluationData.dimensions.length > 0;
 
     // Enrich dimensions with metadata, sorted by performance ascending (worst first)
-    const enrichedDimensions = evaluationData.dimensions
-      .map((d) => ({
-        ...d,
-        ...EVALUATION_DIMENSIONS.find((ed) => ed.id === d.id),
-      }))
-      .sort((a, b) => a.performanceScore - b.performanceScore);
+    const enrichedDimensions = hasEvaluation
+      ? evaluationData.dimensions
+          .map((d) => ({
+            ...d,
+            ...EVALUATION_DIMENSIONS.find((ed) => ed.id === d.id),
+          }))
+          .sort((a, b) => a.performanceScore - b.performanceScore)
+      : [];
 
     // Radar chart data: maturity levels scaled to 0-100
-    const radarData = evaluationData.dimensions.map((d) => {
-      const def = EVALUATION_DIMENSIONS.find((ed) => ed.id === d.id);
-      return { name: def?.shortTitle || d.id, score: d.maturityLevel * 20 };
-    });
+    const radarData = hasEvaluation
+      ? evaluationData.dimensions.map((d) => {
+          const def = EVALUATION_DIMENSIONS.find((ed) => ed.id === d.id);
+          return { name: def?.shortTitle || d.id, score: d.maturityLevel * 20 };
+        })
+      : [];
 
     // Group evaluation action items by dimension, sorted worst-performing first
     const evaluationActions = actionItems.filter((a) => a.sourceType === 'evaluation');
@@ -719,20 +820,69 @@ export default function StartupPlatform() {
             <h2>Evaluation & Actions</h2>
             <p>Your company&apos;s evaluation across key business dimensions</p>
           </div>
+          <div className="eval-header-actions">
+            {evaluationLoading ? (
+              <div className="eval-progress-indicator">
+                <span className="eval-progress-icon">&#10022;</span>
+                <span>{evaluationStatus || 'Evaluating...'}</span>
+                <span className="eval-progress-count">{evaluationProgress.size}/10</span>
+              </div>
+            ) : (
+              <>
+                {!onboardingSummary && (
+                  <button className="eval-sample-btn" onClick={handleLoadSampleData}>
+                    Use Sample Data
+                  </button>
+                )}
+                <button
+                  className="eval-generate-btn"
+                  onClick={handleGenerateEvaluation}
+                  disabled={!onboardingSummary}
+                  title={onboardingSummary ? 'Generate AI evaluation' : 'Complete onboarding first'}
+                >
+                  Generate Evaluation
+                </button>
+              </>
+            )}
+          </div>
         </div>
+        {evaluationError && (
+          <div className="eval-error">
+            {evaluationError}
+            <button className="eval-error-dismiss" onClick={() => setEvaluationError(null)}>&times;</button>
+          </div>
+        )}
+        {evaluationWarning && !evaluationLoading && (
+          <div className="eval-warning">
+            {evaluationWarning}
+            <button className="eval-warning-dismiss" onClick={() => setEvaluationWarning(null)}>&times;</button>
+          </div>
+        )}
 
         <div className="eval-content">
+          {!hasEvaluation && !evaluationLoading ? (
+            <div className="eval-placeholder">
+              <div className="eval-placeholder-icon">&#9776;</div>
+              <h3>{onboardingSummary ? 'Ready to evaluate' : 'Complete onboarding to begin'}</h3>
+              <p>
+                {onboardingSummary
+                  ? 'Click "Generate Evaluation" to analyze your company across 10 key business dimensions.'
+                  : 'Complete the onboarding conversation first, or load sample data to test the evaluation flow.'}
+              </p>
+            </div>
+          ) : (
+          <>
           {/* Overall Assessment */}
           <div className="eval-overall-card">
             <div className="eval-overall-row">
               <div className="eval-overall-box">
                 <span className="eval-overall-label">Stage</span>
-                <span className="eval-overall-value">{evaluationData.overallMaturity.name}</span>
+                <span className="eval-overall-value">{evaluationData?.overallMaturity?.name || '—'}</span>
                 <div className="maturity-track">
                   {MATURITY_STAGES.map((stage) => (
                     <div
                       key={stage.level}
-                      className={`track-step ${stage.level <= evaluationData.overallMaturity.level ? 'completed' : ''} ${stage.level === evaluationData.overallMaturity.level ? 'current' : ''}`}
+                      className={`track-step ${stage.level <= evaluationData?.overallMaturity?.level ? 'completed' : ''} ${stage.level === evaluationData?.overallMaturity?.level ? 'current' : ''}`}
                     >
                       <div className="track-dot"></div>
                       <span>{stage.name}</span>
@@ -743,14 +893,14 @@ export default function StartupPlatform() {
               <div className="eval-overall-box">
                 <span className="eval-overall-label">Progress</span>
                 <span className="eval-overall-value">
-                  {evaluationData.overallPerformance.score} <span className="eval-overall-unit">/ 5</span>
+                  {evaluationData?.overallPerformance?.score} <span className="eval-overall-unit">/ 5</span>
                 </span>
-                <span className="eval-overall-sublabel" style={{ color: getPerformanceColor(evaluationData.overallPerformance.score) }}>
-                  {evaluationData.overallPerformance.label}
+                <span className="eval-overall-sublabel" style={{ color: getPerformanceColor(evaluationData?.overallPerformance?.score) }}>
+                  {evaluationData?.overallPerformance?.label}
                 </span>
               </div>
             </div>
-            <p className="eval-description">{evaluationData.description}</p>
+            <p className="eval-description">{evaluationData?.description}</p>
           </div>
 
           {/* Dimension Analysis — radar + progress details side by side */}
@@ -956,6 +1106,8 @@ export default function StartupPlatform() {
               )}
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
     );
