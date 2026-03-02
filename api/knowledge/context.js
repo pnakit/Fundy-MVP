@@ -45,10 +45,23 @@ export default async function handler(req, res) {
     return res.status(auth.status).json({ error: auth.error });
   }
 
-  const { user_id } = req.body;
+  // Parse body — handle cases where Vercel doesn't auto-parse
+  let body = req.body;
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch (_e) {
+      return res.status(400).json({ error: 'Invalid JSON body' });
+    }
+  }
+  if (!body || typeof body !== 'object') {
+    return res.status(400).json({ error: 'Request body is required (JSON with user_id)', received: typeof body });
+  }
+
+  const { user_id } = body;
 
   if (!user_id) {
-    return res.status(400).json({ error: 'user_id is required' });
+    return res.status(400).json({ error: 'user_id is required', body_keys: Object.keys(body) });
   }
 
   try {
