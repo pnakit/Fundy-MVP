@@ -1,33 +1,31 @@
 import { verifyWebhook } from '../_webhookAuth.js';
 import { getSupabaseAdmin } from '../_supabase.js';
-import { generateEmbeddings } from './embeddings.js';
+import { generateEmbedding } from './embeddings.js';
 import { semanticSearch } from './knowledgeBase.js';
 
 /**
  * GET/POST /api/knowledge/context
  *
- * Returns assembled per-category context for evaluation.
- * Called by Dify HTTP Request node or by our evaluation endpoint.
+ * Returns assembled context for evaluation categories.
+ * Called by Dify HTTP Request nodes (one call per category).
  *
  * Auth: webhook secret via X-Webhook-Secret header or ?secret= query param
  *
  * POST body (JSON):
  * {
- *   "user_id": "UUID",
- *   "queries": {                          // Optional — Dify controls what to search for
- *     "product_technology": "working product MVP demo technical architecture",
- *     "market_traction": "revenue MRR growth customers retention",
- *     ...
- *   }
+ *   "user_id": "UUID",                    // Required
+ *   "category_id": "product_technology",   // Optional — if set, returns only this category
+ *   "query": "search terms for vector DB", // Optional — triggers vector search
+ *   "top_k": 5,                            // Optional — number of chunks to retrieve (default: 5)
+ *   "threshold": 0.5,                      // Optional — min similarity score 0-1 (default: 0.5)
+ *   "source_types": ["conversation","file","summary"]  // Optional — filter by source type
  * }
  *
- * If queries are provided: generates embeddings → searches pgvector → returns KB results + onboarding data
- * If queries are omitted: returns onboarding data only (no vector search)
+ * Response (single category):
+ * { "context": "## Onboarding Data\n...\n## Retrieved Context\n..." }
  *
- * This means:
- * - Dify controls the search terms (editable in Dify Studio, no code deploy)
- * - Different workflows can send different queries to the same endpoint
- * - Falls back gracefully if embeddings fail (returns onboarding-only context)
+ * Response (all categories, no category_id):
+ * { "context_product_technology": "...", "context_market_traction": "...", ... }
  */
 
 const CATEGORY_IDS = [
@@ -60,25 +58,36 @@ export default async function handler(req, res) {
     return res.status(auth.status).json({ error: auth.error });
   }
 
-  // Parse params from query (GET) or body (POST)
-  let user_id;
-  let queries;
+  // Parse params
+  let params;
   if (req.method === 'GET') {
-    user_id = req.query?.user_id;
+    params = {
+      user_id: req.query?.user_id,
+      category_id: req.query?.category_id,
+      query: req.query?.query,
+      top_k: req.query?.top_k ? parseInt(req.query.top_k, 10) : undefined,
+      threshold: req.query?.threshold ? parseFloat(req.query.threshold) : undefined,
+      source_types: req.query?.source_types?.split(','),
+    };
   } else {
     let body = req.body;
     if (typeof body === 'string') {
       try { body = JSON.parse(body); } catch (_e) { body = {}; }
     }
-    user_id = body?.user_id || req.query?.user_id;
-    queries = body?.queries;
+    params = {
+      user_id: body?.user_id || req.query?.user_id,
+      category_id: body?.category_id,
+      query: body?.query,
+      top_k: body?.top_k,
+      threshold: body?.threshold,
+      source_types: body?.source_types,
+    };
   }
 
+  const { user_id, category_id, query, top_k = 5, threshold = 0.5, source_types } = params;
+
   if (!user_id) {
-    return res.status(400).json({
-      error: 'user_id is required',
-      usage: 'POST with { "user_id": "UUID", "queries": { "category_id": "search terms" } }',
-    });
+    return res.status(400).json({ error: 'user_id is required' });
   }
 
   try {
@@ -97,56 +106,83 @@ export default async function handler(req, res) {
 
     const onboardingSummary = summaryRow?.summary_data || null;
 
-    // If Dify sent queries, do vector search; otherwise return onboarding-only
-    let kbResults = {};
-    if (queries && typeof queries === 'object' && Object.keys(queries).length > 0) {
-      kbResults = await searchKnowledgeBase(queries, user_id);
+    // Single category mode (Dify calls once per category)
+    if (category_id) {
+      const context = await buildSingleContext(category_id, onboardingSummary, query, user_id, top_k, threshold, source_types);
+      return res.status(200).json({ context });
     }
 
-    const contexts = buildContexts(onboardingSummary, kbResults);
-
+    // All categories mode (backward compatible)
+    const contexts = buildAllContexts(onboardingSummary);
     return res.status(200).json(contexts);
   } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to build category contexts' });
+    return res.status(500).json({ error: err.message || 'Failed to build context' });
   }
 }
 
 /**
- * Search the knowledge base using queries provided by Dify.
- * Returns { category_id: [results] } for each query that was provided.
+ * Build context for a single category.
+ * If query is provided, does vector search and appends KB results.
  */
-async function searchKnowledgeBase(queries, userId) {
-  const categoryIds = Object.keys(queries);
-  const queryTexts = categoryIds.map((id) => queries[id]);
+async function buildSingleContext(categoryId, onboardingSummary, query, userId, topK, threshold, sourceTypes) {
+  const sections = [];
 
-  let embeddings;
-  try {
-    embeddings = await generateEmbeddings(queryTexts);
-  } catch (err) {
-    console.error('Embedding generation failed, skipping KB search:', err.message);
-    return {};
+  // Section 1: Onboarding data
+  const cat = onboardingSummary?.categories?.find((c) => c.id === categoryId);
+  sections.push('## Onboarding Data');
+  if (cat) {
+    sections.push(`Summary: ${cat.summary}`);
+    sections.push(`Completeness: ${cat.completeness}%`);
+    if (cat.highlights?.length) {
+      sections.push(`Highlights:\n${cat.highlights.map((h) => `- ${h}`).join('\n')}`);
+    }
+    if (cat.gaps?.length) {
+      sections.push(`Gaps:\n${cat.gaps.map((g) => `- ${g}`).join('\n')}`);
+    }
+    if (cat.keyMetrics && Object.keys(cat.keyMetrics).length > 0) {
+      sections.push(
+        `Key Metrics:\n${Object.entries(cat.keyMetrics)
+          .map(([k, v]) => `- ${k}: ${v}`)
+          .join('\n')}`,
+      );
+    }
+  } else {
+    sections.push('No onboarding data available for this category.');
   }
 
-  const results = {};
-  const searchPromises = embeddings.map((embedding, i) =>
-    semanticSearch(embedding, { topK: 5, threshold: 0.5, userId }).catch((err) => {
-      console.error(`KB search failed for ${categoryIds[i]}: ${err.message}`);
-      return [];
-    }),
-  );
+  // Section 2: Vector search results (if query provided)
+  if (query) {
+    try {
+      const embedding = await generateEmbedding(query);
+      const results = await semanticSearch(
+        embedding,
+        { topK, threshold, userId, sourceTypes: sourceTypes || null },
+      );
 
-  const searchResults = await Promise.all(searchPromises);
-  for (let i = 0; i < categoryIds.length; i++) {
-    results[categoryIds[i]] = searchResults[i];
+      if (results.length > 0) {
+        sections.push('\n## Retrieved Context');
+        results.forEach((result, idx) => {
+          const source = result.source_type || 'unknown';
+          sections.push(`[Source ${idx + 1} — ${source}, relevance: ${(result.score * 100).toFixed(0)}%]`);
+          sections.push(result.content);
+          if (idx < results.length - 1) sections.push('---');
+        });
+      } else {
+        sections.push('\n## Retrieved Context');
+        sections.push('No relevant documents found for this query.');
+      }
+    } catch (err) {
+      sections.push(`\n## Retrieved Context\nVector search failed: ${err.message}`);
+    }
   }
 
-  return results;
+  return sections.join('\n');
 }
 
 /**
- * Build per-category context combining onboarding data + KB search results.
+ * Build context for all categories (onboarding data only, no vector search).
  */
-function buildContexts(onboardingSummary, kbResults) {
+function buildAllContexts(onboardingSummary) {
   const categoriesMap = {};
   if (onboardingSummary?.categories) {
     for (const cat of onboardingSummary.categories) {
@@ -157,10 +193,7 @@ function buildContexts(onboardingSummary, kbResults) {
   const contexts = {};
   for (const categoryId of CATEGORY_IDS) {
     const cat = categoriesMap[categoryId];
-    const sections = [];
-
-    // Section 1: Onboarding data
-    sections.push('## Onboarding Data');
+    const sections = ['## Onboarding Data'];
     if (cat) {
       sections.push(`Summary: ${cat.summary}`);
       sections.push(`Completeness: ${cat.completeness}%`);
@@ -180,19 +213,6 @@ function buildContexts(onboardingSummary, kbResults) {
     } else {
       sections.push('No onboarding data available for this category.');
     }
-
-    // Section 2: KB search results (if queries were provided and returned results)
-    const categoryResults = kbResults[categoryId];
-    if (categoryResults && categoryResults.length > 0) {
-      sections.push('\n## Retrieved Context');
-      categoryResults.forEach((result, idx) => {
-        const source = result.source_type || 'unknown';
-        sections.push(`[Source ${idx + 1} — ${source}, relevance: ${(result.score * 100).toFixed(0)}%]`);
-        sections.push(result.content);
-        if (idx < categoryResults.length - 1) sections.push('---');
-      });
-    }
-
     contexts[`context_${categoryId}`] = sections.join('\n');
   }
 
