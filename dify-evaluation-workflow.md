@@ -12,24 +12,55 @@ This document describes how to create the evaluation workflow in Dify Studio. Th
 - In Dify Studio, click **Create App** → select **Workflow** (not Chatflow)
 - Name it something like "Startup Evaluation"
 
-### Step 2: Configure the Start node
-- The **Start** node is already on the canvas — this is the only starting node type for Workflows
-- Click the Start node and add the 11 input variables listed in the "Input Variables" section below
-- The Start node receives these variables via our API call (`POST /workflows/run`)
+### Step 2: Set up the evaluation framework as an Environment Variable
+- Go to **Settings** (gear icon) → **Environment Variables**
+- Create `EVALUATION_FRAMEWORK` (type: String)
+- Paste the full evaluation framework text (scorecard items, scoring rules, maturity thresholds — see "Evaluation Framework" section below)
+- This is where you edit evaluation criteria — all 10 LLM nodes reference it via `{{EVALUATION_FRAMEWORK}}`
 
-### Step 3: Add 10 LLM nodes
-- Drag 10 LLM nodes from the Start node — they will run in **parallel**
-- Name each node exactly as specified in the "Node Naming Convention" section (e.g., `eval_product_technology`)
-- Each LLM node reads its corresponding `context_*` variable from the Start node
+### Step 3: Configure the Start node
+- The **Start** node is already on the canvas
+- Add **12 input variables**: `company_name`, `user_id`, and 10 `context_*` variables
+- See "Input Variables" section below for the full list
+- The Start node receives these via our API call (`POST /workflows/run`)
 
-### Step 4: Connect to End
+### Step 4: Add IF/ELSE context fallback
+- Add an **IF/ELSE** node after Start
+- Condition: check if `context_product_technology` is empty/blank
+- **IF empty** → route to an **HTTP Request** node:
+  - Method: POST
+  - URL: `https://app.nusuai.com/api/knowledge/context`
+  - Headers: `X-Webhook-Secret: {{DIFY_WEBHOOK_SECRET}}` (add as Dify env var)
+  - Body: `{ "user_id": "{{user_id}}" }`
+  - This fetches all 10 context blocks from our API
+- **IF not empty** → route directly to the LLM nodes (context already provided)
+
+This means:
+- **Testing in Dify Studio**: leave context_* inputs blank → HTTP fallback fetches real context
+- **Production (from app)**: context_* inputs are pre-filled → HTTP fallback is skipped
+
+### Step 5: Add 10 LLM nodes (parallel)
+- Drag 10 LLM nodes — they will run in **parallel**
+- Name each node exactly as specified in the "Node Naming Convention" section
+- Each LLM node reads: `{{EVALUATION_FRAMEWORK}}` (env var) + its `context_*` variable
+
+### Step 6: Connect to End
 - Connect all 10 LLM node outputs directly to the **End** node
 - **Do NOT add a Variable Aggregator** — we want each branch to fire `node_finished` independently for streaming
 
 ### Trigger
-Dify Workflow apps are **API-triggered**. Our serverless function `api/evaluation/generate.js` calls `POST {DIFY_BASE_URL}/workflows/run` with `response_mode: "streaming"` and the input variables. No special trigger configuration needed — the Start node receives variables automatically via the API.
+Dify Workflow apps are **API-triggered**. Our serverless function `api/evaluation/generate.js` calls `POST {DIFY_BASE_URL}/workflows/run` with `response_mode: "streaming"`.
 
 **From the user's perspective**: They click "Generate Evaluation" in the webapp → our API does KB retrieval → calls this Dify workflow → streams results back.
+
+### Where things live (single source of truth)
+
+| Component | Location | How to edit |
+|-----------|----------|-------------|
+| Evaluation criteria (scorecard, scoring rules) | Dify env var `EVALUATION_FRAMEWORK` | Dify Studio → Settings → Environment Variables |
+| Search queries for KB retrieval | Supabase `app_config` table, key `evaluation_search_queries` | Supabase Dashboard → Table Editor |
+| KB retrieval logic | `api/knowledge/context.js` + `api/evaluation/_categoryContext.js` | Code (serverless functions) |
+| LLM prompts | Dify LLM nodes (reference `{{EVALUATION_FRAMEWORK}}`) | Dify Studio → node editor |
 
 ## How it's called
 
@@ -68,6 +99,7 @@ Configure these in the Start node of the Dify workflow:
 | Variable Name | Type | Description |
 |--------------|------|-------------|
 | `company_name` | String | Company display name |
+| `user_id` | String | Supabase user ID (used by HTTP fallback to fetch context) |
 | `context_product_technology` | Paragraph | Retrieved context for Product & Technology |
 | `context_market_traction` | Paragraph | Retrieved context for Market Traction & Revenue |
 | `context_business_model` | Paragraph | Retrieved context for Business Model & Economics |
@@ -162,6 +194,62 @@ Each LLM node should output **structured JSON** matching this schema:
 - `gaps`: Array of strings, actionable areas to explore
 - `keyMetrics`: Object of key-value pairs (string values)
 - `deepDivePrompt`: Natural conversation opener for follow-up
+
+---
+
+## Evaluation Framework — Category Scorecards
+
+Each category has 20 evidence items. For each item, the evaluator determines whether it is **proven** (clear evidence), **partial** (some evidence, gaps remain), or **unproven** (no evidence or not addressed).
+
+### Maturity Stage Thresholds
+
+The maturity stage is derived from how many items are proven across the scorecard:
+
+| Stage | Proven Items | Description |
+|-------|-------------|-------------|
+| **Concept** | 0–4 | Idea stage, minimal evidence |
+| **Early** | 5–8 | Some traction, foundational work underway |
+| **Validated** | 9–13 | Core claims substantiated, gaps in secondary areas |
+| **Scaling** | 14–17 | Strong evidence across most items |
+| **Leader** | 18–20 | Comprehensive evidence, market-leading position |
+
+Partial items count as 0.5 toward the proven count.
+
+---
+
+### Category 1: Product & Technology (`product_technology`)
+
+| # | Evidence Item | Maturity Gate | Semantic Search Query |
+|---|--------------|---------------|----------------------|
+| 1 | Working product exists | Concept | `working product demo prototype MVP functional` |
+| 2 | Core problem clearly defined | Concept | `problem statement pain point customer need being solved` |
+| 3 | Target user identified | Concept | `target user persona ideal customer profile` |
+| 4 | Technical architecture documented | Early | `technical architecture system design stack infrastructure` |
+| 5 | Product used by real customers | Early | `active users customers using product DAU MAU usage` |
+| 6 | Core feature set complete | Early | `core features functionality product capabilities shipped` |
+| 7 | User feedback collected systematically | Early | `user feedback surveys NPS customer interviews insights` |
+| 8 | Product solves problem measurably | Validated | `customer outcomes metrics impact ROI before after` |
+| 9 | Product-market fit signals present | Validated | `product market fit Sean Ellis organic growth retention` |
+| 10 | Technical scalability demonstrated | Validated | `scalability load testing concurrent users performance under load` |
+| 11 | Development velocity sustainable | Validated | `release cadence sprint velocity deployment frequency CI CD` |
+| 12 | Technical debt managed | Validated | `technical debt refactoring code quality maintainability` |
+| 13 | Security practices in place | Scaling | `security audit penetration testing vulnerability management encryption` |
+| 14 | IP protection strategy exists | Scaling | `intellectual property patents trade secrets IP filings provisional` |
+| 15 | Platform/API extensibility | Scaling | `API integrations platform extensibility third party ecosystem` |
+| 16 | Data infrastructure mature | Scaling | `data pipeline analytics infrastructure monitoring observability` |
+| 17 | Multi-environment deployment | Scaling | `staging production environments deployment pipeline blue green` |
+| 18 | Product roadmap driven by data | Leader | `data driven roadmap prioritization metrics usage analytics decisions` |
+| 19 | Industry-recognized technical excellence | Leader | `technical awards recognition benchmarks industry comparison` |
+| 20 | Innovation pipeline active | Leader | `R&D innovation pipeline research new capabilities emerging technology` |
+
+**Maturity stage interpretation for Product & Technology:**
+- **Concept** (0–4): Has an idea or early prototype but no real users
+- **Early** (5–8): Working product with initial users, basic architecture in place
+- **Validated** (9–13): Product-market fit signals, customers getting measurable value, scalable architecture
+- **Scaling** (14–17): Enterprise-ready security, IP protected, extensible platform, data-driven development
+- **Leader** (18–20): Industry-recognized technology, active innovation pipeline, comprehensive technical excellence
+
+---
 
 ### Prompt Template
 

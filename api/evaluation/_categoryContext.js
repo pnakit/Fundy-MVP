@@ -2,42 +2,119 @@
  * Category context builder for evaluation.
  * Assembles per-category context from onboarding data + semantic search results.
  * Each context becomes a Dify workflow input variable.
+ *
+ * Search queries can come from:
+ * 1. app_config table in Supabase (single source of truth, editable without deploy)
+ * 2. Hardcoded defaults (fallback if app_config not populated)
  */
 
 import { generateEmbeddings } from '../knowledge/embeddings.js';
 import { semanticSearch } from '../knowledge/knowledgeBase.js';
+import { getSupabaseAdmin } from '../_supabase.js';
 
 /**
- * The 10 evaluation dimensions and their search query templates.
- * Each template combines category keywords with relevant onboarding data.
+ * Default search query templates per category.
+ * Used as fallback if app_config doesn't have evaluation_search_queries.
  */
-const CATEGORY_QUERIES = {
-  product_technology: (cat) =>
-    `product technology features capabilities technical architecture ${cat?.highlights?.join(' ') || ''}`,
-  market_traction: (cat) =>
-    `market traction revenue growth customers metrics ${cat?.keyMetrics?.mrr || ''} ${cat?.keyMetrics?.mrrGrowth || ''}`,
-  business_model: (cat) =>
-    `business model economics pricing unit economics margins ${cat?.keyMetrics?.grossMargin || ''}`,
-  team_organization: (cat) =>
-    `team organization founders leadership hiring ${cat?.keyMetrics?.teamSize || ''}`,
-  go_to_market: (cat) =>
-    `go to market strategy sales channels distribution ${cat?.keyMetrics?.primaryMotion || ''}`,
-  financial_health: (cat) =>
-    `financial health runway burn rate revenue expenses ${cat?.keyMetrics?.burnRate || ''}`,
-  fundraising_capital: (cat) =>
-    `fundraising capital investment rounds valuation ${cat?.keyMetrics?.lastRound || ''}`,
-  competitive_position: (cat) =>
-    `competitive position moat differentiation competitors ${cat?.keyMetrics?.primaryDifferentiator || ''}`,
-  operations: (cat) =>
-    `operations processes infrastructure scalability ${cat?.keyMetrics?.uptime || ''}`,
-  legal_compliance: (cat) =>
-    `legal compliance regulatory IP patents GDPR ${cat?.keyMetrics?.entityType || ''}`,
+const DEFAULT_SEARCH_QUERIES = {
+  product_technology: [
+    'working product demo prototype MVP functional',
+    'technical architecture system design stack infrastructure',
+    'product market fit Sean Ellis organic growth retention',
+    'scalability load testing performance under load',
+    'intellectual property patents trade secrets IP filings',
+  ],
+  market_traction: [
+    'revenue MRR ARR growth rate month over month',
+    'customer acquisition cost CAC payback period',
+    'total addressable market TAM SAM SOM market size',
+    'net revenue retention expansion churn rate',
+    'customer count growth active users paying customers',
+  ],
+  business_model: [
+    'pricing model subscription tiers freemium enterprise',
+    'unit economics LTV CAC ratio gross margin',
+    'revenue streams monetization business model canvas',
+    'customer lifetime value retention cohort analysis',
+    'gross margins cost structure contribution margin',
+  ],
+  team_organization: [
+    'founding team background experience domain expertise',
+    'team size headcount organizational structure',
+    'key hires VP engineering sales marketing roles',
+    'advisory board mentors investors advisors',
+    'culture values retention employee satisfaction',
+  ],
+  go_to_market: [
+    'sales channels distribution strategy go to market',
+    'customer acquisition channels marketing funnel',
+    'product led growth PLG self serve conversion',
+    'enterprise sales playbook pipeline deal cycle',
+    'partnerships channel strategy reseller distributor',
+  ],
+  financial_health: [
+    'runway months cash burn rate monthly expenses',
+    'revenue vs expenses break even path profitability',
+    'financial projections forecast model assumptions',
+    'cash flow working capital liquidity position',
+    'cost reduction efficiency operational leverage',
+  ],
+  fundraising_capital: [
+    'funding rounds raised seed series investment history',
+    'valuation cap table dilution ownership structure',
+    'investor pipeline warm introductions term sheets',
+    'use of funds allocation deployment strategy',
+    'fundraising timeline next round target amount',
+  ],
+  competitive_position: [
+    'competitive advantage moat differentiation unique value',
+    'competitor analysis market landscape alternatives',
+    'barriers to entry switching costs network effects',
+    'market share positioning category leadership',
+    'competitive matrix feature comparison benchmarks',
+  ],
+  operations: [
+    'operational processes workflows automation efficiency',
+    'infrastructure uptime SLA reliability monitoring',
+    'customer support scaling help desk response time',
+    'vendor management procurement supply chain',
+    'disaster recovery business continuity compliance',
+  ],
+  legal_compliance: [
+    'corporate structure entity type incorporation jurisdiction',
+    'intellectual property IP assignments contractor agreements',
+    'regulatory compliance GDPR data privacy requirements',
+    'employment law contracts equity vesting agreements',
+    'insurance liability coverage risk management',
+  ],
 };
 
-const CATEGORY_IDS = Object.keys(CATEGORY_QUERIES);
+const CATEGORY_IDS = Object.keys(DEFAULT_SEARCH_QUERIES);
+
+/**
+ * Fetch search queries from app_config, falling back to defaults.
+ */
+async function getSearchQueries() {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'evaluation_search_queries')
+      .single();
+
+    if (data?.value) {
+      return data.value;
+    }
+  } catch (_err) {
+    // Fall through to defaults
+  }
+  return DEFAULT_SEARCH_QUERIES;
+}
 
 /**
  * Build context for all 10 evaluation categories.
+ * Uses hardcoded query templates that incorporate onboarding data.
  *
  * @param {string} userId - Supabase user ID
  * @param {object} onboardingSummary - The onboarding summary data (with categories array)
@@ -45,6 +122,23 @@ const CATEGORY_IDS = Object.keys(CATEGORY_QUERIES);
  * @returns {Promise<Record<string, string>>} Map of context_<category_id> → assembled context text
  */
 export async function buildCategoryContexts(userId, onboardingSummary, kbId) {
+  const searchQueries = await getSearchQueries();
+  return buildContextsWithQueries(userId, onboardingSummary, searchQueries, kbId);
+}
+
+/**
+ * Build context using search queries from app_config.
+ * Called by the /api/knowledge/context endpoint (Dify HTTP fallback).
+ */
+export async function buildCategoryContextsFromConfig(userId, onboardingSummary, kbId) {
+  const searchQueries = await getSearchQueries();
+  return buildContextsWithQueries(userId, onboardingSummary, searchQueries, kbId);
+}
+
+/**
+ * Core context builder — takes search queries and builds per-category context.
+ */
+async function buildContextsWithQueries(userId, onboardingSummary, searchQueries, kbId) {
   const categoriesMap = {};
   if (onboardingSummary?.categories) {
     for (const cat of onboardingSummary.categories) {
@@ -52,11 +146,18 @@ export async function buildCategoryContexts(userId, onboardingSummary, kbId) {
     }
   }
 
-  // Step 1: Build search queries for each category
+  // Step 1: Build one combined search query per category
   const queries = CATEGORY_IDS.map((id) => {
-    const queryFn = CATEGORY_QUERIES[id];
-    const cat = categoriesMap[id];
-    return queryFn(cat).replace(/\s+/g, ' ').trim();
+    const categoryQueries = searchQueries[id] || DEFAULT_SEARCH_QUERIES[id] || [];
+    const onboardingCat = categoriesMap[id];
+
+    // Combine the stored search queries with onboarding highlights for better retrieval
+    const queryParts = [...categoryQueries];
+    if (onboardingCat?.highlights) {
+      queryParts.push(...onboardingCat.highlights);
+    }
+
+    return queryParts.join(' ').replace(/\s+/g, ' ').trim();
   });
 
   // Step 2: Batch generate embeddings for all 10 queries
@@ -64,11 +165,7 @@ export async function buildCategoryContexts(userId, onboardingSummary, kbId) {
 
   // Step 3: Execute 10 parallel KB searches
   const searchPromises = embeddings.map((embedding, i) =>
-    semanticSearch(
-      embedding,
-      { topK: 5, threshold: 0.5, userId },
-      kbId,
-    ).catch((err) => {
+    semanticSearch(embedding, { topK: 5, threshold: 0.5, userId }, kbId).catch((err) => {
       console.error(`KB search failed for ${CATEGORY_IDS[i]}: ${err.message}`);
       return [];
     }),
@@ -133,7 +230,4 @@ function assembleContext(categoryId, onboardingCategory, kbResults) {
   return sections.join('\n');
 }
 
-/**
- * Get the list of category IDs used in evaluation.
- */
 export { CATEGORY_IDS };
