@@ -2,24 +2,17 @@ import { verifyWebhook } from '../_webhookAuth.js';
 import { getSupabaseAdmin } from '../_supabase.js';
 
 /**
- * POST /api/knowledge/context
+ * GET/POST /api/knowledge/context
  *
  * Returns assembled per-category context for evaluation.
- * Called by Dify HTTP Request node (fallback when context isn't provided as input).
+ * Called by Dify HTTP Request node.
  *
- * Auth: webhook secret (Dify → Vercel)
+ * Auth: webhook secret via X-Webhook-Secret header
  *
- * Request body:
- * {
- *   user_id: string (UUID)
- * }
+ * GET:  /api/knowledge/context?user_id=UUID&secret=WEBHOOK_SECRET
+ * POST: /api/knowledge/context  { user_id: "UUID" }
  *
- * Response:
- * {
- *   context_product_technology: "## Onboarding Data\n...",
- *   context_market_traction: "...",
- *   ...
- * }
+ * The GET variant also accepts the secret as a query param for simpler Dify config.
  */
 
 const CATEGORY_IDS = [
@@ -36,8 +29,16 @@ const CATEGORY_IDS = [
 ];
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  // Accept both GET and POST
+  if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Auth: check header first, then query param fallback
+  const secretFromQuery = req.query?.secret;
+  if (secretFromQuery) {
+    req.headers = req.headers || {};
+    req.headers['x-webhook-secret'] = secretFromQuery;
   }
 
   const auth = verifyWebhook(req);
@@ -45,29 +46,28 @@ export default async function handler(req, res) {
     return res.status(auth.status).json({ error: auth.error });
   }
 
-  // Parse body — handle cases where Vercel doesn't auto-parse
-  let body = req.body;
-  if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body);
-    } catch (_e) {
-      return res.status(400).json({ error: 'Invalid JSON body' });
+  // Get user_id from query params (GET) or body (POST)
+  let user_id;
+  if (req.method === 'GET') {
+    user_id = req.query?.user_id;
+  } else {
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch (_e) { body = {}; }
     }
+    user_id = body?.user_id || req.query?.user_id;
   }
-  if (!body || typeof body !== 'object') {
-    return res.status(400).json({ error: 'Request body is required (JSON with user_id)', received: typeof body });
-  }
-
-  const { user_id } = body;
 
   if (!user_id) {
-    return res.status(400).json({ error: 'user_id is required', body_keys: Object.keys(body) });
+    return res.status(400).json({
+      error: 'user_id is required',
+      usage: 'GET /api/knowledge/context?user_id=UUID&secret=WEBHOOK_SECRET',
+    });
   }
 
   try {
     const supabase = getSupabaseAdmin();
 
-    // Fetch onboarding summary for this user
     const { data: summaryRow, error: summaryErr } = await supabase
       .from('onboarding_summaries')
       .select('summary_data')
@@ -79,8 +79,6 @@ export default async function handler(req, res) {
     }
 
     const onboardingSummary = summaryRow?.summary_data || null;
-
-    // Build context from onboarding data (no KB search — keeps this endpoint fast and reliable)
     const contexts = buildContexts(onboardingSummary);
 
     return res.status(200).json(contexts);
@@ -89,9 +87,6 @@ export default async function handler(req, res) {
   }
 }
 
-/**
- * Build per-category context from onboarding summary data.
- */
 function buildContexts(onboardingSummary) {
   const categoriesMap = {};
   if (onboardingSummary?.categories) {
