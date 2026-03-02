@@ -35,18 +35,18 @@ npm install -g vercel
 vercel
 ```
 
-## Connect Your Custom Domain (app.nusuai.com)
+## Connect Your Custom Domain (fundy.nusuai.com)
 
 After deploying to Vercel:
 
 1. In Vercel dashboard, go to your project → Settings → Domains
-2. Add `app.nusuai.com`
+2. Add `fundy.nusuai.com`
 3. Vercel will show you DNS records to add
 4. Go to your domain registrar (where you bought nusuai.com)
 5. Add the DNS records Vercel shows you:
    - Usually a CNAME record: `app` → `cname.vercel-dns.com`
 6. Wait 5-30 minutes for DNS to update
-7. Done! Visit app.nusuai.com
+7. Done! Visit fundy.nusuai.com
 
 ## Connecting to Dify
 

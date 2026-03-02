@@ -197,7 +197,7 @@ Run a single test file: `npx vitest run src/utils/colors.test.js`
 
 ## Deployment
 
-Deployed to Vercel with custom domain `app.nusuai.com`. Vercel auto-detects the Vite build and the `/api` serverless functions. Env vars must be set in Vercel project settings. See README.md for setup details.
+Deployed to Vercel with custom domain `fundy.nusuai.com`. Vercel auto-detects the Vite build and the `/api` serverless functions. Env vars must be set in Vercel project settings. See README.md for setup details.
 
 ## Code Review & Change Protocol
 

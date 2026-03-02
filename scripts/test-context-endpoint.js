@@ -95,7 +95,7 @@ async function testProduction() {
 
   console.log(`Testing production endpoint with user: ${testUser.email}\n`);
 
-  const response = await fetch('https://app.nusuai.com/api/knowledge/context', {
+  const response = await fetch('https://fundy.nusuai.com/api/knowledge/context', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

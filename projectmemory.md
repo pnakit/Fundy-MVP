@@ -7,7 +7,7 @@ High-level record of the app's evolution, decisions made, and context for future
 - Monolithic single-file React app (`App.jsx`, ~1900 lines including inline CSS)
 - Three-window startup evaluation platform: Onboarding Chat, Evaluation & Actions, Investment Matching
 - Mock data with simulated Dify API responses
-- Deployed to Vercel at `app.nusuai.com`
+- Deployed to Vercel at `fundy.nusuai.com`
 - No tests, no linter, no component extraction
 
 ## v1 — Architecture & Quality Refactor (Feb 2026)
@@ -130,7 +130,7 @@ Replaced the client-side password gate with Supabase email + OTP authentication.
 - Email OTP enabled (8-digit codes)
 - Custom email templates (dark-themed, using `{{ .Token }}` for OTP)
 - OTP uses "Magic Link" template for returning users, "Confirm Signup" template for new users
-- Site URL: `http://localhost:5173` for local dev (change to `https://app.nusuai.com` for production)
+- Site URL: `http://localhost:5173` for local dev (change to `https://fundy.nusuai.com` for production)
 
 ### Decisions explicitly deferred
 

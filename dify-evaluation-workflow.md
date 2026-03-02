@@ -29,7 +29,7 @@ This document describes how to create the evaluation workflow in Dify Studio. Th
 - Condition: check if `context_product_technology` is empty/blank
 - **IF empty** → route to an **HTTP Request** node:
   - Method: POST
-  - URL: `https://app.nusuai.com/api/knowledge/context`
+  - URL: `https://fundy.nusuai.com/api/knowledge/context`
   - Headers: `X-Webhook-Secret: {{DIFY_WEBHOOK_SECRET}}` (add as Dify env var)
   - Body: `{ "user_id": "{{user_id}}" }`
   - This fetches all 10 context blocks from our API

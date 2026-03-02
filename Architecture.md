@@ -331,7 +331,7 @@ Before any code changes, configure these settings:
 2. **Auth > SMTP Settings**: Configure Resend SMTP (host: `smtp.resend.com`, port: 465, username: `resend`, password: Resend API key, sender: `auth@nusuai.com`)
 3. **Auth > Bot and Abuse Protection**: Enable hCaptcha or Cloudflare Turnstile
 4. **Auth > Sessions**: Set JWT expiry to 900-1800 seconds (15-30 min)
-5. **Auth > URL Configuration**: Add `https://app.nusuai.com` and `http://localhost:5173` as redirect URLs
+5. **Auth > URL Configuration**: Add `https://fundy.nusuai.com` and `http://localhost:5173` as redirect URLs
 6. **Database > Extensions**: Enable `pgvector` (for later use)
 
 ---
