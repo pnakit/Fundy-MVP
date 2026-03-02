@@ -1,29 +1,40 @@
 import { verifyWebhook } from '../_webhookAuth.js';
 import { getSupabaseAdmin } from '../_supabase.js';
-import { buildCategoryContextsFromConfig, CATEGORY_IDS } from '../evaluation/_categoryContext.js';
 
 /**
  * POST /api/knowledge/context
  *
  * Returns assembled per-category context for evaluation.
- * Called by Dify HTTP Request node (fallback when context isn't provided as input)
- * or by our evaluation generate endpoint.
+ * Called by Dify HTTP Request node (fallback when context isn't provided as input).
  *
  * Auth: webhook secret (Dify → Vercel)
  *
  * Request body:
  * {
- *   user_id: string (UUID),
- *   knowledge_base_id?: string (defaults to active KB)
+ *   user_id: string (UUID)
  * }
  *
  * Response:
  * {
- *   context_product_technology: "## Onboarding Data\n...\n## Retrieved Context\n...",
+ *   context_product_technology: "## Onboarding Data\n...",
  *   context_market_traction: "...",
  *   ...
  * }
  */
+
+const CATEGORY_IDS = [
+  'product_technology',
+  'market_traction',
+  'business_model',
+  'team_organization',
+  'go_to_market',
+  'financial_health',
+  'fundraising_capital',
+  'competitive_position',
+  'operations',
+  'legal_compliance',
+];
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -34,7 +45,7 @@ export default async function handler(req, res) {
     return res.status(auth.status).json({ error: auth.error });
   }
 
-  const { user_id, knowledge_base_id } = req.body;
+  const { user_id } = req.body;
 
   if (!user_id) {
     return res.status(400).json({ error: 'user_id is required' });
@@ -51,21 +62,13 @@ export default async function handler(req, res) {
       .single();
 
     if (summaryErr && summaryErr.code !== 'PGRST116') {
-      // PGRST116 = no rows found (acceptable — user may not have completed onboarding)
       return res.status(500).json({ error: `Failed to fetch summary: ${summaryErr.message}` });
     }
 
     const onboardingSummary = summaryRow?.summary_data || null;
 
-    // Build category contexts (reads search queries from app_config, does KB retrieval)
-    let contexts;
-    try {
-      contexts = await buildCategoryContextsFromConfig(user_id, onboardingSummary, knowledge_base_id);
-    } catch (kbErr) {
-      // If KB retrieval fails (e.g. OpenAI quota), return onboarding-only context
-      console.error('KB retrieval failed in context endpoint, using onboarding fallback:', kbErr.message);
-      contexts = buildOnboardingOnlyContexts(onboardingSummary);
-    }
+    // Build context from onboarding data (no KB search — keeps this endpoint fast and reliable)
+    const contexts = buildContexts(onboardingSummary);
 
     return res.status(200).json(contexts);
   } catch (err) {
@@ -74,10 +77,9 @@ export default async function handler(req, res) {
 }
 
 /**
- * Fallback: build context using only onboarding data (no KB search).
- * Used when embedding generation fails.
+ * Build per-category context from onboarding summary data.
  */
-function buildOnboardingOnlyContexts(onboardingSummary) {
+function buildContexts(onboardingSummary) {
   const categoriesMap = {};
   if (onboardingSummary?.categories) {
     for (const cat of onboardingSummary.categories) {
@@ -92,8 +94,12 @@ function buildOnboardingOnlyContexts(onboardingSummary) {
     if (cat) {
       sections.push(`Summary: ${cat.summary}`);
       sections.push(`Completeness: ${cat.completeness}%`);
-      if (cat.highlights?.length) sections.push(`Highlights:\n${cat.highlights.map((h) => `- ${h}`).join('\n')}`);
-      if (cat.gaps?.length) sections.push(`Gaps:\n${cat.gaps.map((g) => `- ${g}`).join('\n')}`);
+      if (cat.highlights?.length) {
+        sections.push(`Highlights:\n${cat.highlights.map((h) => `- ${h}`).join('\n')}`);
+      }
+      if (cat.gaps?.length) {
+        sections.push(`Gaps:\n${cat.gaps.map((g) => `- ${g}`).join('\n')}`);
+      }
       if (cat.keyMetrics && Object.keys(cat.keyMetrics).length > 0) {
         sections.push(
           `Key Metrics:\n${Object.entries(cat.keyMetrics)
