@@ -16,7 +16,8 @@
       "Bash(npx supabase migration repair --status reverted 001_initial_schema)",
       "Bash(npx supabase migration repair --status reverted 001)",
       "Bash(npx supabase migration repair --status applied 001)",
-      "Bash(node -e \"console.log\\(''whsec_'' + require\\(''crypto''\\).randomBytes\\(24\\).toString\\(''hex''\\)\\)\")"
+      "Bash(node -e \"console.log\\(''whsec_'' + require\\(''crypto''\\).randomBytes\\(24\\).toString\\(''hex''\\)\\)\")",
+      "WebFetch(domain:dify.ai)"
     ]
   }
 }

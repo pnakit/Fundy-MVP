@@ -115,23 +115,58 @@ Configure these in the Start node of the Dify workflow:
 
 ## Workflow Structure
 
+The workflow uses an Iteration node to fetch context for each category in parallel, then routes assembled context to 10 parallel LLM evaluation nodes.
+
 ```
-                              START
-                                │
-  ┌─────┬─────┬─────┬─────┬────┴────┬─────┬─────┬─────┬─────┐
-  ▼     ▼     ▼     ▼     ▼         ▼     ▼     ▼     ▼     ▼
-┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐    ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐
-│LLM│ │LLM│ │LLM│ │LLM│ │LLM│    │LLM│ │LLM│ │LLM│ │LLM│ │LLM│
-│   │ │   │ │   │ │   │ │   │    │   │ │   │ │   │ │   │ │   │
-│P&T│ │Mkt│ │Biz│ │Tm │ │GTM│    │Fin│ │Cap│ │Cmp│ │Ops│ │Lgl│
-└─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘    └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘ └─┬─┘
-  │     │     │     │     │        │     │     │     │     │
-  └─────┴─────┴─────┴─────┴────┬───┴─────┴─────┴─────┴─────┘
-                               │
-                              END
+                         START
+                           │
+             Code 1 (define_categories)
+                           │
+          Iteration (context_retrieval)   ← parallel mode, max 10
+          ┌────────────────────────────┐
+          │  Code 2 (build_query)      │  extract query + checklist from item
+          │          ↓                 │
+          │  HTTP Request (iteration)  │  POST /api/knowledge/context
+          │          ↓                 │
+          │  Code 3 (format_context)   │  parse JSON response, prepend CATEGORY_ID:
+          └────────────────────────────┘
+                           │
+             Code 4 (route_to_llms)       ← parse CATEGORY_ID → 10 context_* vars
+                           │
+  ┌────┬────┬────┬────┬────┼────┬────┬────┬────┬────┐
+  ▼    ▼    ▼    ▼    ▼    ▼    ▼    ▼    ▼    ▼    ▼
+ LLM  LLM  LLM  LLM  LLM  LLM  LLM  LLM  LLM  LLM
+ P&T  Mkt  Biz  Tm   GTM  Fin  Cap  Cmp  Ops  Lgl
+  └────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
+                           │
+                          END
 ```
 
-**No Variable Aggregator** — branches go directly to END. Each branch fires a `node_finished` SSE event independently, which our API transforms into a `category_complete` event for the frontend.
+### Node Inventory
+
+| Node | Type | Role |
+|------|------|------|
+| Start | Input | `company_name`, `user_id` + optional `context_*` variables |
+| Code 1 (`define_categories`) | Code | Hardcodes all 10 categories with 20 evidence items and search queries each |
+| Iteration (`context_retrieval`) | Iteration | Parallel loop (max 10) — input: `categories` array, output: `eval_context` strings |
+| → Code 2 (`build_query`) | Code | Bound to iteration `item` — extracts `category_id`, `combined_query`, `items_checklist` |
+| → HTTP Request (`iteration`) | HTTP | `POST /api/knowledge/context?secret=...` with `user_id`, `category_id`, `query` |
+| → Code 3 (`format_context`) | Code | Parses HTTP response JSON, formats eval prompt, prepends `CATEGORY_ID:` prefix |
+| Code 4 (`route_to_llms`) | Code | Parses `CATEGORY_ID:` prefix from each string → routes to 10 `context_*` output variables |
+| `eval_<category_id>` (×10) | LLM | Evaluates one category against the scorecard — outputs structured JSON |
+| End | Output | All 10 category evaluation results |
+
+### Critical Implementation Notes
+
+- **Code 2 input binding**: Must be bound to `Iteration (context_retrieval) / item Object` — not to the source `categories` array. Binding to the full array causes the function to receive a list instead of a single dict.
+- **Code 3 variable naming**: Function parameter names must exactly match declared input variable names in the Dify UI. If the HTTP response variable is named `http_body`, the function signature must use `http_body`, not `context`.
+- **Code 3 JSON parsing**: The HTTP response `body` is a raw JSON string (`{"context":"..."}`). Must parse with `json.loads(http_body).get("context", "")` — do not pass the raw string to the LLM prompt.
+- **Code 3 CATEGORY_ID prefix**: Prepend `CATEGORY_ID: {category_id}\n` to the output. Code 4 relies on this prefix to route each context to the correct output variable.
+- **Code 3 output variable**: Name the declared output variable `eval_context`. The Iteration node's output variable reference must point to `Code 3 (format_context) / eval_context`.
+- **Code 4 parsing**: Splits on first `\n` to extract `cat_id`, builds `result["context_" + cat_id]` dynamically. Declared output variables must match exactly: `context_product_technology`, `context_market_traction`, etc.
+- **No Variable Aggregator**: LLM nodes connect directly to END. Each fires `node_finished` independently, enabling streaming `category_complete` events to the frontend.
+
+**Dify Studio testing**: `sys.user_id` is a Dify-internal identifier, not a Supabase UUID. The HTTP endpoint returns 200 with empty context ("No onboarding data available"). All items score UNPROVEN — this is correct. Real data flows when triggered from the app with a valid Supabase user.
 
 ## LLM Node Configuration
 
@@ -215,32 +250,36 @@ The maturity stage is derived from how many items are proven across the scorecar
 
 Partial items count as 0.5 toward the proven count.
 
+### Query Design Philosophy
+
+Search queries are written to match **how founders describe evidence**, not how investors look for it. A founder won't write "cap table clean maintained accurate" — they'll write "founders own 65%, option pool is 15%". Queries use natural founder speech patterns, specific numbers, tool names, and concrete outcomes rather than evaluation jargon. This ensures the vector search finds genuine evidence in onboarding transcripts, pitch decks, and uploaded documents.
+
 ---
 
 ### Category 1: Product & Technology (`product_technology`)
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
-| 1 | Working product exists | Concept | `working product demo prototype MVP functional` |
-| 2 | Core problem clearly defined | Concept | `problem statement pain point customer need being solved` |
-| 3 | Target user identified | Concept | `target user persona ideal customer profile` |
-| 4 | Technical architecture documented | Early | `technical architecture system design stack infrastructure` |
-| 5 | Product used by real customers | Early | `active users customers using product DAU MAU usage` |
-| 6 | Core feature set complete | Early | `core features functionality product capabilities shipped` |
-| 7 | User feedback collected systematically | Early | `user feedback surveys NPS customer interviews insights` |
-| 8 | Product solves problem measurably | Validated | `customer outcomes metrics impact ROI before after` |
-| 9 | Product-market fit signals present | Validated | `product market fit Sean Ellis organic growth retention` |
-| 10 | Technical scalability demonstrated | Validated | `scalability load testing concurrent users performance under load` |
-| 11 | Development velocity sustainable | Validated | `release cadence sprint velocity deployment frequency CI CD` |
-| 12 | Technical debt managed | Validated | `technical debt refactoring code quality maintainability` |
-| 13 | Security practices in place | Scaling | `security audit penetration testing vulnerability management encryption` |
-| 14 | IP protection strategy exists | Scaling | `intellectual property patents trade secrets IP filings provisional` |
-| 15 | Platform/API extensibility | Scaling | `API integrations platform extensibility third party ecosystem` |
-| 16 | Data infrastructure mature | Scaling | `data pipeline analytics infrastructure monitoring observability` |
-| 17 | Multi-environment deployment | Scaling | `staging production environments deployment pipeline blue green` |
-| 18 | Product roadmap driven by data | Leader | `data driven roadmap prioritization metrics usage analytics decisions` |
-| 19 | Industry-recognized technical excellence | Leader | `technical awards recognition benchmarks industry comparison` |
-| 20 | Innovation pipeline active | Leader | `R&D innovation pipeline research new capabilities emerging technology` |
+| 1 | Working product exists | Concept | `product is live users can sign up here is the demo how it works` |
+| 2 | Core problem clearly defined | Concept | `companies have to manually struggle with this costs time before we built` |
+| 3 | Target user identified | Concept | `our customers are we built this for they typically work at` |
+| 4 | Technical architecture documented | Early | `we built using our stack is runs on AWS GCP Node Python React Postgres` |
+| 5 | Product used by real customers | Early | `we have active users customers logging in daily weekly usage numbers` |
+| 6 | Core feature set complete | Early | `the product lets you users can do key features include we shipped` |
+| 7 | User feedback collected systematically | Early | `users told us our NPS is customers said they wish survey results` |
+| 8 | Product solves problem measurably | Validated | `customers went from to saved time reduced cost results after using` |
+| 9 | Product-market fit signals present | Validated | `customers keep coming back referring friends organic retention stayed without asking` |
+| 10 | Technical scalability demonstrated | Validated | `system handled peak requests per second concurrent users latency at load` |
+| 11 | Development velocity sustainable | Validated | `we deploy weekly shipped features this sprint two-week releases cadence` |
+| 12 | Technical debt managed | Validated | `code review test coverage we allocate time refactoring quality standards` |
+| 13 | Security practices in place | Scaling | `pen test passed SOC2 encrypt customer data audit security assessment` |
+| 14 | IP protection strategy exists | Scaling | `filed patent provisional application trade secret we own proprietary algorithm` |
+| 15 | Platform/API extensibility | Scaling | `our API third parties integrate developers built on webhooks SDK ecosystem` |
+| 16 | Data infrastructure mature | Scaling | `we track events per day analytics warehouse Mixpanel Segment dashboards alerts` |
+| 17 | Multi-environment deployment | Scaling | `staging before production CI pipeline automated tests deploy process` |
+| 18 | Product roadmap driven by data | Leader | `data showed users doing so we prioritized A/B test analytics informed decision` |
+| 19 | Industry-recognized technical excellence | Leader | `won recognized benchmark compared top ranked award featured in` |
+| 20 | Innovation pipeline active | Leader | `building next R&D exploring research upcoming capabilities working on new` |
 
 **Maturity stage interpretation for Product & Technology:**
 - **Concept** (0–4): Has an idea or early prototype but no real users
@@ -255,26 +294,26 @@ Partial items count as 0.5 toward the proven count.
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
-| 1 | Target market identified | Concept | `target market segment addressable audience` |
-| 2 | Value proposition articulated | Concept | `value proposition unique selling point customer benefit` |
-| 3 | First paying customer acquired | Concept | `first customer paying revenue initial sale` |
-| 4 | Revenue model defined | Early | `revenue model pricing monetization strategy` |
-| 5 | Monthly recurring revenue established | Early | `MRR monthly recurring revenue subscription` |
-| 6 | Customer acquisition channel identified | Early | `customer acquisition channel source marketing` |
-| 7 | Customer retention measured | Early | `customer retention churn rate renewal` |
-| 8 | Revenue growth rate documented | Validated | `revenue growth rate month over month year over year` |
-| 9 | Net revenue retention above 100% | Validated | `net revenue retention expansion NRR` |
-| 10 | Customer acquisition cost known | Validated | `CAC customer acquisition cost payback period` |
-| 11 | Total addressable market sized | Validated | `TAM SAM SOM total addressable market size` |
-| 12 | Repeatable sales process exists | Validated | `repeatable sales process pipeline conversion` |
-| 13 | Multiple revenue streams active | Scaling | `multiple revenue streams diversification` |
-| 14 | Unit economics positive | Scaling | `unit economics LTV CAC ratio positive` |
-| 15 | Market share measured | Scaling | `market share percentage competitive position` |
-| 16 | International or multi-market revenue | Scaling | `international expansion multi market geography` |
-| 17 | Revenue predictability demonstrated | Scaling | `revenue predictability forecast accuracy cohort` |
-| 18 | Category leader position | Leader | `market leader category leadership top position` |
-| 19 | Revenue at scale (>$1M ARR) | Leader | `ARR annual recurring revenue million scale` |
-| 20 | Organic growth engine working | Leader | `organic growth viral referral word of mouth network effects` |
+| 1 | Target market identified | Concept | `the market we are going after segment we focus on companies that` |
+| 2 | Value proposition articulated | Concept | `unlike alternatives we offer reason customers choose us different because` |
+| 3 | First paying customer acquired | Concept | `first sale closed customer paid us initial revenue first contract signed` |
+| 4 | Revenue model defined | Early | `we charge per seat subscription monthly fee pricing is annual contract` |
+| 5 | Monthly recurring revenue established | Early | `MRR is thousand monthly recurring revenue subscription paying customers` |
+| 6 | Customer acquisition channel identified | Early | `we find customers through most customers come from our main channel is` |
+| 7 | Customer retention measured | Early | `percent of customers renew churn is low customers stay average tenure` |
+| 8 | Revenue growth rate documented | Validated | `grew percent last month revenue doubled this quarter growth rate` |
+| 9 | Net revenue retention above 100% | Validated | `existing customers spend more upsell expanded account increased seats` |
+| 10 | Customer acquisition cost known | Validated | `costs us dollars to acquire new customer marketing spend per acquisition` |
+| 11 | Total addressable market sized | Validated | `the market is billion we are going after segment worth opportunity` |
+| 12 | Repeatable sales process exists | Validated | `sales pipeline stages close rate we convert from demo to paid` |
+| 13 | Multiple revenue streams active | Scaling | `also generate from services professional implementation in addition to subscription` |
+| 14 | Unit economics positive | Scaling | `we make profit per customer lifetime value multiple of acquisition cost` |
+| 15 | Market share measured | Scaling | `we have percent of the market one of the top players in space` |
+| 16 | International or multi-market revenue | Scaling | `customers in UK Europe Canada international revenue outside US global` |
+| 17 | Revenue predictability demonstrated | Scaling | `annual contracts we can forecast revenue ninety percent accuracy cohort` |
+| 18 | Category leader position | Leader | `we are the leading top three recognized as the go-to solution` |
+| 19 | Revenue at scale (>$1M ARR) | Leader | `ARR is million annual revenue run rate crossed million dollar` |
+| 20 | Organic growth engine working | Leader | `customers find us without paid ads word of mouth referral came from` |
 
 **Maturity stage interpretation for Market Traction & Revenue:**
 - **Concept** (0–4): Has an idea of target market but no revenue
@@ -289,26 +328,26 @@ Partial items count as 0.5 toward the proven count.
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
-| 1 | Business model described | Concept | `business model how company makes money` |
-| 2 | Pricing approach exists | Concept | `pricing approach strategy price point` |
-| 3 | Target customer willingness to pay validated | Concept | `willingness to pay validation customer interviews` |
-| 4 | Pricing tiers or packages defined | Early | `pricing tiers packages plans subscription` |
-| 5 | Gross margin calculated | Early | `gross margin cost of goods revenue percentage` |
-| 6 | Cost structure documented | Early | `cost structure fixed variable operating expenses` |
-| 7 | Revenue per customer tracked | Early | `ARPU average revenue per user customer` |
-| 8 | Customer lifetime value estimated | Validated | `LTV lifetime value customer cohort retention` |
-| 9 | LTV:CAC ratio above 3:1 | Validated | `LTV CAC ratio payback period unit economics` |
-| 10 | Gross margins above 60% | Validated | `gross margin above 60 percent healthy SaaS` |
-| 11 | Pricing optimization tested | Validated | `pricing optimization testing A/B experiment` |
-| 12 | Path to profitability mapped | Validated | `path to profitability break even timeline` |
-| 13 | Contribution margin positive | Scaling | `contribution margin unit level profitability` |
-| 14 | Operating leverage demonstrated | Scaling | `operating leverage revenue growth exceeds cost growth` |
-| 15 | Multi-product or upsell revenue | Scaling | `upsell cross-sell expansion revenue multi-product` |
-| 16 | Pricing power demonstrated | Scaling | `pricing power increase retention premium` |
-| 17 | Working capital efficient | Scaling | `working capital cash conversion cycle efficiency` |
-| 18 | EBITDA positive or near | Leader | `EBITDA positive operating profit margin` |
-| 19 | Business model proven at scale | Leader | `business model scale proven economics replicable` |
-| 20 | Best-in-class unit economics | Leader | `best in class unit economics benchmark comparison` |
+| 1 | Business model described | Concept | `we make money by charging customers for how we monetize revenue comes from` |
+| 2 | Pricing approach exists | Concept | `price point is per month per seat per user we charge` |
+| 3 | Target customer willingness to pay validated | Concept | `customers told us price is right willing to pay validated found price` |
+| 4 | Pricing tiers or packages defined | Early | `plans are starter professional enterprise tiers pricing packages options` |
+| 5 | Gross margin calculated | Early | `gross margin is percent cost to deliver service infrastructure` |
+| 6 | Cost structure documented | Early | `our costs are fixed variable biggest expenses headcount infrastructure hosting` |
+| 7 | Revenue per customer tracked | Early | `average revenue per customer per month ARPU average contract value` |
+| 8 | Customer lifetime value estimated | Validated | `average customer stays years lifetime value calculated cohort analysis` |
+| 9 | LTV:CAC ratio above 3:1 | Validated | `lifetime value is times what we spend to acquire payback period months` |
+| 10 | Gross margins above 60% | Validated | `margins are percent healthy gross profit on each subscription SaaS` |
+| 11 | Pricing optimization tested | Validated | `tested different price points at this price conversion improved customers responded` |
+| 12 | Path to profitability mapped | Validated | `break even at MRR we reach profitability by quarter timeline` |
+| 13 | Contribution margin positive | Scaling | `profitable on each customer after variable costs contribution positive` |
+| 14 | Operating leverage demonstrated | Scaling | `revenue grew faster than costs this quarter efficiency ratio improving` |
+| 15 | Multi-product or upsell revenue | Scaling | `customers buy add-ons upgrade to higher plan upsell cross-sell expansion` |
+| 16 | Pricing power demonstrated | Scaling | `raised prices customers stayed didn't churn at higher price point` |
+| 17 | Working capital efficient | Scaling | `customers pay upfront annual billing cash flow positive before delivering` |
+| 18 | EBITDA positive or near | Leader | `close to break even nearly profitable operating margin positive` |
+| 19 | Business model proven at scale | Leader | `economics hold as we scale proven across cohorts replicable` |
+| 20 | Best-in-class unit economics | Leader | `our margins LTV CAC ratio better than industry average benchmark comparison` |
 
 **Maturity stage interpretation for Business Model & Economics:**
 - **Concept** (0–4): Basic pricing idea, no validated economics
@@ -323,26 +362,26 @@ Partial items count as 0.5 toward the proven count.
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
-| 1 | Founding team identified | Concept | `founding team cofounders background` |
-| 2 | Relevant domain expertise present | Concept | `domain expertise industry experience relevant` |
-| 3 | Technical capability on team | Concept | `technical capability CTO engineering build` |
-| 4 | Full-time commitment from founders | Early | `full time founders dedicated committed` |
-| 5 | Core team of 3+ hired | Early | `team size employees hired core team` |
-| 6 | Key roles filled (eng, product, sales) | Early | `key hires engineering product sales marketing roles` |
-| 7 | Compensation structure defined | Early | `compensation salary equity vesting structure` |
-| 8 | Team has complementary skills | Validated | `complementary skills diverse backgrounds strengths` |
-| 9 | Prior startup or scaling experience | Validated | `prior startup experience scaling previous venture` |
-| 10 | Culture and values articulated | Validated | `culture values company mission team alignment` |
-| 11 | Employee retention healthy | Validated | `employee retention turnover satisfaction` |
-| 12 | Hiring pipeline active | Validated | `hiring pipeline recruiting talent acquisition` |
-| 13 | Advisory board established | Scaling | `advisory board mentors strategic advisors` |
-| 14 | Management layer in place | Scaling | `management layer VP director leadership team` |
-| 15 | Organizational structure documented | Scaling | `organizational structure org chart reporting` |
-| 16 | Succession planning for key roles | Scaling | `succession planning key person risk backup` |
-| 17 | Remote/hybrid work processes | Scaling | `remote hybrid distributed team processes tools` |
-| 18 | Industry-recognized team | Leader | `industry recognized team awards reputation` |
-| 19 | Team scaled past 50+ employees | Leader | `team size scaled 50 employees growth organization` |
-| 20 | Board of directors active | Leader | `board of directors governance oversight independent` |
+| 1 | Founding team identified | Concept | `the founders are I am cofounder my background previously worked at` |
+| 2 | Relevant domain expertise present | Concept | `spent years in this industry worked at domain deep expertise insider` |
+| 3 | Technical capability on team | Concept | `CTO cofounder engineer built previously technical background software` |
+| 4 | Full-time commitment from founders | Early | `all full time left jobs dedicated working on this not nights and weekends` |
+| 5 | Core team of 3+ hired | Early | `team of people hired employees full time staff working with us` |
+| 6 | Key roles filled (eng, product, sales) | Early | `hired VP sales director of engineering product manager marketing lead head of` |
+| 7 | Compensation structure defined | Early | `salary equity vesting cliff four year schedule options grant` |
+| 8 | Team has complementary skills | Validated | `between us cover technical business domain sales I bring he brings` |
+| 9 | Prior startup or scaling experience | Validated | `previously founded built scaled early employee at grew from to` |
+| 10 | Culture and values articulated | Validated | `our values are company culture we believe in how we work together` |
+| 11 | Employee retention healthy | Validated | `team has been here years average tenure no one has left people stay` |
+| 12 | Hiring pipeline active | Validated | `actively hiring open roles candidates interviewing recruiting pipeline` |
+| 13 | Advisory board established | Scaling | `advisors include former VP at connected to investor industry expert helps` |
+| 14 | Management layer in place | Scaling | `VP of director of managers lead each function reports directly to` |
+| 15 | Organizational structure documented | Scaling | `org chart reporting structure team organized by function departments` |
+| 16 | Succession planning for key roles | Scaling | `if this person left backup can cover documented not dependent on one person` |
+| 17 | Remote/hybrid work processes | Scaling | `team distributed remote offices hybrid async Slack documentation` |
+| 18 | Industry-recognized team | Leader | `team from Google Facebook Stripe top company well known previously at notable` |
+| 19 | Team scaled past 50+ employees | Leader | `grew from to fifty employees headcount scaling hiring rapidly organization` |
+| 20 | Board of directors active | Leader | `board meets quarterly directors include independent board member governance` |
 
 **Maturity stage interpretation for Team & Organization:**
 - **Concept** (0–4): Founders with an idea, minimal team
@@ -357,26 +396,26 @@ Partial items count as 0.5 toward the proven count.
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
-| 1 | Target customer defined | Concept | `target customer ideal buyer persona segment` |
-| 2 | Initial distribution channel identified | Concept | `distribution channel go to market initial` |
-| 3 | First customers acquired manually | Concept | `first customers manual outreach sales` |
-| 4 | Sales motion defined (PLG/sales-led/hybrid) | Early | `sales motion product led growth sales led hybrid` |
-| 5 | Marketing website and materials exist | Early | `marketing website content materials messaging` |
-| 6 | Lead generation active | Early | `lead generation pipeline inbound outbound` |
-| 7 | Conversion funnel measured | Early | `conversion funnel metrics trial signup demo` |
-| 8 | Customer acquisition repeatable | Validated | `customer acquisition repeatable scalable channel` |
-| 9 | Sales cycle length known | Validated | `sales cycle length time to close deal velocity` |
-| 10 | Content or inbound marketing working | Validated | `content marketing inbound SEO thought leadership` |
-| 11 | Referral or word-of-mouth channel | Validated | `referral word of mouth organic viral customer` |
-| 12 | Sales playbook documented | Validated | `sales playbook process methodology documented` |
-| 13 | Multi-channel acquisition | Scaling | `multi channel acquisition marketing diversified` |
-| 14 | Enterprise sales process | Scaling | `enterprise sales process large accounts deal size` |
-| 15 | Partner or channel strategy | Scaling | `partner channel reseller distributor strategy` |
-| 16 | Brand awareness growing | Scaling | `brand awareness recognition market visibility` |
-| 17 | Demand generation at scale | Scaling | `demand generation scale pipeline volume` |
-| 18 | Market category ownership | Leader | `market category leadership brand dominance` |
-| 19 | Self-sustaining growth engine | Leader | `self sustaining growth engine flywheel` |
-| 20 | International GTM execution | Leader | `international go to market global expansion` |
+| 1 | Target customer defined | Concept | `ideal customer is company that has these problems decision maker is` |
+| 2 | Initial distribution channel identified | Concept | `first customers came from started with direct outreach community network` |
+| 3 | First customers acquired manually | Concept | `found first customers by reaching out personally cold outreach direct` |
+| 4 | Sales motion defined (PLG/sales-led/hybrid) | Early | `sell through self-serve trial signup product led or direct sales outbound` |
+| 5 | Marketing website and materials exist | Early | `website pricing page case studies testimonials content published` |
+| 6 | Lead generation active | Early | `generating leads per month inbound outbound pipeline filling` |
+| 7 | Conversion funnel measured | Early | `trial to paid conversion is percent demo close rate funnel` |
+| 8 | Customer acquisition repeatable | Validated | `predictably acquire customers same process pipeline consistent` |
+| 9 | Sales cycle length known | Validated | `average time to close is days weeks months from first contact to signature` |
+| 10 | Content or inbound marketing working | Validated | `blog SEO organic traffic content thought leadership customers find us` |
+| 11 | Referral or word-of-mouth channel | Validated | `customers tell others referred by existing customer came from word of mouth` |
+| 12 | Sales playbook documented | Validated | `sales process documented objection handling how we run demos scripts` |
+| 13 | Multi-channel acquisition | Scaling | `customers come from paid SEO events partnerships multiple sources` |
+| 14 | Enterprise sales process | Scaling | `enterprise deals six figure procurement legal review security questionnaire` |
+| 15 | Partner or channel strategy | Scaling | `partner with resellers distributors integration partners channel agreement` |
+| 16 | Brand awareness growing | Scaling | `people recognize us heard of us market awareness name recognition growing` |
+| 17 | Demand generation at scale | Scaling | `MQLs per month pipeline volume programs running generating demand` |
+| 18 | Market category ownership | Leader | `when people think of this problem they think of us category leader` |
+| 19 | Self-sustaining growth engine | Leader | `growth compounds each cohort brings others flywheel growing without spending` |
+| 20 | International GTM execution | Leader | `launched in UK Europe international team hiring local market sales` |
 
 **Maturity stage interpretation for Go-to-Market:**
 - **Concept** (0–4): Target customer identified, first manual sales
@@ -391,26 +430,26 @@ Partial items count as 0.5 toward the proven count.
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
-| 1 | Basic financial records exist | Concept | `financial records bookkeeping accounting` |
-| 2 | Burn rate known | Concept | `burn rate monthly spend expenses` |
-| 3 | Revenue tracked | Concept | `revenue tracking income receipts` |
-| 4 | Monthly financial reporting | Early | `monthly financial report P&L balance sheet` |
-| 5 | Runway calculated | Early | `runway months cash remaining funding` |
-| 6 | Budget exists | Early | `budget plan spending allocation` |
-| 7 | Revenue vs expenses tracked | Early | `revenue vs expenses ratio coverage` |
-| 8 | 12+ months runway | Validated | `twelve months runway cash position` |
-| 9 | Cash flow forecast exists | Validated | `cash flow forecast projection model` |
-| 10 | Financial projections (3-year) | Validated | `financial projections three year model forecast` |
-| 11 | Revenue covering >30% of expenses | Validated | `revenue covering expenses percentage` |
-| 12 | Burn rate declining or stable | Validated | `burn rate trend declining stable improving` |
-| 13 | 18+ months runway | Scaling | `eighteen months runway comfortable cash` |
-| 14 | Detailed unit economics tracked | Scaling | `unit economics detailed tracking per customer` |
-| 15 | Revenue growth outpacing expense growth | Scaling | `revenue growth outpacing expenses operating leverage` |
-| 16 | Financial controls and auditing | Scaling | `financial controls audit compliance SOX` |
-| 17 | Treasury management | Scaling | `treasury management cash investment banking` |
-| 18 | Near break-even or profitable | Leader | `break even profitable profitability timeline` |
-| 19 | Financial operations scaled | Leader | `financial operations FP&A controller CFO` |
-| 20 | Capital efficient growth demonstrated | Leader | `capital efficient growth burn multiple efficiency` |
+| 1 | Basic financial records exist | Concept | `bookkeeping accounting QuickBooks Xero financial records tracked transactions` |
+| 2 | Burn rate known | Concept | `spending per month burn rate monthly cash out going` |
+| 3 | Revenue tracked | Concept | `invoices receipts payment revenue coming in dollars per month tracking` |
+| 4 | Monthly financial reporting | Early | `P&L income statement balance sheet monthly report reviewed` |
+| 5 | Runway calculated | Early | `have months of cash remaining at current burn will last until` |
+| 6 | Budget exists | Early | `allocated budget headcount plan spend this year next quarter approved` |
+| 7 | Revenue vs expenses tracked | Early | `revenue covers percent of our expenses burn ratio improving` |
+| 8 | 12+ months runway | Validated | `twelve months runway cash will last through comfortable position funded` |
+| 9 | Cash flow forecast exists | Validated | `modeled cash flow projected inflows outflows over next months model` |
+| 10 | Financial projections (3-year) | Validated | `three year financial model revenue projections expenses assumptions forecast` |
+| 11 | Revenue covering >30% of expenses | Validated | `revenue covers third of our burn expenses percentage of spend` |
+| 12 | Burn rate declining or stable | Validated | `burn came down reduced costs efficiency spending less than before` |
+| 13 | 18+ months runway | Scaling | `eighteen months comfortable runway raised enough will last through milestone` |
+| 14 | Detailed unit economics tracked | Scaling | `per customer cost to serve margin after delivery unit economics` |
+| 15 | Revenue growth outpacing expense growth | Scaling | `revenue growing faster than costs ratio improving efficiency gain` |
+| 16 | Financial controls and auditing | Scaling | `audit completed reviewed by accounting firm financial controls process` |
+| 17 | Treasury management | Scaling | `cash in treasury short term yield banking relationship managing reserves` |
+| 18 | Near break-even or profitable | Leader | `close to breaking even a few months away nearly profitable positive` |
+| 19 | Financial operations scaled | Leader | `CFO controller FP&A finance team running numbers reporting` |
+| 20 | Capital efficient growth demonstrated | Leader | `grew revenue efficiently low burn multiple capital efficient ratio` |
 
 **Maturity stage interpretation for Financial Health:**
 - **Concept** (0–4): Basic tracking, knows burn rate
@@ -425,26 +464,26 @@ Partial items count as 0.5 toward the proven count.
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
-| 1 | Funding need articulated | Concept | `funding need capital requirements how much raise` |
-| 2 | Use of funds defined | Concept | `use of funds allocation deployment milestones` |
-| 3 | Pitch materials exist | Concept | `pitch deck investor presentation materials` |
-| 4 | Pre-seed or seed raised | Early | `pre-seed seed round raised funding closed` |
-| 5 | Cap table clean | Early | `cap table ownership structure equity distribution` |
-| 6 | Investor relationships initiated | Early | `investor relationships introductions networking VCs` |
-| 7 | Valuation benchmark understood | Early | `valuation benchmark comparable multiples` |
-| 8 | Lead investor secured (or lined up) | Validated | `lead investor term sheet committed` |
-| 9 | Due diligence ready | Validated | `due diligence data room documents ready` |
-| 10 | Target round size and valuation set | Validated | `target round size valuation raise amount` |
-| 11 | Warm introductions to multiple funds | Validated | `warm introductions funds VCs pipeline` |
-| 12 | Prior round terms clean | Validated | `prior round terms clean no toxic provisions` |
-| 13 | Series A+ raised or in process | Scaling | `Series A raised process institutional funding` |
-| 14 | Multiple funding options available | Scaling | `multiple funding options venture debt grants` |
-| 15 | Investor update cadence established | Scaling | `investor updates cadence reporting monthly quarterly` |
-| 16 | Board governance structured | Scaling | `board governance structure meetings rights` |
-| 17 | Secondary or strategic capital access | Scaling | `secondary strategic capital options access` |
-| 18 | Growth round raised | Leader | `growth round Series B C raised scaled funding` |
-| 19 | Strong investor brand association | Leader | `top tier investors brand name fund portfolio` |
-| 20 | Capital markets optionality (IPO/M&A) | Leader | `IPO M&A exit optionality capital markets readiness` |
+| 1 | Funding need articulated | Concept | `raising million need capital to hire expand build grow` |
+| 2 | Use of funds defined | Concept | `will use the money for spending on hiring product sales market` |
+| 3 | Pitch materials exist | Concept | `deck presentation investor materials prepared slides ready to share` |
+| 4 | Pre-seed or seed raised | Early | `raised million from closed seed round pre-seed funding investors backed` |
+| 5 | Cap table clean | Early | `founders own percent investors own option pool percent shares outstanding` |
+| 6 | Investor relationships initiated | Early | `introduced to VC been meeting with investors warm intro through` |
+| 7 | Valuation benchmark understood | Early | `comparable companies valued at our valuation based on revenue multiple` |
+| 8 | Lead investor secured (or lined up) | Validated | `lead investor committed signed term sheet leading the round` |
+| 9 | Due diligence ready | Validated | `data room prepared documents organized financial records contracts ready` |
+| 10 | Target round size and valuation set | Validated | `raising at valuation this round post-money pre-money target` |
+| 11 | Warm introductions to multiple funds | Validated | `introductions to multiple VCs warm intro through portfolio friend` |
+| 12 | Prior round terms clean | Validated | `previous investors standard terms no unusual provisions clean simple` |
+| 13 | Series A+ raised or in process | Scaling | `Series A closed institutional investor led the round raised` |
+| 14 | Multiple funding options available | Scaling | `venture debt SBIR grant revenue financing in addition to equity` |
+| 15 | Investor update cadence established | Scaling | `send monthly update to investors quarterly report keeping informed` |
+| 16 | Board governance structured | Scaling | `board seat observer rights quarterly meeting agenda minutes` |
+| 17 | Secondary or strategic capital access | Scaling | `strategic investor corporate venture arm secondary sale option` |
+| 18 | Growth round raised | Leader | `Series B C growth capital raised institutional scaling round closed` |
+| 19 | Strong investor brand association | Leader | `Sequoia Andreessen Y Combinator top tier investor backed portfolio` |
+| 20 | Capital markets optionality (IPO/M&A) | Leader | `thinking about IPO acquisition conversations exit options preparing readiness` |
 
 **Maturity stage interpretation for Fundraising & Capital:**
 - **Concept** (0–4): Knows funding need, pitch deck exists
@@ -459,26 +498,26 @@ Partial items count as 0.5 toward the proven count.
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
-| 1 | Competitors identified | Concept | `competitors identified landscape alternatives` |
-| 2 | Differentiation articulated | Concept | `differentiation unique advantage what makes different` |
-| 3 | Basic competitive awareness | Concept | `competitive awareness market knowledge` |
-| 4 | Competitive matrix documented | Early | `competitive matrix comparison feature analysis` |
-| 5 | Unique value proposition clear | Early | `unique value proposition clear distinct` |
-| 6 | Customer preference signals | Early | `customer preference why choose us over competitors` |
-| 7 | Switching costs understood | Early | `switching costs lock-in migration barriers` |
-| 8 | Technical moat identified | Validated | `technical moat proprietary technology advantage` |
-| 9 | Win/loss analysis conducted | Validated | `win loss analysis competitive deals outcomes` |
-| 10 | Market positioning defined | Validated | `market positioning brand perception category` |
-| 11 | Barrier to entry assessed | Validated | `barrier to entry defensibility competitive response` |
-| 12 | First-mover or fast-follower advantage | Validated | `first mover advantage early entrant timing` |
-| 13 | Sustainable competitive advantage demonstrated | Scaling | `sustainable competitive advantage durable moat` |
-| 14 | Network effects or data advantages | Scaling | `network effects data advantage platform ecosystem` |
-| 15 | Brand as competitive advantage | Scaling | `brand reputation trust competitive advantage` |
-| 16 | Pricing power vs competitors | Scaling | `pricing power premium discount competitive pricing` |
-| 17 | Competitive intelligence process | Scaling | `competitive intelligence monitoring tracking process` |
-| 18 | Category defining company | Leader | `category defining market maker standard setter` |
-| 19 | Multiple defensible moats | Leader | `multiple moats defensible technology brand network data` |
-| 20 | Competitors benchmark against you | Leader | `competitors benchmark against reference standard` |
+| 1 | Competitors identified | Concept | `our competitors are alternatives customers compare us to others in space` |
+| 2 | Differentiation articulated | Concept | `unlike X we do Y we are different because unique approach compared to` |
+| 3 | Basic competitive awareness | Concept | `we know the landscape what else is out there alternatives exist` |
+| 4 | Competitive matrix documented | Early | `comparison versus competitors we win on feature price service` |
+| 5 | Unique value proposition clear | Early | `what makes us different is why customers choose us specifically` |
+| 6 | Customer preference signals | Early | `customers chose us over X because they said prefer us win deals against` |
+| 7 | Switching costs understood | Early | `customers integrate deeply to migrate would have to customers locked in stay` |
+| 8 | Technical moat identified | Validated | `proprietary algorithm took years to build technical advantage hard to copy` |
+| 9 | Win/loss analysis conducted | Validated | `we win against X when we lose to Y because deals closed against` |
+| 10 | Market positioning defined | Validated | `we position as we are known for category we own perceived as` |
+| 11 | Barrier to entry assessed | Validated | `hard to replicate because took years data network relationships built up` |
+| 12 | First-mover or fast-follower advantage | Validated | `we were first earliest in market ahead timing advantage launched before` |
+| 13 | Sustainable competitive advantage demonstrated | Scaling | `advantage grows over time harder to compete as we scale compounds` |
+| 14 | Network effects or data advantages | Scaling | `more users makes it better each adds value data improves with scale` |
+| 15 | Brand as competitive advantage | Scaling | `customers trust our name brand association recognized trusted reputation` |
+| 16 | Pricing power vs competitors | Scaling | `charge more than alternatives customers pay premium we command higher` |
+| 17 | Competitive intelligence process | Scaling | `we monitor competitors track what they release watch market moves` |
+| 18 | Category defining company | Leader | `we created this category set the standard defined what it means` |
+| 19 | Multiple defensible moats | Leader | `combination of technology data network brand all working together` |
+| 20 | Competitors benchmark against you | Leader | `competitors mention us in their marketing compare themselves to us reference` |
 
 **Maturity stage interpretation for Competitive Position:**
 - **Concept** (0–4): Knows competitors exist, basic differentiation idea
@@ -493,26 +532,26 @@ Partial items count as 0.5 toward the proven count.
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
-| 1 | Basic tools and infrastructure in place | Concept | `tools infrastructure setup basic operations` |
-| 2 | Communication processes exist | Concept | `communication process team meetings standup` |
-| 3 | Project management approach | Concept | `project management approach methodology tracking` |
-| 4 | Development process defined | Early | `development process agile sprint methodology` |
-| 5 | Customer support exists | Early | `customer support help desk ticketing response` |
-| 6 | Uptime and reliability tracked | Early | `uptime reliability monitoring SLA availability` |
-| 7 | Incident response process | Early | `incident response process outage handling` |
-| 8 | SLA commitments defined | Validated | `SLA service level agreement commitments guarantees` |
-| 9 | Vendor management in place | Validated | `vendor management procurement suppliers contracts` |
-| 10 | Quality assurance process | Validated | `quality assurance QA testing process standards` |
-| 11 | Documentation maintained | Validated | `documentation internal external maintained current` |
-| 12 | Onboarding process for employees | Validated | `employee onboarding process training ramp up` |
-| 13 | Business continuity plan | Scaling | `business continuity disaster recovery BCP DR plan` |
-| 14 | Compliance frameworks adopted | Scaling | `compliance framework SOC2 ISO GDPR certification` |
-| 15 | Operational metrics dashboarded | Scaling | `operational metrics dashboard KPI monitoring` |
-| 16 | Support scaling plan | Scaling | `customer support scaling plan growth capacity` |
-| 17 | Automation of repetitive processes | Scaling | `automation workflow efficiency repetitive tasks` |
-| 18 | World-class operational efficiency | Leader | `operational excellence efficiency best practices` |
-| 19 | 99.9%+ uptime demonstrated | Leader | `uptime 99.9 percent high availability demonstrated` |
-| 20 | Operational playbooks for all key functions | Leader | `operational playbooks runbooks standard procedures` |
+| 1 | Basic tools and infrastructure in place | Concept | `we use Slack Notion Jira Linear AWS tools set up running` |
+| 2 | Communication processes exist | Concept | `daily standup weekly team meeting sync how we communicate process` |
+| 3 | Project management approach | Concept | `track in Jira Linear sprints backlog priority planning tickets` |
+| 4 | Development process defined | Early | `agile two-week sprints pull request review merge deploy process` |
+| 5 | Customer support exists | Early | `support team responds tickets email chat Intercom help desk response time` |
+| 6 | Uptime and reliability tracked | Early | `uptime percent availability monitored status page SLA` |
+| 7 | Incident response process | Early | `when outage happens on-call runbook escalate post-mortem review` |
+| 8 | SLA commitments defined | Validated | `we commit to uptime response time SLA guarantee enterprise contract` |
+| 9 | Vendor management in place | Validated | `vendors suppliers contracts procurement negotiate manage relationships` |
+| 10 | Quality assurance process | Validated | `QA testing before release review checklist bug tracking regression` |
+| 11 | Documentation maintained | Validated | `internal docs wiki Notion Confluence knowledge base written updated` |
+| 12 | Onboarding process for employees | Validated | `new hire first week checklist training onboarding ramp up process` |
+| 13 | Business continuity plan | Scaling | `if X fails backup plan redundancy disaster recovery we would` |
+| 14 | Compliance frameworks adopted | Scaling | `SOC2 ISO 27001 GDPR HIPAA compliance process working toward certification` |
+| 15 | Operational metrics dashboarded | Scaling | `dashboard KPIs tracked visible to team operations metrics reviewed` |
+| 16 | Support scaling plan | Scaling | `support team grew customers to agent ratio tickets handled per person` |
+| 17 | Automation of repetitive processes | Scaling | `automated scripts workflows eliminated manual repetitive saved time` |
+| 18 | World-class operational efficiency | Leader | `operations running smoothly efficient team doing more with less` |
+| 19 | 99.9%+ uptime demonstrated | Leader | `system has been up nine nines availability demonstrated track record` |
+| 20 | Operational playbooks for all key functions | Leader | `runbooks written step by step documented procedures playbook` |
 
 **Maturity stage interpretation for Operations:**
 - **Concept** (0–4): Basic tools, ad-hoc processes
@@ -527,26 +566,26 @@ Partial items count as 0.5 toward the proven count.
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
-| 1 | Company incorporated | Concept | `company incorporated entity formation legal` |
-| 2 | Founder agreements signed | Concept | `founder agreements vesting equity split` |
-| 3 | Basic terms of service exist | Concept | `terms of service privacy policy legal basics` |
-| 4 | Employment agreements in place | Early | `employment agreements contracts offer letters` |
-| 5 | Contractor agreements standardized | Early | `contractor agreements independent consultant NDA` |
-| 6 | IP assignment agreements signed | Early | `IP assignment intellectual property agreements signed` |
-| 7 | Privacy policy published | Early | `privacy policy data handling published GDPR` |
-| 8 | Cap table properly maintained | Validated | `cap table maintained clean accurate equity` |
-| 9 | Data handling compliant (GDPR/CCPA) | Validated | `data handling GDPR CCPA compliance privacy regulation` |
-| 10 | Customer contracts standardized | Validated | `customer contracts MSA SaaS agreement standardized` |
-| 11 | Insurance coverage in place | Validated | `insurance coverage D&O liability E&O` |
-| 12 | Regulatory requirements mapped | Validated | `regulatory requirements mapped industry compliance` |
-| 13 | IP portfolio documented | Scaling | `IP portfolio patents trademarks trade secrets documented` |
-| 14 | SOC2 or equivalent compliance | Scaling | `SOC2 compliance audit certification security` |
-| 15 | International legal framework | Scaling | `international legal framework cross-border compliance` |
-| 16 | Legal counsel retained | Scaling | `legal counsel retained attorney law firm` |
-| 17 | Shareholder agreement comprehensive | Scaling | `shareholder agreement rights obligations governance` |
-| 18 | Full regulatory compliance demonstrated | Leader | `regulatory compliance demonstrated certified approved` |
-| 19 | Patent portfolio active | Leader | `patent portfolio filed granted IP protection` |
-| 20 | Legal readiness for exit (M&A/IPO) | Leader | `legal readiness exit M&A IPO due diligence ready` |
+| 1 | Company incorporated | Concept | `incorporated in Delaware C-corp LLC entity structure formation registered` |
+| 2 | Founder agreements signed | Concept | `founder agreement equity split vesting schedule signed between cofounders` |
+| 3 | Basic terms of service exist | Concept | `terms of service privacy policy website legal pages published` |
+| 4 | Employment agreements in place | Early | `offer letters employment contracts signed all employees have agreements` |
+| 5 | Contractor agreements standardized | Early | `contractor NDA independent contractor agreement consultant signed` |
+| 6 | IP assignment agreements signed | Early | `employees assigned IP work product invention assignment signed over` |
+| 7 | Privacy policy published | Early | `privacy policy data collection handling published GDPR compliant` |
+| 8 | Cap table properly maintained | Validated | `founders own percent investors own option pool outstanding shares breakdown` |
+| 9 | Data handling compliant (GDPR/CCPA) | Validated | `GDPR CCPA data privacy user data handling processing compliant` |
+| 10 | Customer contracts standardized | Validated | `standard MSA SaaS agreement template all customers sign same contract` |
+| 11 | Insurance coverage in place | Validated | `D&O liability insurance E&O errors omissions policy coverage` |
+| 12 | Regulatory requirements mapped | Validated | `regulations in our industry we must comply with identified mapped` |
+| 13 | IP portfolio documented | Scaling | `patents filed trademarks registered trade secrets listed documented` |
+| 14 | SOC2 or equivalent compliance | Scaling | `SOC2 Type II report audit passed security certified compliance` |
+| 15 | International legal framework | Scaling | `operating in multiple countries EU UK legal entities set up cross-border` |
+| 16 | Legal counsel retained | Scaling | `working with law firm attorney outside counsel represents us legal` |
+| 17 | Shareholder agreement comprehensive | Scaling | `investor rights agreement voting rights pro-rata information rights` |
+| 18 | Full regulatory compliance demonstrated | Leader | `passed regulatory audit approved certified by authority compliance demonstrated` |
+| 19 | Patent portfolio active | Leader | `patents granted pending filed portfolio growing protection IP claims` |
+| 20 | Legal readiness for exit (M&A/IPO) | Leader | `data room organized diligence ready documents clean exit preparation` |
 
 **Maturity stage interpretation for Legal & Compliance:**
 - **Concept** (0–4): Incorporated, basic agreements

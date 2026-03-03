@@ -259,7 +259,53 @@ Built the plumbing for Dify workflows to pull user data from Supabase, plus a st
 
 **Test totals:** 98 tests across 8 files (unchanged)
 
-### Next steps
+## v3.2 — Dify Evaluation Workflow Build & Debug (Mar 2026)
+
+Built and debugged the Dify evaluation workflow end-to-end in Dify Studio.
+
+### Dify Workflow Architecture
+
+The implemented workflow uses an Iteration node for context retrieval, not 10 independent HTTP nodes:
+
+- **Code 1 (`define_categories`)**: Python node that hardcodes all 10 evaluation categories — each with 20 evidence items and their semantic search queries. No inputs, outputs `categories Array[Object]`.
+- **Iteration (`context_retrieval`)**: Parallel loop (max 10) over the categories array. Inner chain per iteration:
+  - **Code 2 (`build_query`)**: Bound to `Iteration / item Object`. Extracts `category_id`, `category_title`, `combined_query` (all item queries joined), and `items_checklist` (numbered list of item names).
+  - **HTTP Request**: `POST /api/knowledge/context?secret=<DIFY_WEBHOOK_SECRET>` with body `{user_id, category_id, query, top_k: 10, threshold: 0.3}`. Returns `{"context": "..."}`.
+  - **Code 3 (`format_context`)**: Parses HTTP response JSON, formats into eval prompt structure, prepends `CATEGORY_ID: {id}\n` prefix. Outputs single `eval_context` String.
+- **Code 4 (`route_to_llms`)**: Receives `iteration_output Array[String]`, parses `CATEGORY_ID:` prefix from each, builds `result["context_" + cat_id]` dynamically. Outputs 10 `context_*` String variables.
+- **10 parallel LLM nodes** (`eval_<category_id>`): Each receives its `context_*` variable and evaluates against the scorecard.
+
+### Debugging Lessons
+
+Five bugs caught during construction — all documented in `dify-evaluation-workflow.md`:
+
+1. **Code 2 input bound to full array** instead of `Iteration / item` → function received a list instead of a single dict.
+2. **Code 3 variable name mismatch** → renamed input to `http_body` in UI but function still used `context` → `NameError`.
+3. **Code 3 missing JSON parse** → HTTP body is a raw JSON string, not a dict. Must use `json.loads(http_body).get("context", "")`.
+4. **Code 3 wrong return key** → returned `{"eval_context": ...}` but declared output was `result` → "Output result is missing" error.
+5. **Code 3 missing CATEGORY_ID prefix** → Code 4 looks for `CATEGORY_ID:` prefix to route contexts. Without it, `result` stays `{}` and all 10 output variables remain empty.
+
+### Search Query Philosophy (Key Change)
+
+All 200 semantic search queries were rewritten. Original queries used evaluation jargon that founders never write ("cap table clean maintained accurate"). Revised queries match how founders actually describe evidence ("founders own percent investors own option pool outstanding shares breakdown").
+
+**Rule**: Write queries in the language a founder uses when they *have* this evidence — specific numbers, tool names, concrete outcomes, natural speech. Not the language an investor uses when *looking* for it.
+
+### Files Updated
+
+- `dify-evaluation-workflow.md` — workflow architecture, all 200 queries, query philosophy note
+- Dify Studio — Code 1 node with all 10 categories + revised queries
+
+### Current State
+
+- Workflow running in Dify Studio (Code 1 → Iteration → HTTP → Code 4 → LLM nodes)
+- Auth and HTTP retrieval confirmed working (200 responses)
+- Empty context in Dify Studio testing is expected (`sys.user_id` ≠ Supabase UUID)
+- LLM nodes next to verify: confirm JSON output schema matches frontend expectations
+
+---
+
+### Next steps (from v3.1)
 
 1. Create Dify evaluation Workflow in Dify Studio (see `dify-evaluation-workflow.md`)
 2. Set `DIFY_EVALUATION_API_KEY` in `.env` and Vercel
