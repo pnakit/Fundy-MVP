@@ -17,7 +17,13 @@
       "Bash(npx supabase migration repair --status reverted 001)",
       "Bash(npx supabase migration repair --status applied 001)",
       "Bash(node -e \"console.log\\(''whsec_'' + require\\(''crypto''\\).randomBytes\\(24\\).toString\\(''hex''\\)\\)\")",
-      "WebFetch(domain:dify.ai)"
+      "WebFetch(domain:dify.ai)",
+      "Bash(npm run test:run -- api/evaluation/_difyWorkflow.test.js)",
+      "Bash(npm run test:run)",
+      "Read(//c/Users/jamot/.claude/projects/c--Users-jamot-OneDrive-Nusu-Git-LOCAL-Fundy-MVP/memory/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\jamot\\.claude\\projects\\c--Users-jamot-OneDrive-Nusu-Git-LOCAL-Fundy-MVP\\memory"
     ]
   }
 }

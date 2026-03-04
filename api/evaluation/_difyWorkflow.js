@@ -115,13 +115,17 @@ function transformDifyEvent(event) {
     const categoryId = extractCategoryFromNodeTitle(nodeTitle);
     if (!categoryId) return null;
 
-    // Extract the LLM output — Dify puts structured output in outputs.text or outputs.result
+    // Extract the LLM output — Dify puts structured output in outputs.text or outputs.result.
+    // structured_output is preferred (already parsed); text is the fallback JSON string.
     const outputs = event.data?.outputs || {};
-    const outputText = outputs.text || outputs.result || '';
+    const rawOutput = outputs.structured_output || outputs.text || outputs.result || '';
 
     try {
-      const categoryData = typeof outputText === 'string' ? JSON.parse(outputText) : outputText;
-      return { type: 'category_complete', category_id: categoryId, data: categoryData };
+      const categoryData = typeof rawOutput === 'string' ? JSON.parse(rawOutput) : rawOutput;
+      // Override category_id with the node-title-derived value — the node title is the
+      // source of truth. The LLM's category_id field may include the "eval_" prefix or
+      // otherwise drift, so we never trust it.
+      return { type: 'category_complete', category_id: categoryId, data: { ...categoryData, category_id: categoryId } };
     } catch (_e) {
       return {
         type: 'error',
@@ -149,10 +153,36 @@ function transformDifyEvent(event) {
 }
 
 /**
+ * Known category IDs — the source of truth for what evaluation categories exist.
+ *
+ * Naming contract:
+ *   - App-level IDs (EVALUATION_DIMENSIONS, evaluationApi.js): bare form, e.g. "business_model"
+ *   - Dify node titles: "eval_" prefix, e.g. "eval_business_model"
+ *   - Dify context inputs: "context_" prefix, e.g. "context_business_model"
+ *
+ * To add a new category: add its bare ID here AND add it to EVALUATION_DIMENSIONS in App.jsx
+ * AND create a Dify node named "eval_<id>".
+ */
+const VALID_CATEGORY_IDS = new Set([
+  'product_technology',
+  'market_traction',
+  'business_model',
+  'team_organization',
+  'go_to_market',
+  'financial_health',
+  'fundraising_capital',
+  'competitive_position',
+  'operations',
+  'legal_compliance',
+]);
+
+/**
  * Extract category ID from Dify node title.
  * Convention: nodes are named "eval_product_technology", "eval_market_traction", etc.
+ * Returns null for unknown categories so they're silently ignored rather than corrupting data.
  */
 function extractCategoryFromNodeTitle(title) {
-  if (!title || !title.startsWith('eval_')) return null;
-  return title.slice(5); // Remove "eval_" prefix
+  if (!title?.startsWith('eval_')) return null;
+  const id = title.slice(5);
+  return VALID_CATEGORY_IDS.has(id) ? id : null;
 }

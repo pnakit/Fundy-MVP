@@ -303,6 +303,70 @@ All 200 semantic search queries were rewritten. Original queries used evaluation
 - Empty context in Dify Studio testing is expected (`sys.user_id` ≠ Supabase UUID)
 - LLM nodes next to verify: confirm JSON output schema matches frontend expectations
 
+## v3.3 — Evaluation Pipeline Wiring & Output Validation (Mar 2026)
+
+Validated the full pipeline from Dify Studio → LLM output → frontend, fixed category ID mismatch, preserved rich LLM output, and re-seeded with real embeddings.
+
+### Changes
+
+**Dify Studio — `user_id` input variable:**
+- Added `user_id` as a START node input variable in the Dify evaluation workflow
+- HTTP Request body now references `user_id` workflow input instead of `sys.user_id`
+- `sys.user_id` in Dify Studio is Dify's own user ID, not a Supabase UUID — this fix allows Studio testing with real Supabase data by entering a UUID in the Run panel
+- Test UUID: `0d71eb07-6e99-4109-ae02-b9e1f657c911` (peter@nusufi.com)
+
+**`api/evaluation/generate.js`:**
+- Added `user_id: userId` to the `inputs` object passed to Dify, so the workflow input variable is populated in production
+
+**`api/evaluation/_difyWorkflow.js`:**
+- Added `VALID_CATEGORY_IDS` set — explicit source of truth for category ID ↔ Dify node name contract
+- `extractCategoryFromNodeTitle()` now validates against the set; unknown node titles are silently ignored (not errors)
+- `node_finished` handler: prefers `outputs.structured_output` → `outputs.text` → `outputs.result`
+- Always overrides `categoryData.category_id` with the node-title-derived value — the LLM output was including the `eval_` prefix (`"eval_business_model"`) which broke `EVALUATION_DIMENSIONS` lookup
+
+**`src/App.jsx` — `onCategoryComplete` callback:**
+- `dim` object now preserves all LLM output fields: `status`, `highlights`, `gaps`, `keyMetrics`, `deepDivePrompt`
+- Previously only `category_id`, `completeness`, `summary` were kept; all other fields were silently dropped
+- `keyMetrics` contains `perItemAssessment` (per-item PROVEN/PARTIAL/UNPROVEN scores) for future UI use
+
+**Naming convention (documented):**
+
+| Layer | Convention | Example |
+|-------|-----------|---------|
+| App-level IDs, evaluationApi.js | bare | `business_model` |
+| Dify node titles | `eval_` prefix | `eval_business_model` |
+| Dify context inputs to workflow | `context_` prefix | `context_business_model` |
+| Code 3 CATEGORY_ID: labels | bare | `business_model` |
+
+**Test data:**
+- Re-seeded with real OpenAI embeddings (`node scripts/seed-test-data.js --real`)
+- 17 chunks: 4 onboarding + 3 deep-dive + 10 summary for peter@nusufi.com
+
+**`api/evaluation/_difyWorkflow.test.js` — new file:**
+- 17 tests covering: category ID extraction, VALID_CATEGORY_IDS validation, category_id override, structured_output preference, rich field passthrough, error handling
+
+**Test totals:** 117 tests across 9 files (up from 98 across 8 files)
+
+### LLM Output Schema (confirmed working)
+
+```json
+{
+  "category_id": "eval_business_model",
+  "category_title": "Business Model & Economics",
+  "summary": "...",
+  "completeness": 60,
+  "status": "partial",
+  "highlights": ["..."],
+  "gaps": ["..."],
+  "keyMetrics": {
+    "mrr": 45000,
+    "perItemAssessment": { "1_BusinessModelDescribed": "PROVEN", ... },
+    "provenCount": 7, "partialCount": 3, "unprovenCount": 10
+  },
+  "deepDivePrompt": "..."
+}
+```
+
 ---
 
 ### Next steps (from v3.1)

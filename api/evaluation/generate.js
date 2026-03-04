@@ -93,6 +93,7 @@ export default async function handler(req, res) {
 
       const inputs = {
         company_name: companyName,
+        user_id: userId,
         ...contexts,
       };
 

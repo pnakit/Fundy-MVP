@@ -725,11 +725,17 @@ export default function StartupPlatform() {
         setEvaluationData((prev) => {
           const dimensions = [...(prev.dimensions || [])];
           const existingIdx = dimensions.findIndex((d) => d.id === categoryData.category_id);
+          const completeness = categoryData.completeness ?? 0;
           const dim = {
             id: categoryData.category_id,
-            maturityLevel: categoryData.completeness >= 70 ? 4 : categoryData.completeness >= 40 ? 3 : categoryData.completeness >= 20 ? 2 : 1,
-            performanceScore: Math.round(categoryData.completeness / 20),
+            maturityLevel: completeness >= 70 ? 4 : completeness >= 40 ? 3 : completeness >= 20 ? 2 : 1,
+            performanceScore: Math.round(completeness / 20),
             description: categoryData.summary,
+            status: categoryData.status,
+            highlights: categoryData.highlights || [],
+            gaps: categoryData.gaps || [],
+            keyMetrics: categoryData.keyMetrics || {},
+            deepDivePrompt: categoryData.deepDivePrompt || '',
           };
           if (existingIdx >= 0) {
             dimensions[existingIdx] = dim;
