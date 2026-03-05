@@ -20,7 +20,8 @@
       "WebFetch(domain:dify.ai)",
       "Bash(npm run test:run -- api/evaluation/_difyWorkflow.test.js)",
       "Bash(npm run test:run)",
-      "Read(//c/Users/jamot/.claude/projects/c--Users-jamot-OneDrive-Nusu-Git-LOCAL-Fundy-MVP/memory/**)"
+      "Read(//c/Users/jamot/.claude/projects/c--Users-jamot-OneDrive-Nusu-Git-LOCAL-Fundy-MVP/memory/**)",
+      "Bash(npx vercel logs fundy-8oqh4iix0-peters-projects-31a5d738.vercel.app)"
     ],
     "additionalDirectories": [
       "c:\\Users\\jamot\\.claude\\projects\\c--Users-jamot-OneDrive-Nusu-Git-LOCAL-Fundy-MVP\\memory"
