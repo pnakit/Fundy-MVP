@@ -25,12 +25,29 @@ describe('extractOnboardingSummary', () => {
     expect(extractOnboardingSummary('Just a normal message')).toBeNull();
   });
 
-  it('returns null when only start marker is present', () => {
-    expect(extractOnboardingSummary(`${SUMMARY_START_MARKER}\n{"foo":1}`)).toBeNull();
+  it('tries to parse JSON when closing marker is absent (Dify may not output it)', () => {
+    // Without closing marker, attempts to parse everything after opening marker
+    const result = extractOnboardingSummary(`${SUMMARY_START_MARKER}\n{"foo":1}`);
+    // {"foo":1} has no categories array → missing_categories error, not null
+    expect(result).toEqual({ error: 'missing_categories', message: 'The summary is missing category data.' });
+  });
+
+  it('parses valid summary even when closing marker is absent', () => {
+    const input = makeValidSummary();
+    const text = `Great summary\n${SUMMARY_START_MARKER}\n${JSON.stringify(input)}`;
+    const result = extractOnboardingSummary(text);
+    expect(result.error).toBeUndefined();
+    expect(result.companyName).toBe('TestCo');
   });
 
   it('returns parse_error for malformed JSON', () => {
     const response = `${SUMMARY_START_MARKER}\n{not valid json}\n${SUMMARY_END_MARKER}`;
+    const result = extractOnboardingSummary(response);
+    expect(result).toEqual({ error: 'parse_error', message: 'The summary data could not be parsed.' });
+  });
+
+  it('returns parse_error for malformed JSON when closing marker is absent', () => {
+    const response = `${SUMMARY_START_MARKER}\n{not valid json}`;
     const result = extractOnboardingSummary(response);
     expect(result).toEqual({ error: 'parse_error', message: 'The summary data could not be parsed.' });
   });

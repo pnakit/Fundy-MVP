@@ -9,9 +9,11 @@ export function extractOnboardingSummary(responseText) {
 
   const jsonStart = startIdx + SUMMARY_START_MARKER.length;
   const endIdx = responseText.indexOf(SUMMARY_END_MARKER, jsonStart);
-  if (endIdx === -1) return null;
 
-  let jsonString = responseText.substring(jsonStart, endIdx).trim();
+  // Closing marker is optional — if absent (e.g. Dify doesn't output it), use everything after the opening marker
+  let jsonString = (endIdx !== -1)
+    ? responseText.substring(jsonStart, endIdx).trim()
+    : responseText.substring(jsonStart).trim();
 
   // Strip markdown code fences if LLM wrapped the JSON in ```json ... ```
   jsonString = jsonString.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
