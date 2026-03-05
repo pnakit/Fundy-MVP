@@ -24,17 +24,32 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'No Dify API keys configured' });
   }
 
-  const response = await fetch(`${getDifyBaseUrl()}/files/upload`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': req.headers['content-type'],
-    },
-    body: req,
-  });
+  // Buffer the request body — streaming `req` directly into fetch can silently
+  // fail in some Vercel Node.js environments when the stream is consumed too early.
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+  const body = Buffer.concat(chunks);
+
+  let response;
+  try {
+    response = await fetch(`${getDifyBaseUrl()}/files/upload`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': req.headers['content-type'],
+      },
+      body,
+    });
+  } catch (fetchErr) {
+    console.error('[upload] Fetch to Dify failed:', fetchErr.message);
+    return res.status(502).json({ error: `Failed to reach Dify: ${fetchErr.message}` });
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error(`[upload] Dify rejected upload (${response.status}):`, errorText);
     return res.status(response.status).send(errorText);
   }
 
