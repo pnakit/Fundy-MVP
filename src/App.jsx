@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
-  MOCK_EVALUATION_DATA,
   MOCK_INVESTMENT_DATA,
   INVESTMENT_ACTIONS,
   ONBOARDING_CATEGORIES,
   MOCK_ONBOARDING_SUMMARY,
-  INITIAL_ACTION_ITEMS,
   EVALUATION_DIMENSIONS,
   MATURITY_STAGES,
 } from './data/mockData';
@@ -23,18 +21,53 @@ import RadarChart from './components/RadarChart';
 import ProgressRing from './components/ProgressRing';
 import ChatPanel from './components/ChatPanel';
 import LoginScreen from './components/LoginScreen';
-import { getSession, signOut, onAuthStateChange } from './api/dataAccess';
+import {
+  getSession,
+  signOut,
+  onAuthStateChange,
+  loadOnboardingSummary,
+  loadEvaluation,
+  loadInvestmentSelections,
+  loadActionItems,
+  upsertInvestmentSelection,
+  saveActionItem,
+  updateActionItemStatus,
+  deleteActionItemsBySourceId,
+} from './api/dataAccess';
 import ErrorBoundary from './components/ErrorBoundary';
 import { addInvestmentActions, removeInvestmentActions } from './utils/actionItems';
 import { uploadFiles, buildUploadMessages } from './utils/fileUpload';
 import { generateEvaluation } from './api/evaluationApi';
 
-let nextActionId = 100;
-function generateActionId() {
-  return nextActionId++;
+const CHAT_ERROR_MESSAGE = 'I apologize, but I encountered an error. Please try again.';
+
+/** Reconstruct evaluationData state shape from a DB evaluations row. */
+function mapDbEvalToState(dbRow) {
+  return {
+    companyName: dbRow.maturity_stage?.companyName,
+    overallMaturity: dbRow.maturity_stage?.overallMaturity,
+    overallPerformance: dbRow.performance_metrics?.overallPerformance,
+    description: dbRow.maturity_stage?.description,
+    dimensions: dbRow.dimensions || [],
+  };
 }
 
-const CHAT_ERROR_MESSAGE = 'I apologize, but I encountered an error. Please try again.';
+/** Reconstruct action item state shape from a DB action_items row. */
+function mapDbActionToState(dbRow) {
+  return {
+    id: dbRow.id,
+    title: dbRow.title,
+    description: dbRow.description || '',
+    priority: dbRow.priority || 'medium',
+    status: dbRow.status || 'pending',
+    sourceType: dbRow.source_type || null,
+    sourceId: dbRow.source_id || null,
+    dimensionId: dbRow.dimension_id || null,
+    actionKey: dbRow.action_key || null,
+    files: [],
+    inputs: {},
+  };
+}
 
 /** Replace the last message in a messages array. Returns a new array. */
 function replaceLastMessage(messages, newMsg) {
@@ -70,25 +103,97 @@ export default function StartupPlatform() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [expandedDimension, setExpandedDimension] = useState(null);
 
-  // Auth: check existing session + listen for changes
-  useEffect(() => {
-    getSession().then((s) => {
-      setSession(s);
-      setAuthLoading(false);
-    }).catch(() => {
-      setAuthLoading(false);
-    });
+  // ─── Persistence helpers ──────────────────────────────────────────────
 
-    const unsubscribe = onAuthStateChange((_event, s) => {
+  /** Save the onboarding summary to Supabase and embed it for KB search. Fire-and-forget. */
+  const persistSummary = async (summary) => {
+    try {
+      const session = await getSession();
+      if (!session) return;
+      const res = await fetch('/api/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ onboardingSummary: summary, onboardingPhase: 'summary' }),
+      });
+      if (!res.ok) console.error('[persistSummary] HTTP', res.status);
+    } catch (err) {
+      console.error('[persistSummary] Failed:', err.message);
+    }
+  };
+
+  /** Save the completed evaluation result to Supabase. Fire-and-forget. */
+  const persistEvaluation = async (data) => {
+    if (!data?.dimensions?.length) return;
+    try {
+      const session = await getSession();
+      if (!session) return;
+      const res = await fetch('/api/evaluation/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ evaluationData: data }),
+      });
+      if (!res.ok) console.error('[persistEvaluation] HTTP', res.status);
+    } catch (err) {
+      console.error('[persistEvaluation] Failed:', err.message);
+    }
+  };
+
+  /** Restore all persisted user data from Supabase after sign-in. */
+  const restoreUserData = async () => {
+    try {
+      const [savedSummary, savedEval, savedInvestments, savedActions] = await Promise.all([
+        loadOnboardingSummary(),
+        loadEvaluation(),
+        loadInvestmentSelections(),
+        loadActionItems(),
+      ]);
+      if (savedSummary) {
+        setOnboardingSummary(savedSummary.summaryData);
+        setOnboardingPhase('summary');
+      }
+      if (savedEval) {
+        setEvaluationData(mapDbEvalToState(savedEval));
+      }
+      if (savedInvestments.length > 0) {
+        setSelectedInvestments(savedInvestments);
+      }
+      if (savedActions.length > 0) {
+        setActionItems(savedActions.map(mapDbActionToState));
+      }
+    } catch (err) {
+      console.error('[restoreUserData] Failed:', err.message);
+    }
+  };
+
+  // ─── Auth ─────────────────────────────────────────────────────────────
+
+  // Check existing session on mount + restore persisted data; listen for future auth changes.
+  useEffect(() => {
+    getSession()
+      .then((s) => {
+        setSession(s);
+        setAuthLoading(false);
+        if (s) restoreUserData();
+      })
+      .catch(() => setAuthLoading(false));
+
+    const unsubscribe = onAuthStateChange((event, s) => {
       setSession(s);
+      if (event === 'SIGNED_IN') restoreUserData();
     });
 
     return unsubscribe;
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSignOut = async () => {
     await signOut();
     setSession(null);
+    // Clear persisted state on sign-out
+    setOnboardingSummary(null);
+    setOnboardingPhase('chat');
+    setEvaluationData(null);
+    setSelectedInvestments([]);
+    setActionItems([]);
   };
 
   // Process a completed Dify response — check for summary, update messages
@@ -122,6 +227,7 @@ export default function StartupPlatform() {
 
       setOnboardingSummary(result);
       setOnboardingPhase('summary');
+      persistSummary(result);
     } else {
       setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
     }
@@ -201,6 +307,7 @@ export default function StartupPlatform() {
           setMessages(prev => replaceLastMessage(prev, { role: 'assistant', content: conversationalPart || response.message }));
           setOnboardingSummary(result);
           setOnboardingPhase('summary');
+          persistSummary(result);
         } else {
           setMessages(prev => replaceLastMessage(prev, { role: 'assistant', content: response.message }));
         }
@@ -266,18 +373,31 @@ export default function StartupPlatform() {
     }));
   };
 
-  const toggleInvestment = (investmentId) => {
-    setSelectedInvestments((prev) => {
-      const isSelected = prev.includes(investmentId);
-      if (isSelected) {
-        setActionItems((prevActions) => removeInvestmentActions(prevActions, investmentId));
-        return prev.filter((id) => id !== investmentId);
-      } else {
-        const rawActions = INVESTMENT_ACTIONS[investmentId] || [];
-        setActionItems((prevActions) => addInvestmentActions(prevActions, investmentId, rawActions, generateActionId));
-        return [...prev, investmentId];
+  const toggleInvestment = async (investmentId) => {
+    const isSelected = selectedInvestments.includes(investmentId);
+    if (isSelected) {
+      setActionItems((prevActions) => removeInvestmentActions(prevActions, investmentId));
+      setSelectedInvestments((prev) => prev.filter((id) => id !== investmentId));
+      // Persist: mark deselected + remove action items from DB
+      upsertInvestmentSelection(investmentId, false);
+      deleteActionItemsBySourceId(investmentId);
+    } else {
+      const rawActions = INVESTMENT_ACTIONS[investmentId] || [];
+      const newActions = addInvestmentActions([], investmentId, rawActions, () => crypto.randomUUID());
+      setActionItems((prevActions) => [...prevActions, ...newActions]);
+      setSelectedInvestments((prev) => [...prev, investmentId]);
+      // Persist: mark selected + save new action items to DB
+      upsertInvestmentSelection(investmentId, true);
+      const userId = session?.user?.id;
+      if (userId) {
+        newActions.forEach((action) => saveActionItem(action, userId));
       }
-    });
+    }
+  };
+
+  const handleMarkComplete = (actionId) => {
+    setActionItems((prev) => prev.map((a) => (a.id === actionId ? { ...a, status: 'completed' } : a)));
+    updateActionItemStatus(actionId, 'completed');
   };
 
   const handleCategoryClick = (categoryId) => {
@@ -695,6 +815,7 @@ export default function StartupPlatform() {
   // Load sample onboarding data for evaluation testing
   const handleLoadSampleData = () => {
     setOnboardingSummary(MOCK_ONBOARDING_SUMMARY);
+    persistSummary(MOCK_ONBOARDING_SUMMARY);
   };
 
   // Generate evaluation via streaming API
@@ -781,10 +902,14 @@ export default function StartupPlatform() {
     setEvaluationStatus(null);
 
     if (result.success) {
-      setEvaluationData((prev) => ({
-        ...prev,
-        description: `Your company has been evaluated across ${prev.dimensions.length} key business dimensions.`,
-      }));
+      setEvaluationData((prev) => {
+        const finalData = {
+          ...prev,
+          description: `Your company has been evaluated across ${prev.dimensions.length} key business dimensions.`,
+        };
+        persistEvaluation(finalData);
+        return finalData;
+      });
     }
   };
 
@@ -1031,7 +1156,7 @@ export default function StartupPlatform() {
                           <div className="action-buttons">
                             <button
                               className="btn-complete"
-                              onClick={() => setActionItems((prev) => prev.map((a) => (a.id === action.id ? { ...a, status: 'completed' } : a)))}
+                              onClick={() => handleMarkComplete(action.id)}
                             >
                               Mark Complete
                             </button>
@@ -1105,7 +1230,7 @@ export default function StartupPlatform() {
                           <div className="action-buttons">
                             <button
                               className="btn-complete"
-                              onClick={() => setActionItems((prev) => prev.map((a) => (a.id === action.id ? { ...a, status: 'completed' } : a)))}
+                              onClick={() => handleMarkComplete(action.id)}
                             >
                               Mark Complete
                             </button>

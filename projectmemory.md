@@ -383,3 +383,65 @@ Validated the full pipeline from Dify Studio → LLM output → frontend, fixed 
 - **File text extraction pipeline** — `extracted_text_path` column exists but no extraction logic yet
 - **Conversation persistence from client** — tables exist but client doesn't write to them yet (Phase 2)
 - **Additional serverless tests** — webhook auth, KB search, category context tests planned but not yet written
+
+## v3.4 — Full Persistence Pipeline (Mar 2026)
+
+Closes the loop: onboarding summary + evaluation results + investment state now survive page
+refresh. Also embeds the summary into pgvector so KB search finds user-specific content,
+making evaluation output company-specific rather than generic.
+
+### Root cause of generic evaluation (fixed)
+
+`buildCategoryContexts` queries `document_embeddings` by `userId`. No embeddings existed for
+real users (only the seeded test user). Now: saving the summary also embeds it into
+`document_embeddings` (10 chunks, one per category) so KB search immediately enriches context.
+
+### Architecture decisions
+
+- **Summary save = embed trigger**: `POST /api/summary` upserts to `onboarding_summaries` AND
+  chunks + embeds into `document_embeddings`. One call, two effects, idempotent.
+- **Client vs server writes**: RLS determines path. `onboarding_summaries` + `evaluations` are
+  server-managed (SELECT only for clients → requires JWT-authenticated server endpoint).
+  `action_items` + `investment_selections` have full CRUD RLS → client writes directly via
+  Supabase JS.
+- **Fire-and-forget persist**: `persistSummary()` and `persistEvaluation()` are called
+  non-blocking after state is set. UI never waits for DB writes.
+- **Auth-time restore**: On every login, load summary + evaluation + investments + action items
+  in parallel from Supabase and restore React state.
+- **UUID action item IDs**: `generateActionId()` counter replaced with `crypto.randomUUID()` so
+  IDs can be used as Supabase primary keys directly.
+
+### New files
+
+- `api/summary.js` — `POST /api/summary` (JWT auth): upsert summary + chunk + embed
+- `api/evaluation/save.js` — `POST /api/evaluation/save` (JWT auth): upsert evaluation
+- `api/account/reset.js` — `POST /api/account/reset` (JWT auth): wipe all user data, keep account
+- `api/account/delete.js` — `POST /api/account/delete` (JWT auth): GDPR full account deletion
+
+### Modified files
+
+- `src/api/dataAccess.js` — added: `loadOnboardingSummary`, `loadEvaluation`,
+  `loadInvestmentSelections`, `loadActionItems`, `upsertInvestmentSelection`, `saveActionItem`,
+  `updateActionItemStatus`, `deleteActionItemsBySourceId`
+- `src/App.jsx` — added: `persistSummary()`, `persistEvaluation()`, `mapDbEvalToState()`,
+  `mapDbActionToState()`, auth-restore block, investment/action persist wiring
+- `src/utils/actionItems.js` — `generateActionId` → `crypto.randomUUID()`
+
+### Long-horizon items (Phase D and beyond)
+
+- **Conversation message persistence (Phase D)**: Save each onboarding + deep-dive message to
+  `messages` table. Requires: `conversationDbId` state (Supabase UUID alongside Dify's
+  `conversationId`), INSERT on first message, save final assistant message after stream ends.
+  Also enables embedding conversation chunks for richer KB retrieval.
+- **Investment matching Dify workflow**: Currently static mock data (`MOCK_INVESTMENT_DATA`).
+  Future: Dify workflow that takes evaluation results + company profile → returns ranked investor
+  matches. Output saved to `investment_recommendations` table.
+- **File text extraction pipeline**: `extracted_text_path` column exists in `file_metadata`.
+  Need: PDF/doc text extraction server-side, chunk + embed extracted text, store path in column.
+- **Account self-service reset/delete**: `api/account/reset.js` and `api/account/delete.js`
+  endpoints (schemas designed, see data architecture diagram in session notes).
+- **External KB adapter**: `knowledgeBase.js` has adapter pattern but only internal Supabase
+  adapter implemented. Partner KB integration when needed.
+- **Resend custom SMTP**: Supabase SMTP is 2 emails/hr. Configure before public beta.
+- **Conversation embedding**: After Phase D message persistence, embed conversation chunks to
+  enrich KB search context for evaluation (complements summary embeddings).

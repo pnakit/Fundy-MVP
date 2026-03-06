@@ -25,7 +25,7 @@ src/
   data/mockData.js          # Mock data constants (evaluation, investments, onboarding)
   api/
     supabaseClient.js       # Supabase client init (VITE_SUPABASE_URL + anon key)
-    dataAccess.js            # Data access layer — auth methods (Phase 1), persistence (future)
+    dataAccess.js            # Data access layer — auth + full persistence (read/write for summary, evaluation, investments, actions)
     difyApi.js               # Dify API client (blocking, streaming, mock modes)
     evaluationApi.js         # Streaming evaluation client (SSE → progressive category rendering)
   utils/
@@ -72,7 +72,7 @@ Server-side vars are used by Vercel serverless functions and the Vite dev proxy.
 
 ## Architecture
 
-**Target Architecture**: See `Architecture.md` for the planned multi-tenancy, persistence, and auth architecture (Supabase unified stack). Consult that document when planning any work related to authentication, data persistence, file storage, vector search, or Dify integration updates. The current app uses mock/ephemeral state — the architecture document describes the production target.
+**Target Architecture**: See `Architecture.md` for the planned multi-tenancy, persistence, and auth architecture (Supabase unified stack). Consult that document when planning any work related to authentication, data persistence, file storage, vector search, or Dify integration updates. Summary, evaluation, investments, and action items are now persisted to Supabase and restored on login. Conversation message persistence is deferred (Phase D).
 
 **Data Structure & Workflow Contracts**: See `datastructure.md` for the exact input/output contracts for all Dify workflows (onboarding, deep-dive, evaluation generation, investment matching), the data that flows between them, client-side validation rules, and database schema alignment. Consult that document when building or modifying Dify workflows, parsers, or persistence logic.
 
@@ -110,8 +110,10 @@ api/
     knowledgeBase.js      # KB abstraction layer (swappable internal/external pgvector)
     embeddings.js         # OpenAI embedding client (text-embedding-3-small)
     embed.js              # POST /api/knowledge/embed — embedding ingestion endpoint
+  summary.js              # POST /api/summary — upsert onboarding summary + embed into pgvector
   evaluation/
     generate.js           # POST /api/evaluation/generate — orchestrates retrieval + Dify + SSE
+    save.js               # POST /api/evaluation/save — persist evaluation results to DB
     _categoryContext.js   # Per-category context assembly (10 parallel KB searches)
     _difyWorkflow.js      # Dify Workflow API + SSE stream transformation
 ```
@@ -129,7 +131,7 @@ api/
 - Color constants are centralized in `src/utils/colors.js` (`COLORS.success`, `COLORS.warning`, etc.)
 - `ProgressRing` component replaces all hand-rolled SVG circle progress indicators
 - `ChatPanel` component is shared between onboarding chat and deep-dive chat
-- Action item IDs use an incrementing counter (`generateActionId()`) — not `Date.now() + Math.random()`
+- Action item IDs use `crypto.randomUUID()` — UUIDs serve as Supabase primary keys directly
 - Investment toggle properly cleans up associated action items on deselect (via `actionItems.js` utility)
 - Each window is wrapped in `<ErrorBoundary name="...">` for crash isolation
 - Action items use `sourceType` ('evaluation' | 'investment'), `sourceId`, and `dimensionId` metadata
@@ -177,15 +179,16 @@ Vitest + React Testing Library + jsdom. Test setup in `src/test/setup.js`.
 
 Test files live alongside their source files (`*.test.js` / `*.test.jsx`).
 
-Current test coverage:
-- `extractSummary.test.js` — 22 tests: JSON parsing, validation, normalization, edge cases, SSE parser
-- `colors.test.js` — 21 tests: all color helper functions including maturity/performance helpers
+Current test coverage (122 tests, 9 files):
+- `extractSummary.test.js` — 26 tests: JSON parsing, validation, normalization, edge cases, SSE parser
+- `colors.test.js` — 23 tests: all color helper functions including maturity/performance helpers
 - `difyApi.test.js` — 7 tests: mock response structure, summary triggers, file upload
 - `LoginScreen.test.jsx` — 8 tests: email + OTP flow, error handling, back navigation
 - `InvestmentToggle.test.jsx` — 6 tests: select/deselect, action cleanup, multi-investment, metadata
 - `actionItems.test.js` — 12 tests: add/remove investment actions, metadata, immutability, edge cases
-- `fileUpload.test.js` — 9 tests: upload, failure, mixed results, message building
+- `fileUpload.test.js` — 10 tests: upload, failure, mixed results, message building
 - `_chunking.test.js` — 13 tests: conversation/summary/file chunking, overlap, edge cases
+- `_difyWorkflow.test.js` — 17 tests: SSE parsing, node mapping, category extraction, error events
 
 Run a single test file: `npx vitest run src/utils/colors.test.js`
 
