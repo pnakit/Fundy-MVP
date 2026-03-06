@@ -415,8 +415,7 @@ real users (only the seeded test user). Now: saving the summary also embeds it i
 
 - `api/summary.js` — `POST /api/summary` (JWT auth): upsert summary + chunk + embed
 - `api/evaluation/save.js` — `POST /api/evaluation/save` (JWT auth): upsert evaluation
-- `api/account/reset.js` — `POST /api/account/reset` (JWT auth): wipe all user data, keep account
-- `api/account/delete.js` — `POST /api/account/delete` (JWT auth): GDPR full account deletion
+- `scripts/clear-user-data.js` — CLI tool: wipe all app data for a user by email or UUID (preserves auth account)
 
 ### Modified files
 
@@ -427,21 +426,49 @@ real users (only the seeded test user). Now: saving the summary also embeds it i
   `mapDbActionToState()`, auth-restore block, investment/action persist wiring
 - `src/utils/actionItems.js` — `generateActionId` → `crypto.randomUUID()`
 
-### Long-horizon items (Phase D and beyond)
+**Test totals:** 122 tests across 9 files (unchanged from v3.3; no new test files this version)
 
-- **Conversation message persistence (Phase D)**: Save each onboarding + deep-dive message to
-  `messages` table. Requires: `conversationDbId` state (Supabase UUID alongside Dify's
-  `conversationId`), INSERT on first message, save final assistant message after stream ends.
-  Also enables embedding conversation chunks for richer KB retrieval.
-- **Investment matching Dify workflow**: Currently static mock data (`MOCK_INVESTMENT_DATA`).
-  Future: Dify workflow that takes evaluation results + company profile → returns ranked investor
-  matches. Output saved to `investment_recommendations` table.
-- **File text extraction pipeline**: `extracted_text_path` column exists in `file_metadata`.
-  Need: PDF/doc text extraction server-side, chunk + embed extracted text, store path in column.
-- **Account self-service reset/delete**: `api/account/reset.js` and `api/account/delete.js`
-  endpoints (schemas designed, see data architecture diagram in session notes).
-- **External KB adapter**: `knowledgeBase.js` has adapter pattern but only internal Supabase
-  adapter implemented. Partner KB integration when needed.
-- **Resend custom SMTP**: Supabase SMTP is 2 emails/hr. Configure before public beta.
-- **Conversation embedding**: After Phase D message persistence, embed conversation chunks to
-  enrich KB search context for evaluation (complements summary embeddings).
+### Verified end-to-end in production (fundy.nusuai.com)
+
+- Onboarding completion → `[summary] chunksEmbedded: 10` confirmed in Vercel logs
+- Hard refresh → summary + evaluation state restored automatically
+- Investment toggle → rows appear in `investment_selections` + `action_items` (Supabase dashboard)
+- Mark complete → `action_items.status = 'completed'` confirmed
+- `scripts/clear-user-data.js` — successfully cleared seeded dummy data from peter@nusufi.com
+
+---
+
+## Next Steps (priority order)
+
+### Immediate (next session)
+
+1. **Conversation message persistence (Phase D)** — save onboarding + deep-dive messages to
+   `messages` table. Requires `conversationDbId` state tracked alongside Dify's `conversationId`.
+   INSERT on first user message, save final assistant message after stream completes.
+   Unlocks: embedding conversation chunks for richer KB retrieval.
+
+2. **Evaluation quality verification** — after a real user completes onboarding, run evaluation
+   and confirm results are company-specific (not generic). Check Vercel logs that KB search
+   returns non-empty results (`context_*` variables populated in Dify inputs).
+
+### Medium term
+
+3. **Investment matching Dify workflow** — replace static `MOCK_INVESTMENT_DATA` with a real Dify
+   workflow: takes evaluation results + onboarding summary → returns ranked investor matches.
+   Save results to `investment_recommendations` table.
+
+4. **Account self-service reset/delete** — `POST /api/account/reset` (wipe data, keep auth) and
+   `POST /api/account/delete` (full GDPR delete). Add UI in settings panel.
+   `scripts/clear-user-data.js` is the basis for the reset endpoint logic.
+
+5. **File text extraction pipeline** — extract text from uploaded PDFs/docs server-side, chunk +
+   embed, store path in `file_metadata.extracted_text_path`. Makes uploaded files searchable
+   in KB retrieval.
+
+### Long horizon
+
+6. **Resend custom SMTP** — before inviting external users. Supabase built-in is 2 emails/hr.
+7. **Conversation embedding** — after Phase D, embed conversation chunks to enrich KB search.
+8. **External KB adapter** — `knowledgeBase.js` has adapter pattern but only internal implemented.
+9. **CAPTCHA / bot protection** — before public launch.
+
