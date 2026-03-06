@@ -4,31 +4,39 @@ export const SUMMARY_START_MARKER = '[ONBOARDING_SUMMARY]';
 export const SUMMARY_END_MARKER = '[/ONBOARDING_SUMMARY]';
 
 export function extractOnboardingSummary(responseText) {
+  let jsonString;
   const startIdx = responseText.indexOf(SUMMARY_START_MARKER);
-  if (startIdx === -1) return null;
+  const isMarkerPath = startIdx !== -1;
 
-  const jsonStart = startIdx + SUMMARY_START_MARKER.length;
-  const endIdx = responseText.indexOf(SUMMARY_END_MARKER, jsonStart);
+  if (isMarkerPath) {
+    // Marker-wrapped path (prompt-only / legacy mode)
+    const jsonStart = startIdx + SUMMARY_START_MARKER.length;
+    const endIdx = responseText.indexOf(SUMMARY_END_MARKER, jsonStart);
+    // Closing marker is optional — if absent, use everything after the opening marker
+    jsonString = (endIdx !== -1)
+      ? responseText.substring(jsonStart, endIdx).trim()
+      : responseText.substring(jsonStart).trim();
+    // Strip markdown code fences if LLM wrapped the JSON in ```json ... ```
+    jsonString = jsonString.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    // Fix trailing commas — most common LLM JSON error
+    jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
+  } else {
+    // Structured output path — Dify returns raw JSON with no wrapper text
+    jsonString = responseText.trim();
+  }
 
-  // Closing marker is optional — if absent (e.g. Dify doesn't output it), use everything after the opening marker
-  let jsonString = (endIdx !== -1)
-    ? responseText.substring(jsonStart, endIdx).trim()
-    : responseText.substring(jsonStart).trim();
-
-  // Strip markdown code fences if LLM wrapped the JSON in ```json ... ```
-  jsonString = jsonString.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-
-  // Fix trailing commas — most common LLM JSON error
-  jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
-
-  console.debug('[extractSummary] Raw JSON between markers (first 500 chars):', jsonString.substring(0, 500));
+  console.debug('[extractSummary] Raw JSON (first 500 chars):', jsonString.substring(0, 500));
 
   let parsed;
   try {
     parsed = JSON.parse(jsonString);
   } catch (e) {
-    console.error('Failed to parse onboarding summary JSON:', e, '\nRaw string:', jsonString.substring(0, 1000));
-    return { error: 'parse_error', message: 'The summary data could not be parsed.' };
+    if (isMarkerPath) {
+      console.error('Failed to parse onboarding summary JSON:', e, '\nRaw string:', jsonString.substring(0, 1000));
+      return { error: 'parse_error', message: 'The summary data could not be parsed.' };
+    }
+    // No marker — response is normal conversation text, not structured JSON
+    return null;
   }
 
   if (!parsed.categories || !Array.isArray(parsed.categories)) {

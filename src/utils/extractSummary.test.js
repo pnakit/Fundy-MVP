@@ -25,6 +25,19 @@ describe('extractOnboardingSummary', () => {
     expect(extractOnboardingSummary('Just a normal message')).toBeNull();
   });
 
+  it('parses raw JSON from Dify structured output (no markers)', () => {
+    const input = makeValidSummary();
+    const result = extractOnboardingSummary(JSON.stringify(input));
+    expect(result.error).toBeUndefined();
+    expect(result.companyName).toBe('TestCo');
+    expect(result.categories).toHaveLength(10);
+  });
+
+  it('returns null for invalid JSON with no markers (normal conversation text)', () => {
+    expect(extractOnboardingSummary('Here is your summary, it looks great!')).toBeNull();
+    expect(extractOnboardingSummary('{not valid json}')).toBeNull();
+  });
+
   it('tries to parse JSON when closing marker is absent (Dify may not output it)', () => {
     // Without closing marker, attempts to parse everything after opening marker
     const result = extractOnboardingSummary(`${SUMMARY_START_MARKER}\n{"foo":1}`);
