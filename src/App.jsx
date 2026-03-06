@@ -142,11 +142,13 @@ export default function StartupPlatform() {
           currentMessage, conversationId, uploadedFiles, 'default-user',
           (accumulated) => {
             const markerIdx = accumulated.indexOf(SUMMARY_START_MARKER);
-            if (markerIdx === -1) {
+            // Also detect raw JSON from Dify structured output (no markers)
+            const isRawJson = markerIdx === -1 && accumulated.trim().startsWith('{');
+            if (markerIdx === -1 && !isRawJson) {
               setMessages(prev => replaceLastMessage(prev, { role: 'assistant', content: accumulated, isStreaming: true }));
             } else {
-              const conversational = accumulated.substring(0, markerIdx).trim();
-              const jsonPart = accumulated.substring(markerIdx);
+              const conversational = markerIdx !== -1 ? accumulated.substring(0, markerIdx).trim() : '';
+              const jsonPart = markerIdx !== -1 ? accumulated.substring(markerIdx) : accumulated;
               const idMatches = jsonPart.match(/"id"\s*:\s*"([^"]+)"/g) || [];
               const categoriesFound = idMatches.length;
               let currentCategoryTitle = '';
