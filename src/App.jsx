@@ -202,7 +202,8 @@ export default function StartupPlatform() {
         } else {
           setMessages(prev => replaceLastMessage(prev, { role: 'assistant', content: response.message }));
         }
-      } catch (_error) {
+      } catch (error) {
+        console.error('[chat/streaming] Send message failed:', error.message);
         setMessages(prev => replaceLastMessage(prev, { role: 'assistant', content: CHAT_ERROR_MESSAGE }));
       }
     } else {
@@ -210,7 +211,8 @@ export default function StartupPlatform() {
       try {
         const response = await DifyAPI.sendMessage(currentMessage, conversationId, uploadedFiles);
         processCompletedResponse(response);
-      } catch (_error) {
+      } catch (error) {
+        console.error('[chat/blocking] Send message failed:', error.message);
         setMessages(prev => [...prev, { role: 'assistant', content: CHAT_ERROR_MESSAGE }]);
       }
       setIsTyping(false);
@@ -228,7 +230,7 @@ export default function StartupPlatform() {
     setUploadedFiles((prev) => [...prev, ...newFiles]);
 
     if (succeeded.length > 0) {
-      const { message, prompt } = buildUploadMessages(succeeded, 'evaluation');
+      const { message, prompt } = buildUploadMessages(succeeded, 'onboarding');
       setMessages((prev) => [...prev, { role: 'assistant', content: message }]);
       setInputValue(prompt);
     }
@@ -361,7 +363,8 @@ export default function StartupPlatform() {
         setUploadedFiles([]);
         const prefix = response.fallback ? '[onboarding] ' : '';
         updateLastMessage(prefix + response.message, { conversationId: response.conversationId });
-      } catch (_error) {
+      } catch (error) {
+        console.error('[deepdive/streaming] Send message failed:', error.message);
         updateLastMessage(CHAT_ERROR_MESSAGE);
       }
     } else {
@@ -387,7 +390,8 @@ export default function StartupPlatform() {
             },
           };
         });
-      } catch (_error) {
+      } catch (error) {
+        console.error('[deepdive/blocking] Send message failed:', error.message);
         appendAssistant(CHAT_ERROR_MESSAGE);
       }
       setIsTyping(false);

@@ -18,24 +18,31 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'No Dify API keys configured' });
   }
 
-  const difyResponse = await fetch(`${getDifyBaseUrl()}/chat-messages`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      inputs: inputs || {},
-      query,
-      response_mode: response_mode || 'blocking',
-      conversation_id: conversation_id || '',
-      user: user || auth.user.sub,
-      files: files || [],
-    }),
-  });
+  let difyResponse;
+  try {
+    difyResponse = await fetch(`${getDifyBaseUrl()}/chat-messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: inputs || {},
+        query,
+        response_mode: response_mode || 'blocking',
+        conversation_id: conversation_id || '',
+        user: user || auth.user.sub,
+        files: files || [],
+      }),
+    });
+  } catch (fetchErr) {
+    console.error('[chat] Fetch to Dify failed:', fetchErr.message);
+    return res.status(502).json({ error: `Failed to reach Dify: ${fetchErr.message}` });
+  }
 
   if (!difyResponse.ok) {
     const errorText = await difyResponse.text();
+    console.error(`[chat] Dify rejected request (${difyResponse.status}):`, errorText.substring(0, 500));
     return res.status(difyResponse.status).send(errorText);
   }
 

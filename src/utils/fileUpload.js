@@ -18,7 +18,8 @@ export async function uploadFiles(files, user = 'default-user', workflow = 'onbo
       const result = await DifyAPI.uploadFile(file, user, workflow);
       uploadedFiles.push({ fileId: result.fileId, fileName: file.name });
       succeeded.push(file.name);
-    } catch (_error) {
+    } catch (error) {
+      console.error(`[uploadFiles] Failed to upload "${file.name}":`, error.message);
       failed.push(file.name);
     }
   }
@@ -29,13 +30,17 @@ export async function uploadFiles(files, user = 'default-user', workflow = 'onbo
 /**
  * Build the success message for uploaded files.
  * @param {string[]} succeeded - File names that uploaded successfully
- * @param {string} context - 'evaluation' or 'discussion' — changes wording
+ * @param {string} context - 'onboarding' | 'evaluation' | 'discussion' — changes wording
  * @returns {{ message: string, prompt: string }}
  */
 export function buildUploadMessages(succeeded, context = 'evaluation') {
   const namesStr = succeeded.map((n) => `"${n}"`).join(', ');
   const pronoun = succeeded.length === 1 ? 'it' : 'them';
-  const contextWord = context === 'discussion' ? 'our discussion' : 'your evaluation';
+
+  const contextWord =
+    context === 'discussion' ? 'our discussion'
+    : context === 'onboarding' ? 'our conversation'
+    : 'your evaluation';
 
   const message = `I've received ${namesStr}. Send a message to incorporate ${pronoun} into ${contextWord}.`;
 

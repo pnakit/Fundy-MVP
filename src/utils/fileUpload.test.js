@@ -99,6 +99,13 @@ describe('buildUploadMessages', () => {
     expect(prompt).toContain('incorporate this into our discussion');
   });
 
+  it('builds onboarding context message', () => {
+    const { message, prompt } = buildUploadMessages(['doc.pdf'], 'onboarding');
+
+    expect(message).toContain('our conversation');
+    expect(prompt).toContain('review it');
+  });
+
   it('defaults to evaluation context', () => {
     const { message } = buildUploadMessages(['x.pdf']);
 
