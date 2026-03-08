@@ -41,6 +41,7 @@ import {
   createConversation,
   updateConversationDifyId,
   saveMessages,
+  loadMessages,
   loadOnboardingConversation,
   loadDeepDiveConversations,
 } from './dataAccess';
@@ -186,6 +187,52 @@ describe('saveMessages', () => {
     await saveMessages('conv-uuid', USER_ID, []);
 
     expect(chain.insert).toHaveBeenCalledWith([]);
+  });
+});
+
+// ─── loadMessages ─────────────────────────────────────────────────────────────
+
+describe('loadMessages', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns ordered messages for a conversation', async () => {
+    const chain = makeChain();
+    chain.order.mockResolvedValue({
+      data: [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there' },
+      ],
+    });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await loadMessages('conv-uuid');
+
+    expect(result).toEqual([
+      { role: 'user', content: 'Hello' },
+      { role: 'assistant', content: 'Hi there' },
+    ]);
+    expect(mockFrom).toHaveBeenCalledWith('messages');
+    expect(chain.eq).toHaveBeenCalledWith('conversation_id', 'conv-uuid');
+  });
+
+  it('returns empty array when no messages exist', async () => {
+    const chain = makeChain();
+    chain.order.mockResolvedValue({ data: [] });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await loadMessages('conv-uuid');
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array when data is null', async () => {
+    const chain = makeChain();
+    chain.order.mockResolvedValue({ data: null });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await loadMessages('conv-uuid');
+
+    expect(result).toEqual([]);
   });
 });
 

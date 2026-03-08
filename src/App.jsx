@@ -36,6 +36,7 @@ import {
   createConversation,
   updateConversationDifyId,
   saveMessages,
+  loadMessages,
   loadOnboardingConversation,
   loadDeepDiveConversations,
 } from './api/dataAccess';
@@ -216,6 +217,14 @@ export default function StartupPlatform() {
         conversationDbIdRef.current = savedOnboardingConv.id;
         if (savedOnboardingConv.dify_conversation_id) {
           setConversationId(savedOnboardingConv.dify_conversation_id);
+        }
+        // Only restore message history when the user is still mid-onboarding (no summary yet).
+        // Once a summary exists, onboardingPhase becomes 'summary' and the chat is never shown.
+        if (!savedSummary) {
+          const savedMsgs = await loadMessages(savedOnboardingConv.id);
+          if (savedMsgs.length > 0) {
+            setMessages((prev) => [prev[0], ...savedMsgs]);
+          }
         }
       }
 

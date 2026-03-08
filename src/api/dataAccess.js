@@ -247,6 +247,20 @@ export async function saveMessages(conversationDbId, userId, pairs) {
 }
 
 /**
+ * Load messages for a conversation, ordered by creation time.
+ * Returns an array of { role, content } objects.
+ * @param {string} conversationDbId - Supabase conversation UUID
+ */
+export async function loadMessages(conversationDbId) {
+  const { data } = await supabase
+    .from('messages')
+    .select('role, content')
+    .eq('conversation_id', conversationDbId)
+    .order('created_at');
+  return data?.map((m) => ({ role: m.role, content: m.content })) || [];
+}
+
+/**
  * Load the user's onboarding conversation row.
  * Used on auth-restore to repopulate conversationId state and prevent duplicate rows.
  * Returns null if no onboarding conversation exists yet.
