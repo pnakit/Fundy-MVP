@@ -179,7 +179,7 @@ Vitest + React Testing Library + jsdom. Test setup in `src/test/setup.js`.
 
 Test files live alongside their source files (`*.test.js` / `*.test.jsx`).
 
-Current test coverage (122 tests, 9 files):
+Current test coverage (137 tests, 10 files):
 - `extractSummary.test.js` — 26 tests: JSON parsing, validation, normalization, edge cases, SSE parser
 - `colors.test.js` — 23 tests: all color helper functions including maturity/performance helpers
 - `difyApi.test.js` — 7 tests: mock response structure, summary triggers, file upload
@@ -189,6 +189,7 @@ Current test coverage (122 tests, 9 files):
 - `fileUpload.test.js` — 10 tests: upload, failure, mixed results, message building
 - `_chunking.test.js` — 13 tests: conversation/summary/file chunking, overlap, edge cases
 - `_difyWorkflow.test.js` — 17 tests: SSE parsing, node mapping, category extraction, error events
+- `dataAccess.test.js` — 15 tests: createConversation, updateDifyId, saveMessages, loadOnboarding, loadDeepDive
 
 Run a single test file: `npx vitest run src/utils/colors.test.js`
 

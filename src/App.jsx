@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   MOCK_INVESTMENT_DATA,
   INVESTMENT_ACTIONS,
@@ -33,6 +33,11 @@ import {
   saveActionItem,
   updateActionItemStatus,
   deleteActionItemsBySourceId,
+  createConversation,
+  updateConversationDifyId,
+  saveMessages,
+  loadOnboardingConversation,
+  loadDeepDiveConversations,
 } from './api/dataAccess';
 import ErrorBoundary from './components/ErrorBoundary';
 import { addInvestmentActions, removeInvestmentActions } from './utils/actionItems';
@@ -103,6 +108,11 @@ export default function StartupPlatform() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [expandedDimension, setExpandedDimension] = useState(null);
 
+  // Refs track Supabase conversation UUIDs — using refs avoids stale closure
+  // issues in fire-and-forget async helpers called from streaming callbacks.
+  const conversationDbIdRef = useRef(null);    // onboarding conversation DB UUID
+  const deepDiveConvDbIdsRef = useRef({});     // { [categoryId]: DB UUID }
+
   // ─── Persistence helpers ──────────────────────────────────────────────
 
   /** Save the onboarding summary to Supabase and embed it for KB search. Fire-and-forget. */
@@ -138,15 +148,54 @@ export default function StartupPlatform() {
     }
   };
 
+  /**
+   * Save a user+assistant exchange to the conversations + messages tables. Fire-and-forget.
+   * Creates the conversation row on first call; reuses the stored DB UUID on subsequent calls.
+   * Skips if assistantMsg is empty or an error message.
+   * @param {'onboarding'|'deepdive'} workflow
+   * @param {string|null} categoryId - null for onboarding, category ID for deep-dive
+   * @param {string} userMsg
+   * @param {string} assistantMsg
+   * @param {string|null} difyConvId - Dify's conversation ID (to store for later resumption)
+   */
+  const persistConversationExchange = async (workflow, categoryId, userMsg, assistantMsg, difyConvId) => {
+    if (!assistantMsg || assistantMsg === CHAT_ERROR_MESSAGE) return;
+    if (!session?.user?.id) return;
+    const userId = session.user.id;
+    try {
+      let dbId =
+        workflow === 'onboarding' ? conversationDbIdRef.current : deepDiveConvDbIdsRef.current[categoryId];
+
+      if (!dbId) {
+        dbId = await createConversation(workflow, categoryId);
+        if (!dbId) return;
+        if (workflow === 'onboarding') conversationDbIdRef.current = dbId;
+        else deepDiveConvDbIdsRef.current = { ...deepDiveConvDbIdsRef.current, [categoryId]: dbId };
+      }
+
+      if (difyConvId) updateConversationDifyId(dbId, difyConvId); // fire-and-forget, idempotent
+      await saveMessages(dbId, userId, [
+        { role: 'user', content: userMsg },
+        { role: 'assistant', content: assistantMsg },
+      ]);
+    } catch (err) {
+      console.error('[persistConversationExchange] Failed:', err.message);
+    }
+  };
+
   /** Restore all persisted user data from Supabase after sign-in. */
   const restoreUserData = async () => {
     try {
-      const [savedSummary, savedEval, savedInvestments, savedActions] = await Promise.all([
-        loadOnboardingSummary(),
-        loadEvaluation(),
-        loadInvestmentSelections(),
-        loadActionItems(),
-      ]);
+      const [savedSummary, savedEval, savedInvestments, savedActions, savedOnboardingConv, savedDeepDive] =
+        await Promise.all([
+          loadOnboardingSummary(),
+          loadEvaluation(),
+          loadInvestmentSelections(),
+          loadActionItems(),
+          loadOnboardingConversation(),
+          loadDeepDiveConversations(),
+        ]);
+
       if (savedSummary) {
         setOnboardingSummary(savedSummary.summaryData);
         setOnboardingPhase('summary');
@@ -159,6 +208,31 @@ export default function StartupPlatform() {
       }
       if (savedActions.length > 0) {
         setActionItems(savedActions.map(mapDbActionToState));
+      }
+
+      // Restore conversation DB IDs into refs (prevents duplicate rows on re-send)
+      // and restore Dify's conversation ID so resumed chats continue the same thread.
+      if (savedOnboardingConv) {
+        conversationDbIdRef.current = savedOnboardingConv.id;
+        if (savedOnboardingConv.dify_conversation_id) {
+          setConversationId(savedOnboardingConv.dify_conversation_id);
+        }
+      }
+
+      // Restore deep-dive conversation history and IDs (only when summary exists
+      // so we have the deepDivePrompt to prepend as the opening message).
+      if (Object.keys(savedDeepDive).length > 0 && savedSummary) {
+        const restoredConvs = {};
+        for (const [catId, conv] of Object.entries(savedDeepDive)) {
+          const cat = savedSummary.summaryData.categories.find((c) => c.id === catId);
+          const prompt = cat?.deepDivePrompt || `Let's dive deeper into ${catId}.`;
+          restoredConvs[catId] = {
+            conversationId: conv.conversationId,
+            messages: [{ role: 'assistant', content: prompt }, ...conv.messages],
+          };
+          deepDiveConvDbIdsRef.current[catId] = conv.conversationDbId;
+        }
+        setCategoryConversations(restoredConvs);
       }
     } catch (err) {
       console.error('[restoreUserData] Failed:', err.message);
@@ -194,9 +268,14 @@ export default function StartupPlatform() {
     setEvaluationData(null);
     setSelectedInvestments([]);
     setActionItems([]);
+    setConversationId(null);
+    setCategoryConversations({});
+    conversationDbIdRef.current = null;
+    deepDiveConvDbIdsRef.current = {};
   };
 
-  // Process a completed Dify response — check for summary, update messages
+  // Process a completed Dify response — check for summary, update messages.
+  // Returns the final assistant text to persist, or null if it should not be saved.
   const processCompletedResponse = (response) => {
     setConversationId(response.conversationId);
     setUploadedFiles([]);
@@ -216,6 +295,7 @@ export default function StartupPlatform() {
         content: `I prepared your summary but encountered a formatting issue: ${result.message} Let me try generating it again.`,
         isError: true,
       }]);
+      return null; // don't persist error exchanges
     } else if (result) {
       const conversationalPart = response.message
         .substring(0, response.message.indexOf(SUMMARY_START_MARKER))
@@ -228,8 +308,10 @@ export default function StartupPlatform() {
       setOnboardingSummary(result);
       setOnboardingPhase('summary');
       persistSummary(result);
+      return conversationalPart || null;
     } else {
       setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
+      return response.message;
     }
   };
 
@@ -308,8 +390,12 @@ export default function StartupPlatform() {
           setOnboardingSummary(result);
           setOnboardingPhase('summary');
           persistSummary(result);
+          if (conversationalPart) {
+            persistConversationExchange('onboarding', null, currentMessage, conversationalPart, response.conversationId);
+          }
         } else {
           setMessages(prev => replaceLastMessage(prev, { role: 'assistant', content: response.message }));
+          persistConversationExchange('onboarding', null, currentMessage, response.message, response.conversationId);
         }
       } catch (error) {
         console.error('[chat/streaming] Send message failed:', error.message);
@@ -319,7 +405,10 @@ export default function StartupPlatform() {
       setIsTyping(true);
       try {
         const response = await DifyAPI.sendMessage(currentMessage, conversationId, uploadedFiles);
-        processCompletedResponse(response);
+        const finalContent = processCompletedResponse(response);
+        if (finalContent) {
+          persistConversationExchange('onboarding', null, currentMessage, finalContent, response.conversationId);
+        }
       } catch (error) {
         console.error('[chat/blocking] Send message failed:', error.message);
         setMessages(prev => [...prev, { role: 'assistant', content: CHAT_ERROR_MESSAGE }]);
@@ -484,7 +573,9 @@ export default function StartupPlatform() {
 
         setUploadedFiles([]);
         const prefix = response.fallback ? '[onboarding] ' : '';
-        updateLastMessage(prefix + response.message, { conversationId: response.conversationId });
+        const finalContent = prefix + response.message;
+        updateLastMessage(finalContent, { conversationId: response.conversationId });
+        persistConversationExchange('deepdive', categoryId, currentMessage, finalContent, response.conversationId);
       } catch (error) {
         console.error('[deepdive/streaming] Send message failed:', error.message);
         updateLastMessage(CHAT_ERROR_MESSAGE);
@@ -498,6 +589,7 @@ export default function StartupPlatform() {
 
         setUploadedFiles([]);
         const prefix = response.fallback ? '[onboarding] ' : '';
+        const finalContent = prefix + response.message;
 
         setCategoryConversations(prev => {
           if (!prev[categoryId]) return prev;
@@ -507,11 +599,12 @@ export default function StartupPlatform() {
               conversationId: response.conversationId,
               messages: [
                 ...prev[categoryId].messages,
-                { role: 'assistant', content: prefix + response.message }
+                { role: 'assistant', content: finalContent }
               ],
             },
           };
         });
+        persistConversationExchange('deepdive', categoryId, currentMessage, finalContent, response.conversationId);
       } catch (error) {
         console.error('[deepdive/blocking] Send message failed:', error.message);
         appendAssistant(CHAT_ERROR_MESSAGE);

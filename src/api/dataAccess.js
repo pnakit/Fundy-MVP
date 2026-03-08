@@ -3,6 +3,7 @@
  *
  * Phase 1: Auth methods (sign-in, OTP, sign-out, session).
  * Phase 2: Data reads + writes for summary, evaluation, investments, action items.
+ * Phase 3: Conversation + message persistence (onboarding + deep-dive).
  */
 
 import { supabase } from './supabaseClient';
@@ -187,4 +188,106 @@ export async function updateActionItemStatus(itemId, status) {
 export async function deleteActionItemsBySourceId(sourceId) {
   const { error } = await supabase.from('action_items').delete().eq('source_id', sourceId);
   if (error) console.error('[dataAccess] deleteActionItemsBySourceId failed:', error.message);
+}
+
+// ─── Conversations & Messages ──────────────────────────────────────────────
+
+/**
+ * Insert a new conversation row for the current user.
+ * Callers guard against duplicate calls by tracking the returned UUID in a ref.
+ * @param {'onboarding'|'deepdive'} workflow
+ * @param {string|null} categoryId - Required for deepdive, null for onboarding
+ * @returns {Promise<string|null>} New conversation UUID, or null on failure
+ */
+export async function createConversation(workflow, categoryId = null) {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return null;
+  const { data, error } = await supabase
+    .from('conversations')
+    .insert({ user_id: userData.user.id, workflow, category_id: categoryId })
+    .select('id')
+    .single();
+  if (error) {
+    console.error('[dataAccess] createConversation failed:', error.message);
+    return null;
+  }
+  return data.id;
+}
+
+/**
+ * Update the Dify conversation ID on an existing conversation row.
+ * Called when Dify returns its conversation ID for the first time.
+ * @param {string} conversationDbId - Supabase conversation UUID
+ * @param {string} difyConversationId - Dify's conversation ID string
+ */
+export async function updateConversationDifyId(conversationDbId, difyConversationId) {
+  const { error } = await supabase
+    .from('conversations')
+    .update({ dify_conversation_id: difyConversationId })
+    .eq('id', conversationDbId);
+  if (error) console.error('[dataAccess] updateConversationDifyId failed:', error.message);
+}
+
+/**
+ * Insert a batch of messages into the messages table.
+ * Typically called with a [user, assistant] pair after each exchange completes.
+ * @param {string} conversationDbId - Supabase conversation UUID
+ * @param {string} userId - Supabase user UUID
+ * @param {Array<{role: 'user'|'assistant', content: string}>} pairs
+ */
+export async function saveMessages(conversationDbId, userId, pairs) {
+  const rows = pairs.map((m) => ({
+    conversation_id: conversationDbId,
+    user_id: userId,
+    role: m.role,
+    content: m.content,
+  }));
+  const { error } = await supabase.from('messages').insert(rows);
+  if (error) console.error('[dataAccess] saveMessages failed:', error.message);
+}
+
+/**
+ * Load the user's onboarding conversation row.
+ * Used on auth-restore to repopulate conversationId state and prevent duplicate rows.
+ * Returns null if no onboarding conversation exists yet.
+ */
+export async function loadOnboardingConversation() {
+  const { data } = await supabase
+    .from('conversations')
+    .select('id, dify_conversation_id')
+    .eq('workflow', 'onboarding')
+    .maybeSingle();
+  return data || null;
+}
+
+/**
+ * Load all deep-dive conversation rows with their messages.
+ * Returns a map keyed by category_id for restoring categoryConversations state.
+ * Only includes categories that have at least one saved message.
+ */
+export async function loadDeepDiveConversations() {
+  const { data: convs } = await supabase
+    .from('conversations')
+    .select('id, category_id, dify_conversation_id')
+    .eq('workflow', 'deepdive');
+  if (!convs?.length) return {};
+
+  const result = {};
+  await Promise.all(
+    convs.map(async (conv) => {
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('role, content')
+        .eq('conversation_id', conv.id)
+        .order('created_at');
+      if (msgs?.length) {
+        result[conv.category_id] = {
+          conversationDbId: conv.id,
+          conversationId: conv.dify_conversation_id,
+          messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+        };
+      }
+    }),
+  );
+  return result;
 }
