@@ -11,6 +11,7 @@ const ChatPanel = React.memo(function ChatPanel({
   fileAccept = '.pdf,.doc,.docx,.txt,.csv,.xlsx,.pptx',
   headerContent,
   renderMessageContent,
+  readOnly = false,
 }) {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -47,7 +48,7 @@ const ChatPanel = React.memo(function ChatPanel({
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="chat-input-area">
+      {!readOnly && <div className="chat-input-area">
         <input
           type="file"
           ref={fileInputRef}
@@ -70,7 +71,7 @@ const ChatPanel = React.memo(function ChatPanel({
         <button className="send-btn" onClick={onSend} disabled={!inputValue.trim()}>
           <span>→</span>
         </button>
-      </div>
+      </div>}
     </div>
   );
 });

@@ -218,13 +218,11 @@ export default function StartupPlatform() {
         if (savedOnboardingConv.dify_conversation_id) {
           setConversationId(savedOnboardingConv.dify_conversation_id);
         }
-        // Only restore message history when the user is still mid-onboarding (no summary yet).
-        // Once a summary exists, onboardingPhase becomes 'summary' and the chat is never shown.
-        if (!savedSummary) {
-          const savedMsgs = await loadMessages(savedOnboardingConv.id);
-          if (savedMsgs.length > 0) {
-            setMessages((prev) => [prev[0], ...savedMsgs]);
-          }
+        // Restore message history so it's available for the read-only conversation view
+        // (accessible from the summary view) as well as for mid-onboarding restore.
+        const savedMsgs = await loadMessages(savedOnboardingConv.id);
+        if (savedMsgs.length > 0) {
+          setMessages((prev) => [prev[0], ...savedMsgs]);
         }
       }
 
@@ -750,6 +748,8 @@ export default function StartupPlatform() {
         return renderOnboardingSummary();
       case 'deep-dive':
         return renderDeepDive();
+      case 'chat-readonly':
+        return renderOnboardingChatReadonly();
       case 'chat':
       default:
         return renderOnboardingChat();
@@ -792,6 +792,37 @@ export default function StartupPlatform() {
     />
   );
 
+  // Phase 1b: Read-only view of the original onboarding conversation
+  const ONBOARDING_READONLY_NOTE = {
+    role: 'assistant',
+    content:
+      'Your onboarding conversation is complete. To provide further context or explore any area in depth, use the category deep dives in your summary dashboard — each category has a dedicated space for ongoing discussion.',
+  };
+
+  const renderOnboardingChatReadonly = () => (
+    <ChatPanel
+      messages={[...messages, ONBOARDING_READONLY_NOTE]}
+      readOnly
+      renderMessageContent={renderMessageContent}
+      headerContent={
+        <div className="chat-header">
+          <div className="chat-title">
+            <div className="chat-avatar">💬</div>
+            <div>
+              <h2>Onboarding conversation</h2>
+              <span>Read-only history</span>
+            </div>
+          </div>
+          <div className="chat-header-right">
+            <button className="view-summary-btn" onClick={() => setOnboardingPhase('summary')}>
+              ← Back to summary
+            </button>
+          </div>
+        </div>
+      }
+    />
+  );
+
   // Phase 2: Onboarding summary cards
   const renderOnboardingSummary = () => {
     const summary = onboardingSummary || MOCK_ONBOARDING_SUMMARY;
@@ -799,8 +830,8 @@ export default function StartupPlatform() {
     return (
       <div className="chat-window summary-window">
         <div className="summary-back-bar">
-          <button className="back-to-chat-btn" onClick={() => setOnboardingPhase('chat')}>
-            ← Back to conversation
+          <button className="back-to-chat-btn" onClick={() => setOnboardingPhase('chat-readonly')}>
+            ← View conversation
           </button>
         </div>
         <div className="chat-header">
