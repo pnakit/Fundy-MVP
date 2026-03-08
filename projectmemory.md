@@ -436,39 +436,112 @@ real users (only the seeded test user). Now: saving the summary also embeds it i
 - Mark complete → `action_items.status = 'completed'` confirmed
 - `scripts/clear-user-data.js` — successfully cleared seeded dummy data from peter@nusufi.com
 
+## v3.5 — Conversation Message Persistence (Phase D) (Mar 2026)
+
+Every chat exchange (onboarding + deep-dive) is now saved to Supabase and restored on login.
+Also adds a read-only view of the original onboarding conversation accessible from the summary
+dashboard.
+
+### Architecture decisions
+
+- **Client-side writes only**: `conversations` + `messages` have SELECT + INSERT RLS — no server
+  endpoint needed. All writes go directly via Supabase JS.
+- **Refs for conversation DB IDs**: `conversationDbIdRef` (onboarding) and `deepDiveConvDbIdsRef`
+  (map of categoryId → UUID) are `useRef`, not state. Avoids stale-closure issues inside
+  streaming callbacks that fire-and-forget persist calls.
+- **Lazy conversation creation**: `createConversation()` is only called when the first exchange
+  completes — never on component mount. The ref is checked first; if populated (from auth restore
+  or a prior exchange), no new row is created.
+- **No duplicate rows despite NULL UNIQUE constraint**: Postgres UNIQUE on
+  `(user_id, workflow, category_id)` doesn't prevent multiple NULLs (NULL ≠ NULL). Prevented
+  by populating `conversationDbIdRef` from DB on auth restore so the lazy-create path is never
+  reached twice for onboarding.
+- **Messages always loaded on restore**: Onboarding message history is always fetched on auth
+  restore (not just when no summary exists), so the read-only conversation view is immediately
+  available without an additional DB call.
+- **processCompletedResponse returns finalContent**: Refactored to return the assistant's final
+  message string, enabling the blocking (non-streaming) path to persist exchanges without
+  duplicating the message extraction logic.
+
+### Read-only conversation view
+
+- New `'chat-readonly'` phase — navigated to from summary via "← View conversation" button
+  (replaces the old "← Back to conversation" which returned to the live editable chat)
+- Uses `ChatPanel` with new `readOnly={true}` prop — hides the input area entirely
+- Appends a closing note at the end of the message list directing users to category deep dives
+- "← Back to summary" button returns to the summary dashboard
+- ChatPanel `readOnly` prop: when true, the `chat-input-area` div is not rendered
+
+### New functions (dataAccess.js)
+
+- `createConversation(workflow, categoryId)` — INSERT conversation row, returns UUID
+- `updateConversationDifyId(conversationDbId, difyConversationId)` — UPDATE dify_conversation_id
+- `saveMessages(conversationDbId, userId, pairs)` — bulk INSERT message pairs
+- `loadMessages(conversationDbId)` — SELECT messages ordered by created_at, returns [{role, content}]
+- `loadOnboardingConversation()` — SELECT onboarding conversation row (maybeSingle)
+- `loadDeepDiveConversations()` — SELECT all deepdive conversations + their messages; returns map
+
+### New App.jsx additions
+
+- `conversationDbIdRef` / `deepDiveConvDbIdsRef` — useRef hooks for DB UUIDs
+- `persistConversationExchange(workflow, categoryId, userMsg, assistantMsg, difyConvId)` — creates
+  conversation row on first call, updates Dify ID, inserts message pair. Fire-and-forget.
+- Wired into: onboarding streaming path, onboarding blocking path, deep-dive streaming path,
+  deep-dive blocking path
+- `restoreUserData` extended: loads conversation IDs into refs, loads onboarding messages into
+  state, loads deep-dive conversations (with messages) into `categoryConversations` state
+- `renderOnboardingChatReadonly()` — Phase 1b render function, read-only view with closing note
+- `scripts/clear-user-data.js` — deletes messages + conversations in addition to prior tables
+
+### Modified files
+
+- `src/api/dataAccess.js` — 6 new functions
+- `src/api/dataAccess.test.js` — NEW, 18 tests (vi.hoisted pattern for mock hoisting fix)
+- `src/components/ChatPanel.jsx` — `readOnly` prop added
+- `src/App.jsx` — refs, persistConversationExchange, restoreUserData extension, readonly phase
+
+**Test totals:** 140 tests across 10 files (up from 122)
+
+### Verified end-to-end
+
+- Onboarding exchanges saved to `messages` table; conversation row in `conversations`
+- Deep-dive exchanges saved per-category; restored on login with full message history
+- "← View conversation" shows read-only onboarding history with closing note
+- Mid-onboarding refresh: previous messages restored to chat state
+
 ---
 
 ## Next Steps (priority order)
 
-### Immediate (next session)
+### Immediate
 
-1. **Conversation message persistence (Phase D)** — save onboarding + deep-dive messages to
-   `messages` table. Requires `conversationDbId` state tracked alongside Dify's `conversationId`.
-   INSERT on first user message, save final assistant message after stream completes.
-   Unlocks: embedding conversation chunks for richer KB retrieval.
+1. **Evaluation quality verification** — with a real user account (not seeded data), run the full
+   onboarding → summary → evaluation flow and confirm:
+   - Vercel logs show `context_*` variables populated in Dify inputs (non-empty KB retrieval)
+   - Evaluation results reference company-specific facts, not generic text
+   - If context is still empty: check `document_embeddings` rows exist for the user after summary save
 
-2. **Evaluation quality verification** — after a real user completes onboarding, run evaluation
-   and confirm results are company-specific (not generic). Check Vercel logs that KB search
-   returns non-empty results (`context_*` variables populated in Dify inputs).
+2. **Investment matching Dify workflow** — replace static `MOCK_INVESTMENT_DATA` with a real Dify
+   workflow: takes evaluation results + onboarding summary → returns ranked investor matches.
+   Save results to `investment_recommendations` table. Restore on login like evaluations.
 
 ### Medium term
 
-3. **Investment matching Dify workflow** — replace static `MOCK_INVESTMENT_DATA` with a real Dify
-   workflow: takes evaluation results + onboarding summary → returns ranked investor matches.
-   Save results to `investment_recommendations` table.
-
-4. **Account self-service reset/delete** — `POST /api/account/reset` (wipe data, keep auth) and
+3. **Account self-service reset/delete** — `POST /api/account/reset` (wipe data, keep auth) and
    `POST /api/account/delete` (full GDPR delete). Add UI in settings panel.
    `scripts/clear-user-data.js` is the basis for the reset endpoint logic.
 
-5. **File text extraction pipeline** — extract text from uploaded PDFs/docs server-side, chunk +
+4. **File text extraction pipeline** — extract text from uploaded PDFs/docs server-side, chunk +
    embed, store path in `file_metadata.extracted_text_path`. Makes uploaded files searchable
    in KB retrieval.
+
+5. **Conversation embedding** — embed onboarding + deep-dive message chunks into
+   `document_embeddings` (source_type: 'conversation') to enrich future KB retrieval. Builds
+   on Phase D infrastructure. Run after each session ends or on a schedule.
 
 ### Long horizon
 
 6. **Resend custom SMTP** — before inviting external users. Supabase built-in is 2 emails/hr.
-7. **Conversation embedding** — after Phase D, embed conversation chunks to enrich KB search.
-8. **External KB adapter** — `knowledgeBase.js` has adapter pattern but only internal implemented.
-9. **CAPTCHA / bot protection** — before public launch.
+7. **External KB adapter** — `knowledgeBase.js` has adapter pattern but only internal implemented.
+8. **CAPTCHA / bot protection** — before public launch.
 

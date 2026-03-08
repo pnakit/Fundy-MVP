@@ -80,8 +80,9 @@ React 18 single-page app built with Vite. No routing library, no state managemen
 
 **`App.jsx`** is the orchestrator — it owns all app state (~18 `useState` hooks) and passes it down to extracted components. The three main views (Onboarding, Evaluation, Investments) are render functions inside App.jsx because they share state (e.g., `actionItems` is used by both Evaluation and Investment windows).
 
-**Onboarding** has three phases dispatched by `onboardingPhase` state:
+**Onboarding** has four phases dispatched by `onboardingPhase` state:
 - `'chat'` → `renderOnboardingChat()` — conversational AI onboarding via ChatPanel
+- `'chat-readonly'` → `renderOnboardingChatReadonly()` — read-only history of completed onboarding conversation (navigated to from summary via "← View conversation")
 - `'summary'` → `renderOnboardingSummary()` — category cards with progress rings
 - `'deep-dive'` → `renderDeepDive()` — per-category follow-up chat with separate conversation state per category
 
@@ -130,7 +131,7 @@ api/
 
 - Color constants are centralized in `src/utils/colors.js` (`COLORS.success`, `COLORS.warning`, etc.)
 - `ProgressRing` component replaces all hand-rolled SVG circle progress indicators
-- `ChatPanel` component is shared between onboarding chat and deep-dive chat
+- `ChatPanel` component is shared between onboarding chat, deep-dive chat, and the read-only conversation view. Accepts `readOnly` prop — when true, the input area is hidden
 - Action item IDs use `crypto.randomUUID()` — UUIDs serve as Supabase primary keys directly
 - Investment toggle properly cleans up associated action items on deselect (via `actionItems.js` utility)
 - Each window is wrapped in `<ErrorBoundary name="...">` for crash isolation
@@ -179,7 +180,7 @@ Vitest + React Testing Library + jsdom. Test setup in `src/test/setup.js`.
 
 Test files live alongside their source files (`*.test.js` / `*.test.jsx`).
 
-Current test coverage (137 tests, 10 files):
+Current test coverage (140 tests, 10 files):
 - `extractSummary.test.js` — 26 tests: JSON parsing, validation, normalization, edge cases, SSE parser
 - `colors.test.js` — 23 tests: all color helper functions including maturity/performance helpers
 - `difyApi.test.js` — 7 tests: mock response structure, summary triggers, file upload
@@ -189,7 +190,7 @@ Current test coverage (137 tests, 10 files):
 - `fileUpload.test.js` — 10 tests: upload, failure, mixed results, message building
 - `_chunking.test.js` — 13 tests: conversation/summary/file chunking, overlap, edge cases
 - `_difyWorkflow.test.js` — 17 tests: SSE parsing, node mapping, category extraction, error events
-- `dataAccess.test.js` — 15 tests: createConversation, updateDifyId, saveMessages, loadOnboarding, loadDeepDive
+- `dataAccess.test.js` — 18 tests: createConversation, updateDifyId, saveMessages, loadMessages, loadOnboarding, loadDeepDive
 
 Run a single test file: `npx vitest run src/utils/colors.test.js`
 
