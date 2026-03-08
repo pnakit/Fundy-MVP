@@ -44,10 +44,23 @@ export function buildUploadMessages(succeeded, context = 'evaluation') {
 
   const message = `I've received ${namesStr}. Send a message to incorporate ${pronoun} into ${contextWord}.`;
 
-  const prompt =
-    succeeded.length === 1
-      ? `I've uploaded "${succeeded[0]}". Please ${context === 'discussion' ? 'incorporate this into our discussion' : 'review it and ask me any relevant questions'}.`
-      : `I've uploaded ${succeeded.length} files (${succeeded.join(', ')}). Please ${context === 'discussion' ? 'incorporate them into our discussion' : 'review them and ask me any relevant questions'}.`;
+  let prompt;
+  if (context === 'onboarding') {
+    prompt =
+      succeeded.length === 1
+        ? `I've uploaded "${succeeded[0]}". Please use it to extract onboarding information.`
+        : `I've uploaded ${succeeded.length} files (${succeeded.join(', ')}). Please use them to extract onboarding information.`;
+  } else if (context === 'discussion') {
+    prompt =
+      succeeded.length === 1
+        ? `I've uploaded "${succeeded[0]}". Please incorporate this into our discussion.`
+        : `I've uploaded ${succeeded.length} files (${succeeded.join(', ')}). Please incorporate them into our discussion.`;
+  } else {
+    prompt =
+      succeeded.length === 1
+        ? `I've uploaded "${succeeded[0]}". Please review it and ask me any relevant questions.`
+        : `I've uploaded ${succeeded.length} files (${succeeded.join(', ')}). Please review them and ask me any relevant questions.`;
+  }
 
   return { message, prompt };
 }

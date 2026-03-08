@@ -103,7 +103,7 @@ describe('buildUploadMessages', () => {
     const { message, prompt } = buildUploadMessages(['doc.pdf'], 'onboarding');
 
     expect(message).toContain('our conversation');
-    expect(prompt).toContain('review it');
+    expect(prompt).toContain('extract onboarding information');
   });
 
   it('defaults to evaluation context', () => {
