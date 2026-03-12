@@ -1,7 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  MOCK_INVESTMENT_DATA,
-  INVESTMENT_ACTIONS,
   ONBOARDING_CATEGORIES,
   MOCK_ONBOARDING_SUMMARY,
   EVALUATION_DIMENSIONS,
@@ -41,11 +39,14 @@ import {
   loadDeepDiveConversations,
 } from './api/dataAccess';
 import ErrorBoundary from './components/ErrorBoundary';
-import { addInvestmentActions, removeInvestmentActions } from './utils/actionItems';
+import DebugPanel from './components/DebugPanel';
 import { uploadFiles, buildUploadMessages, DIFY_MAX_FILES, DIFY_MAX_FILE_SIZE_MB } from './utils/fileUpload';
 import { generateEvaluation } from './api/evaluationApi';
 
 const CHAT_ERROR_MESSAGE = 'I apologize, but I encountered an error. Please try again.';
+
+// Opt-in debug panel — add ?debug to the URL to enable
+const debugEnabled = new URLSearchParams(window.location.search).has('debug');
 
 /** Reconstruct evaluationData state shape from a DB evaluations row. */
 function mapDbEvalToState(dbRow) {
@@ -98,7 +99,7 @@ export default function StartupPlatform() {
   const [evaluationStatus, setEvaluationStatus] = useState(null);
   const [evaluationError, setEvaluationError] = useState(null);
   const [evaluationWarning, setEvaluationWarning] = useState(null);
-  const [investmentData, _setInvestmentData] = useState(MOCK_INVESTMENT_DATA);
+  const [investmentData, setInvestmentData] = useState(null);
   const [actionItems, setActionItems] = useState([]);
   const [selectedInvestments, setSelectedInvestments] = useState([]);
   const [expandedAction, setExpandedAction] = useState(null);
@@ -108,6 +109,13 @@ export default function StartupPlatform() {
   const [categoryConversations, setCategoryConversations] = useState({});
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [expandedDimension, setExpandedDimension] = useState(null);
+  const [debugLogs, setDebugLogs] = useState([]);
+
+  const addDebugLog = useCallback((label, detail) => {
+    if (!debugEnabled) return;
+    const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    setDebugLogs((prev) => [...prev.slice(-99), { ts, label, detail }]);
+  }, []);
 
   // Refs track Supabase conversation UUIDs — using refs avoids stale closure
   // issues in fire-and-forget async helpers called from streaming callbacks.
@@ -132,8 +140,8 @@ export default function StartupPlatform() {
     }
   };
 
-  /** Save the completed evaluation result to Supabase. Fire-and-forget. */
-  const persistEvaluation = async (data) => {
+  /** Save the completed evaluation result (and investment recommendations) to Supabase. Fire-and-forget. */
+  const persistEvaluation = async (data, investmentRecommendations = null) => {
     if (!data?.dimensions?.length) return;
     try {
       const session = await getSession();
@@ -151,11 +159,17 @@ export default function StartupPlatform() {
       const res = await fetch('/api/evaluation/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ evaluationData: data, actionItems: evalActionItems }),
+        body: JSON.stringify({
+          evaluationData: data,
+          actionItems: evalActionItems,
+          investmentRecommendations: investmentRecommendations || undefined,
+        }),
       });
-      if (!res.ok) console.error('[persistEvaluation] HTTP', res.status);
+      if (!res.ok) { console.error('[persistEvaluation] HTTP', res.status); return false; }
+      return true;
     } catch (err) {
       console.error('[persistEvaluation] Failed:', err.message);
+      return false;
     }
   };
 
@@ -213,6 +227,9 @@ export default function StartupPlatform() {
       }
       if (savedEval) {
         setEvaluationData(mapDbEvalToState(savedEval));
+        if (savedEval.investment_data) {
+          setInvestmentData(savedEval.investment_data);
+        }
       }
       if (savedInvestments.length > 0) {
         setSelectedInvestments(savedInvestments);
@@ -501,25 +518,14 @@ export default function StartupPlatform() {
     }));
   };
 
-  const toggleInvestment = async (investmentId) => {
+  const toggleInvestment = (investmentId) => {
     const isSelected = selectedInvestments.includes(investmentId);
     if (isSelected) {
-      setActionItems((prevActions) => removeInvestmentActions(prevActions, investmentId));
       setSelectedInvestments((prev) => prev.filter((id) => id !== investmentId));
-      // Persist: mark deselected + remove action items from DB
       upsertInvestmentSelection(investmentId, false);
-      deleteActionItemsBySourceId(investmentId);
     } else {
-      const rawActions = INVESTMENT_ACTIONS[investmentId] || [];
-      const newActions = addInvestmentActions([], investmentId, rawActions, () => crypto.randomUUID());
-      setActionItems((prevActions) => [...prevActions, ...newActions]);
       setSelectedInvestments((prev) => [...prev, investmentId]);
-      // Persist: mark selected + save new action items to DB
       upsertInvestmentSelection(investmentId, true);
-      const userId = session?.user?.id;
-      if (userId) {
-        newActions.forEach((action) => saveActionItem(action, userId));
-      }
     }
   };
 
@@ -1034,6 +1040,7 @@ export default function StartupPlatform() {
     });
 
     const companyName = onboardingSummary.companyName || 'Unknown Company';
+    let capturedInvestmentRecommendations = null;
 
     const result = await generateEvaluation(companyName, onboardingSummary, {
       onCategoryStarted: (categoryId) => {
@@ -1116,6 +1123,86 @@ export default function StartupPlatform() {
           });
         }
       },
+      onInvestmentMatchingStarted: () => {
+        setEvaluationStatus('Matching investment types...');
+      },
+      onMaturityCalculated: (data) => {
+        // Update evaluation with the server-side weighted maturity score
+        setEvaluationData((prev) => {
+          if (!prev) return prev;
+          const maturityNames = { concept: 'Concept', early_traction: 'Early', validated: 'Validated', scaling: 'Scaling', market_leader: 'Leader' };
+          const perfLabels = { poor: 'Poor', fair: 'Fair', average: 'Average', good: 'Good', exceptional: 'Exceptional' };
+          const maturityLevel = { concept: 1, early_traction: 2, validated: 3, scaling: 4, market_leader: 5 }[data.maturity_stage] ?? prev.overallMaturity?.level ?? 0;
+          return {
+            ...prev,
+            overallMaturity: { level: maturityLevel, name: maturityNames[data.maturity_stage] || prev.overallMaturity?.name || '—' },
+            overallPerformance: {
+              score: Math.round((data.overall_completeness / 20) * 10) / 10,
+              label: perfLabels[data.performance_level] || prev.overallPerformance?.label || '—',
+            },
+          };
+        });
+      },
+      onInvestmentRecommendationsComplete: (data) => {
+        capturedInvestmentRecommendations = data;
+        setInvestmentData(data);
+        // Auto-add next_steps as investment action items, replacing any previous ones
+        const nextSteps = data.next_steps || [];
+        if (nextSteps.length > 0) {
+          setActionItems((prev) => {
+            const withoutOld = prev.filter((a) => a.sourceId !== 'investment_matching');
+            const existingKeys = new Set(
+              prev.filter((a) => a.sourceId === 'investment_matching').map((a) => a.actionKey).filter(Boolean),
+            );
+            const newItems = nextSteps
+              .map((step) => {
+                const slug = step.action
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '-')
+                  .replace(/^-+|-+$/g, '')
+                  .slice(0, 50);
+                const actionKey = `investment-${slug}`;
+                if (existingKeys.has(actionKey)) return null;
+                return {
+                  id: crypto.randomUUID(),
+                  title: step.action,
+                  description: step.expected_outcome || '',
+                  priority: step.priority <= 2 ? 'high' : 'medium',
+                  status: 'pending',
+                  sourceType: 'investment',
+                  sourceId: 'investment_matching',
+                  dimensionId: null,
+                  actionKey,
+                  files: [],
+                  inputs: {},
+                };
+              })
+              .filter(Boolean);
+            return [...withoutOld, ...newItems];
+          });
+          // Persist new investment action items to DB
+          const userId = session?.user?.id;
+          if (userId) {
+            nextSteps.forEach((step) => {
+              const slug = step.action.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50);
+              saveActionItem(
+                {
+                  id: crypto.randomUUID(),
+                  title: step.action,
+                  description: step.expected_outcome || '',
+                  priority: step.priority <= 2 ? 'high' : 'medium',
+                  status: 'pending',
+                  sourceType: 'investment',
+                  sourceId: 'investment_matching',
+                  dimensionId: null,
+                  actionKey: `investment-${slug}`,
+                },
+                userId,
+              );
+            });
+          }
+        }
+      },
       onStatus: (message) => {
         setEvaluationStatus(message);
         if (message.includes('unavailable') || message.includes('Mock mode')) {
@@ -1123,6 +1210,7 @@ export default function StartupPlatform() {
         }
       },
       onError: (message) => setEvaluationError(message),
+      onDebugLog: debugEnabled ? addDebugLog : undefined,
     });
 
     setEvaluationLoading(false);
@@ -1134,7 +1222,9 @@ export default function StartupPlatform() {
           ...prev,
           description: `Your company has been evaluated across ${prev.dimensions.length} key business dimensions.`,
         };
-        persistEvaluation(finalData);
+        persistEvaluation(finalData, capturedInvestmentRecommendations).then((ok) => {
+          addDebugLog('SAVE', ok ? 'evaluation + investment_data saved ✓' : 'save failed ✗');
+        });
         return finalData;
       });
     }
@@ -1478,87 +1568,206 @@ export default function StartupPlatform() {
   };
 
   // Window 3: Investment Matching
-  const renderInvestmentWindow = () => (
-    <div className="investment-window">
-      <div className="invest-header">
-        <h2>Investment Matching</h2>
-        <p>Discover funding opportunities matched to your company profile</p>
-      </div>
+  const renderInvestmentWindow = () => {
+    // Map LLM rating to a 0-100 suitability score for the progress ring
+    const ratingToSuitability = { ideal: 95, strong_fit: 80, acceptable: 65, conditional: 50, marginal: 40, not_suitable: 15 };
+    const ratingToStatus = { ideal: 'strong_match', strong_fit: 'strong_match', acceptable: 'moderate_match', conditional: 'partial_match', marginal: 'partial_match', not_suitable: 'weak_match' };
+    // Display names for investment type IDs
+    const investmentTypeNames = {
+      grant_funding: 'Grant Funding',
+      pre_seed: 'Pre-Seed',
+      seed: 'Seed',
+      series_a: 'Series A',
+      venture_debt: 'Venture Debt',
+      revenue_based_financing: 'Revenue-Based Financing',
+    };
 
-      <div className="invest-content">
-        <div className="invest-summary">
-          <div className="summary-card">
-            <span className="summary-value">{investmentData.investments.filter(i => i.suitability >= 75).length}</span>
-            <span className="summary-label">Strong Matches</span>
+    if (!investmentData) {
+      return (
+        <div className="investment-window">
+          <div className="invest-header">
+            <h2>Investment Matching</h2>
+            <p>Run an evaluation to see personalized investment recommendations</p>
           </div>
-          <div className="summary-card">
-            <span className="summary-value">{selectedInvestments.length}</span>
-            <span className="summary-label">Selected</span>
-          </div>
-          <div className="summary-card">
-            <span className="summary-value">{actionItems.filter(a => a.sourceType === 'investment').length}</span>
-            <span className="summary-label">Actions Added</span>
+          <div className="invest-content">
+            <div style={{ textAlign: 'center', padding: '60px 24px', color: 'rgba(255,255,255,0.4)' }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+              <p style={{ margin: 0, fontSize: 15 }}>Investment recommendations will appear here after you generate an evaluation in the Evaluation tab.</p>
+            </div>
           </div>
         </div>
+      );
+    }
 
-        <div className="investment-grid">
-          {investmentData.investments.map(investment => {
-            const isSelected = selectedInvestments.includes(investment.id);
-            return (
-              <div
-                key={investment.id}
-                className={`investment-card ${isSelected ? 'selected' : ''}`}
-              >
-                <div className="invest-card-header">
-                  <div className="invest-type">
-                    <h3>{investment.type}</h3>
-                    <span
-                      className="invest-status"
-                      style={{ background: `${getStatusColor(investment.status)}22`, color: getStatusColor(investment.status) }}
-                    >
-                      {investment.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <div className="suitability-ring">
-                    <ProgressRing size={60} radius={26} strokeWidth={4} percent={investment.suitability} color={getSuitabilityColor(investment.suitability)} fontSize={14} />
-                  </div>
-                </div>
+    const { investment_readiness_summary, recommended_funding = [], conditional_options = [], improvement_roadmap = [], not_recommended = [] } = investmentData;
+    const investmentActionCount = actionItems.filter((a) => a.sourceType === 'investment').length;
 
-                <p className="invest-description">{investment.description}</p>
+    return (
+      <div className="investment-window">
+        <div className="invest-header">
+          <h2>Investment Matching</h2>
+          <p>Personalized funding recommendations based on your evaluation</p>
+        </div>
 
-                <div className="invest-details">
-                  <div className="detail-row">
-                    <span className="detail-label">Amount Range</span>
-                    <span className="detail-value">{investment.minAmount} - {investment.maxAmount}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-label">Timeline</span>
-                    <span className="detail-value">{investment.timeline}</span>
-                  </div>
-                </div>
+        <div className="invest-content">
+          {/* Summary stats */}
+          <div className="invest-summary">
+            <div className="summary-card">
+              <span className="summary-value">{recommended_funding.length}</span>
+              <span className="summary-label">Recommended</span>
+            </div>
+            <div className="summary-card">
+              <span className="summary-value">{selectedInvestments.length}</span>
+              <span className="summary-label">Pursuing</span>
+            </div>
+            <div className="summary-card">
+              <span className="summary-value">{investmentActionCount}</span>
+              <span className="summary-label">Actions Added</span>
+            </div>
+          </div>
 
-                <div className="invest-requirements">
-                  <span className="req-label">Requirements:</span>
-                  <div className="req-tags">
-                    {investment.requirements.map((req, idx) => (
-                      <span key={idx} className="req-tag">{req}</span>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  className={`invest-select-btn ${isSelected ? 'selected' : ''}`}
-                  onClick={() => toggleInvestment(investment.id)}
-                >
-                  {isSelected ? '✓ Selected' : 'Select & Add Actions'}
-                </button>
+          {/* Investment Readiness Summary */}
+          {investment_readiness_summary && (
+            <div className="invest-readiness-block">
+              <div className="readiness-header">
+                <span className="readiness-score-badge">{investment_readiness_summary.readiness_score}</span>
+                <strong>{investment_readiness_summary.primary_recommendation}</strong>
               </div>
-            );
-          })}
+              <p className="readiness-assessment">{investment_readiness_summary.assessment}</p>
+            </div>
+          )}
+
+          {/* Recommended funding cards */}
+          {recommended_funding.length > 0 && (
+            <>
+              <h3 className="invest-section-heading">Recommended</h3>
+              <div className="investment-grid">
+                {recommended_funding.map((inv) => {
+                  const suitability = ratingToSuitability[inv.rating] ?? 50;
+                  const status = ratingToStatus[inv.rating] ?? 'partial_match';
+                  const isSelected = selectedInvestments.includes(inv.investment_type);
+                  return (
+                    <div key={inv.investment_type} className={`investment-card ${isSelected ? 'selected' : ''}`}>
+                      <div className="invest-card-header">
+                        <div className="invest-type">
+                          <h3>{investmentTypeNames[inv.investment_type] || inv.investment_type}</h3>
+                          <span className="invest-status" style={{ background: `${getStatusColor(status)}22`, color: getStatusColor(status) }}>
+                            {inv.rating.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        <div className="suitability-ring">
+                          <ProgressRing size={60} radius={26} strokeWidth={4} percent={suitability} color={getSuitabilityColor(suitability)} fontSize={14} />
+                        </div>
+                      </div>
+                      <p className="invest-description">{inv.fit_explanation}</p>
+                      <div className="invest-details">
+                        <div className="detail-row">
+                          <span className="detail-label">Typical Terms</span>
+                          <span className="detail-value">{inv.typical_terms}</span>
+                        </div>
+                      </div>
+                      {inv.investor_expectations?.length > 0 && (
+                        <div className="invest-requirements">
+                          <span className="req-label">Investors look for:</span>
+                          <div className="req-tags">
+                            {inv.investor_expectations.map((exp, idx) => <span key={idx} className="req-tag">{exp}</span>)}
+                          </div>
+                        </div>
+                      )}
+                      <button className={`invest-select-btn ${isSelected ? 'selected' : ''}`} onClick={() => toggleInvestment(inv.investment_type)}>
+                        {isSelected ? '✓ Pursuing' : 'Mark as Pursuing'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Conditional options */}
+          {conditional_options.length > 0 && (
+            <>
+              <h3 className="invest-section-heading">Conditional Options</h3>
+              <div className="investment-grid">
+                {conditional_options.map((opt) => {
+                  const isSelected = selectedInvestments.includes(opt.investment_type);
+                  return (
+                    <div key={opt.investment_type} className={`investment-card conditional ${isSelected ? 'selected' : ''}`}>
+                      <div className="invest-card-header">
+                        <div className="invest-type">
+                          <h3>{investmentTypeNames[opt.investment_type] || opt.investment_type}</h3>
+                          <span className="invest-status" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>conditional</span>
+                        </div>
+                        <div className="suitability-ring">
+                          <ProgressRing size={60} radius={26} strokeWidth={4} percent={50} color="#f59e0b" fontSize={14} />
+                        </div>
+                      </div>
+                      <p className="invest-description">{opt.conditions_for_fit}</p>
+                      {opt.improvements_needed?.length > 0 && (
+                        <div className="invest-requirements">
+                          <span className="req-label">Needs improvement in:</span>
+                          <div className="req-tags">
+                            {opt.improvements_needed.map((imp, idx) => <span key={idx} className="req-tag">{imp.category.replace(/_/g, ' ')}</span>)}
+                          </div>
+                        </div>
+                      )}
+                      <button className={`invest-select-btn ${isSelected ? 'selected' : ''}`} onClick={() => toggleInvestment(opt.investment_type)}>
+                        {isSelected ? '✓ Pursuing' : 'Mark as Pursuing'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Improvement Roadmap */}
+          {improvement_roadmap.length > 0 && (
+            <div className="invest-roadmap-section">
+              <h3 className="invest-section-heading">Improvement Roadmap</h3>
+              <div className="roadmap-list">
+                {improvement_roadmap.map((item) => (
+                  <div key={item.category} className="roadmap-item">
+                    <div className="roadmap-item-header">
+                      <span className="roadmap-priority">#{item.priority}</span>
+                      <span className="roadmap-category">{item.category.replace(/_/g, ' ')}</span>
+                      <span className="roadmap-score">{item.current_score} → {item.target_score}</span>
+                      <span className="roadmap-timeline">{item.timeline}</span>
+                    </div>
+                    {item.unlocks?.length > 0 && (
+                      <div className="roadmap-unlocks">
+                        Unlocks: {item.unlocks.map((u) => investmentTypeNames[u] || u).join(', ')}
+                      </div>
+                    )}
+                    {item.specific_actions?.length > 0 && (
+                      <ul className="roadmap-actions">
+                        {item.specific_actions.map((action, idx) => <li key={idx}>{action}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Not Recommended */}
+          {not_recommended.length > 0 && (
+            <div className="invest-not-recommended">
+              <h3 className="invest-section-heading">Not Recommended</h3>
+              <div className="not-rec-list">
+                {not_recommended.map((item) => (
+                  <div key={item.investment_type} className="not-rec-item">
+                    <span className="not-rec-name">{investmentTypeNames[item.investment_type] || item.investment_type}</span>
+                    <span className="not-rec-reason">{item.reason}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   if (authLoading) {
     return (
@@ -1618,6 +1827,8 @@ export default function StartupPlatform() {
         {activeWindow === 1 && <ErrorBoundary name="Evaluation">{renderEvaluationWindow()}</ErrorBoundary>}
         {activeWindow === 2 && <ErrorBoundary name="Investments">{renderInvestmentWindow()}</ErrorBoundary>}
       </main>
+
+      {debugEnabled && <DebugPanel logs={debugLogs} onClear={() => setDebugLogs([])} />}
     </div>
   );
 }

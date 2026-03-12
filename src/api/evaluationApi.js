@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { MOCK_INVESTMENT_DATA } from '../data/mockData';
 
 /**
  * Get the current JWT for authenticated API calls.
@@ -53,8 +54,12 @@ function shouldUseMock() {
  * @param {object} callbacks
  * @param {function} callbacks.onCategoryStarted - (categoryId) => void
  * @param {function} callbacks.onCategoryComplete - (categoryData) => void
+ * @param {function} [callbacks.onInvestmentMatchingStarted] - () => void
+ * @param {function} [callbacks.onMaturityCalculated] - (data) => void
+ * @param {function} [callbacks.onInvestmentRecommendationsComplete] - (data) => void
  * @param {function} callbacks.onError - (error) => void
  * @param {function} callbacks.onStatus - (message) => void
+ * @param {function} [callbacks.onDebugLog] - (label, detail) => void — optional debug hook
  * @param {string} [knowledgeBaseId] - Optional KB override
  * @returns {Promise<{success: boolean, metadata?: object}>}
  */
@@ -71,7 +76,14 @@ export async function generateEvaluation(companyName, onboardingSummary, callbac
  * Used when VITE_DIFY_MOCK=true (dev mode without Vercel serverless).
  */
 async function generateEvaluationMock(onboardingSummary, callbacks) {
-  const { onCategoryStarted, onCategoryComplete, onStatus } = callbacks;
+  const {
+    onCategoryStarted,
+    onCategoryComplete,
+    onInvestmentMatchingStarted,
+    onMaturityCalculated,
+    onInvestmentRecommendationsComplete,
+    onStatus,
+  } = callbacks;
 
   if (onStatus) onStatus('Mock mode — generating evaluation from onboarding data...');
 
@@ -107,6 +119,27 @@ async function generateEvaluationMock(onboardingSummary, callbacks) {
     }
   }
 
+  // Phase 2: mock investment matching
+  if (onInvestmentMatchingStarted) onInvestmentMatchingStarted();
+  await new Promise((resolve) => setTimeout(resolve, 800));
+
+  if (onMaturityCalculated) {
+    onMaturityCalculated({
+      maturity_score: 320,
+      maturity_stage: 'early_traction',
+      maturity_label: 'Early Traction (201-400)',
+      performance_level: 'average',
+      performance_label: 'Average',
+      overall_completeness: 55,
+    });
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  if (onInvestmentRecommendationsComplete) {
+    onInvestmentRecommendationsComplete(MOCK_INVESTMENT_DATA);
+  }
+
   return { success: true, metadata: { total_tokens: 0, elapsed_time: 0, mock: true } };
 }
 
@@ -114,9 +147,20 @@ async function generateEvaluationMock(onboardingSummary, callbacks) {
  * Real mode: calls the serverless evaluation endpoint with SSE streaming.
  */
 async function generateEvaluationReal(companyName, onboardingSummary, callbacks, knowledgeBaseId) {
-  const { onCategoryStarted, onCategoryComplete, onError, onStatus } = callbacks;
+  const {
+    onCategoryStarted,
+    onCategoryComplete,
+    onInvestmentMatchingStarted,
+    onMaturityCalculated,
+    onInvestmentRecommendationsComplete,
+    onError,
+    onStatus,
+    onDebugLog,
+  } = callbacks;
 
   const authHeaders = await getAuthHeaders();
+
+  onDebugLog?.('CONNECT', 'POST /api/evaluation/generate');
 
   let response;
   try {
@@ -173,15 +217,33 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
 
         switch (event.type) {
           case 'category_started':
+            onDebugLog?.('CAT↑', event.category_id);
             if (onCategoryStarted) onCategoryStarted(event.category_id);
             break;
 
           case 'category_complete':
+            onDebugLog?.('CAT✓', `${event.data?.category_id} score=${event.data?.completeness}`);
             if (onCategoryComplete) onCategoryComplete(event.data);
+            break;
+
+          case 'investment_matching_started':
+            onDebugLog?.('INVEST↑', 'Phase 2 started');
+            if (onInvestmentMatchingStarted) onInvestmentMatchingStarted();
+            break;
+
+          case 'maturity_calculated':
+            onDebugLog?.('MATURE', `stage=${event.data?.maturity_stage} score=${event.data?.maturity_score}`);
+            if (onMaturityCalculated) onMaturityCalculated(event.data);
+            break;
+
+          case 'investment_recommendations_complete':
+            onDebugLog?.('INVEST✓', `keys=${Object.keys(event.data || {}).join(',')}`);
+            if (onInvestmentRecommendationsComplete) onInvestmentRecommendationsComplete(event.data);
             break;
 
           case 'workflow_complete':
             metadata = event.metadata;
+            onDebugLog?.('DONE', `tokens=${event.metadata?.total_tokens} elapsed=${event.metadata?.elapsed_time}s`);
             break;
 
           case 'status':
@@ -189,6 +251,7 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
             break;
 
           case 'error':
+            onDebugLog?.('ERROR', event.message);
             if (onError) onError(event.message, event.category_id);
             break;
         }

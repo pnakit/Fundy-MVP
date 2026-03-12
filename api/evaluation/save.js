@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   }
 
   const userId = auth.user.sub;
-  const { evaluationData, actionItems: newActionItems = [] } = req.body;
+  const { evaluationData, actionItems: newActionItems = [], investmentRecommendations } = req.body;
 
   if (!evaluationData?.dimensions || !Array.isArray(evaluationData.dimensions)) {
     return res.status(400).json({ error: 'evaluationData with dimensions array is required' });
@@ -52,6 +52,7 @@ export default async function handler(req, res) {
       performance_metrics: {
         overallPerformance: evaluationData.overallPerformance,
       },
+      investment_data: investmentRecommendations || null,
     },
     { onConflict: 'user_id' },
   );
@@ -60,6 +61,8 @@ export default async function handler(req, res) {
     console.error('[evaluation/save] Failed to upsert evaluation:', error.message);
     return res.status(500).json({ error: `Failed to save evaluation: ${error.message}` });
   }
+
+  console.log(`[evaluation/save] Saved evaluation for user ${userId}, investment_data=${!!investmentRecommendations}`);
 
   // Merge evaluation action items — insert only new action_keys, preserve existing with user modifications
   let actionItemsAdded = 0;
@@ -95,6 +98,7 @@ export default async function handler(req, res) {
         console.error('[evaluation/save] Failed to insert action items:', actionErr.message);
       } else {
         actionItemsAdded = toInsert.length;
+        console.log(`[evaluation/save] Inserted ${actionItemsAdded} action items`);
       }
     }
   }

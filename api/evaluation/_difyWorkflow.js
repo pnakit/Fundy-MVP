@@ -93,8 +93,8 @@ function parseSSELine(line) {
  * Transform a Dify SSE event into an app-level evaluation event.
  *
  * Dify events we care about:
- * - node_started: LLM node begins → category_started
- * - node_finished: LLM node completes with outputs → category_complete
+ * - node_started: LLM node begins → category_started | investment_matching_started
+ * - node_finished: LLM node completes with outputs → category_complete | maturity_calculated | investment_recommendations_complete
  * - workflow_finished: All branches done → workflow_complete
  * - error: Something failed → error
  */
@@ -107,32 +107,59 @@ function transformDifyEvent(event) {
     if (categoryId) {
       return { type: 'category_started', category_id: categoryId };
     }
+    if (nodeTitle === 'calculate_maturity') {
+      return { type: 'investment_matching_started' };
+    }
     return null;
   }
 
   if (eventType === 'node_finished') {
     const nodeTitle = event.data?.title || '';
-    const categoryId = extractCategoryFromNodeTitle(nodeTitle);
-    if (!categoryId) return null;
-
-    // Extract the LLM output — Dify puts structured output in outputs.text or outputs.result.
-    // structured_output is preferred (already parsed); text is the fallback JSON string.
     const outputs = event.data?.outputs || {};
-    const rawOutput = outputs.structured_output || outputs.text || outputs.result || '';
 
-    try {
-      const categoryData = typeof rawOutput === 'string' ? JSON.parse(rawOutput) : rawOutput;
-      // Override category_id with the node-title-derived value — the node title is the
-      // source of truth. The LLM's category_id field may include the "eval_" prefix or
-      // otherwise drift, so we never trust it.
-      return { type: 'category_complete', category_id: categoryId, data: { ...categoryData, category_id: categoryId } };
-    } catch (_e) {
+    // Category evaluation node (eval_* prefix)
+    const categoryId = extractCategoryFromNodeTitle(nodeTitle);
+    if (categoryId) {
+      // Extract the LLM output — Dify puts structured output in outputs.text or outputs.result.
+      // structured_output is preferred (already parsed); text is the fallback JSON string.
+      const rawOutput = outputs.structured_output || outputs.text || outputs.result || '';
+      try {
+        const categoryData = typeof rawOutput === 'string' ? JSON.parse(rawOutput) : rawOutput;
+        // Override category_id with the node-title-derived value — the node title is the
+        // source of truth. The LLM's category_id field may include the "eval_" prefix or
+        // otherwise drift, so we never trust it.
+        return { type: 'category_complete', category_id: categoryId, data: { ...categoryData, category_id: categoryId } };
+      } catch (_e) {
+        return {
+          type: 'error',
+          category_id: categoryId,
+          message: `Failed to parse evaluation output for ${categoryId}`,
+        };
+      }
+    }
+
+    // Investment matching phase: maturity calculation node
+    if (nodeTitle === 'calculate_maturity') {
       return {
-        type: 'error',
-        category_id: categoryId,
-        message: `Failed to parse evaluation output for ${categoryId}`,
+        type: 'maturity_calculated',
+        data: {
+          maturity_score: outputs.maturity_score,
+          maturity_stage: outputs.maturity_stage,
+          maturity_label: outputs.maturity_label,
+          performance_level: outputs.performance_level,
+          performance_label: outputs.performance_label,
+          overall_completeness: outputs.overall_completeness,
+        },
       };
     }
+
+    // Investment recommendations LLM node — detected by structured output shape
+    if (outputs.investment_readiness_summary) {
+      console.log('[_difyWorkflow] investment_recommendations_complete detected, keys:', Object.keys(outputs));
+      return { type: 'investment_recommendations_complete', data: outputs };
+    }
+
+    return null;
   }
 
   if (eventType === 'workflow_finished') {
