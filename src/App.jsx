@@ -438,6 +438,24 @@ export default function StartupPlatform() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    const DIFY_FILE_LIMIT = 3;
+    if (uploadedFiles.length + files.length > DIFY_FILE_LIMIT) {
+      const remaining = DIFY_FILE_LIMIT - uploadedFiles.length;
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content:
+            remaining > 0
+              ? `Dify supports a maximum of ${DIFY_FILE_LIMIT} files per message. You have ${uploadedFiles.length} file(s) pending — you can add ${remaining} more. Send your message first to free up space.`
+              : `Dify supports a maximum of ${DIFY_FILE_LIMIT} files per message. Please send your current message before uploading more files.`,
+          isError: true,
+        },
+      ]);
+      e.target.value = '';
+      return;
+    }
+
     setMessages((prev) => [...prev, { role: 'user', content: `Uploaded: ${files.map((f) => f.name).join(', ')}`, isFile: true }]);
     setIsTyping(true);
 
@@ -635,6 +653,33 @@ export default function StartupPlatform() {
     if (files.length === 0 || !activeCategory) return;
 
     const categoryId = activeCategory;
+
+    const DIFY_FILE_LIMIT = 3;
+    if (uploadedFiles.length + files.length > DIFY_FILE_LIMIT) {
+      const remaining = DIFY_FILE_LIMIT - uploadedFiles.length;
+      setCategoryConversations((prev) => {
+        if (!prev[categoryId]) return prev;
+        return {
+          ...prev,
+          [categoryId]: {
+            ...prev[categoryId],
+            messages: [
+              ...prev[categoryId].messages,
+              {
+                role: 'assistant',
+                content:
+                  remaining > 0
+                    ? `Dify supports a maximum of ${DIFY_FILE_LIMIT} files per message. You have ${uploadedFiles.length} file(s) pending — you can add ${remaining} more. Send your message first to free up space.`
+                    : `Dify supports a maximum of ${DIFY_FILE_LIMIT} files per message. Please send your current message before uploading more files.`,
+                isError: true,
+              },
+            ],
+          },
+        };
+      });
+      e.target.value = '';
+      return;
+    }
 
     setCategoryConversations((prev) => {
       if (!prev[categoryId]) return prev;
