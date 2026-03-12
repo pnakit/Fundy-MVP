@@ -70,6 +70,24 @@ export default async function handler(req, res) {
     let capturedMessageId = null;
 
     try {
+      const parseEvent = (line) => {
+        if (!line.startsWith('data:')) return;
+        try {
+          const event = JSON.parse(line.slice(5).trim());
+          if (event.event === 'node_finished') {
+            console.log(`[chat] node_finished title="${event.data?.title}"`);
+            if (event.data?.title === FILE_TEXT_RELAY_NODE) {
+              capturedFileText = event.data?.outputs?.file_text || null;
+              console.log(`[chat] captured file text length=${capturedFileText?.length}`);
+            }
+          } else if (event.event === 'message_end') {
+            // Dify chatflows may use 'id' or 'message_id' depending on version
+            capturedMessageId = event.message_id || event.id || null;
+            console.log(`[chat] message_end captured, message_id=${capturedMessageId} keys=${Object.keys(event).join(',')}`);
+          }
+        } catch (_) { /* ignore parse errors */ }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -78,23 +96,11 @@ export default async function handler(req, res) {
         sseBuffer += decoder.decode(value, { stream: true });
         const lines = sseBuffer.split('\n');
         sseBuffer = lines.pop();
-        for (const line of lines) {
-          if (!line.startsWith('data:')) continue;
-          try {
-            const event = JSON.parse(line.slice(5).trim());
-            if (event.event === 'node_finished') {
-              console.log(`[chat] node_finished title="${event.data?.title}"`);
-              if (event.data?.title === FILE_TEXT_RELAY_NODE) {
-                capturedFileText = event.data?.outputs?.file_text || null;
-                console.log(`[chat] captured file text length=${capturedFileText?.length}`);
-              }
-            } else if (event.event === 'message_end') {
-              capturedMessageId = event.message_id;
-              console.log(`[chat] message_end captured, message_id=${capturedMessageId} keys=${Object.keys(event).join(',')}`);
-            }
-          } catch (_) { /* ignore parse errors */ }
-        }
+        for (const line of lines) parseEvent(line);
       }
+
+      // Flush any remaining buffered data (last event may lack trailing newline)
+      if (sseBuffer.trim()) parseEvent(sseBuffer.trim());
 
       // Embed captured file text after stream completes, before closing the connection.
       // Adds ~1-2s latency only on messages that include files.
