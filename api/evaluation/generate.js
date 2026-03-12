@@ -2,23 +2,24 @@
  * POST /api/evaluation/generate
  *
  * Main evaluation endpoint. Orchestrates:
- * 1. Knowledge base retrieval (10 parallel semantic searches)
- * 2. Context assembly per category
- * 3. Dify Workflow execution (streaming) — or mock mode if no API key
- * 4. SSE stream transformation back to frontend
+ * 1. Deep dive conversation embedding (enriches KB before retrieval)
+ * 2. Dify Workflow execution (streaming) — Dify iteration handles KB retrieval
+ * 3. SSE stream transformation back to frontend
  *
  * Auth: User JWT (via _auth.js)
  * Response: text/event-stream (SSE)
  *
  * Mock mode: When DIFY_EVALUATION_API_KEY is not set, returns simulated
  * streaming results derived from the onboarding summary. This lets you
- * test the full pipeline (frontend → API → KB retrieval → SSE) without
- * a Dify workflow configured.
+ * test the full pipeline (frontend → API → SSE) without a Dify workflow
+ * configured.
  */
 
 import { verifyAuth } from '../_auth.js';
+import { getSupabaseAdmin } from '../_supabase.js';
 import { resolveApiKey } from '../_shared.js';
-import { buildCategoryContexts } from './_categoryContext.js';
+import { chunkConversation } from '../_chunking.js';
+import { generateEmbeddings } from '../knowledge/embeddings.js';
 import { streamEvaluation } from './_difyWorkflow.js';
 
 const CATEGORY_TITLES = {
@@ -46,13 +47,10 @@ export default async function handler(req, res) {
   }
 
   const userId = auth.user.sub;
-  const { companyName, onboardingSummary, knowledgeBaseId } = req.body;
+  const { companyName, onboardingSummary } = req.body;
 
   if (!companyName) {
     return res.status(400).json({ error: 'companyName is required' });
-  }
-  if (!onboardingSummary?.categories) {
-    return res.status(400).json({ error: 'onboardingSummary with categories is required' });
   }
 
   // Step 2: Resolve Dify API key for evaluation workflow
@@ -78,23 +76,15 @@ export default async function handler(req, res) {
 
       await streamMockEvaluation(sendEvent, onboardingSummary);
     } else {
-      // ── Real mode: KB retrieval + Dify workflow ──
-      sendEvent({ type: 'status', message: 'Retrieving knowledge base context...' });
-
-      let contexts;
-      try {
-        contexts = await buildCategoryContexts(userId, onboardingSummary, knowledgeBaseId);
-      } catch (ctxErr) {
-        // If KB retrieval fails (e.g. OpenAI quota), fall back to onboarding-only context
-        console.error('KB retrieval failed, using onboarding-only context:', ctxErr.message);
-        sendEvent({ type: 'status', message: 'KB retrieval unavailable — using onboarding data only...' });
-        contexts = buildFallbackContexts(onboardingSummary);
-      }
+      // ── Real mode: embed deep dive conversations, then run Dify workflow ──
+      // Dify's own iteration handles KB retrieval; we just ensure deep dive
+      // conversations are embedded so they're available for vector search.
+      sendEvent({ type: 'status', message: 'Preparing knowledge base...' });
+      await embedDeepDiveConversations(userId);
 
       const inputs = {
         company_name: companyName,
         user_id: userId,
-        ...contexts,
       };
 
       sendEvent({ type: 'status', message: 'Starting evaluation workflow...' });
@@ -161,34 +151,73 @@ async function streamMockEvaluation(sendEvent, onboardingSummary) {
 }
 
 /**
- * Build fallback contexts using only onboarding data (no KB search).
- * Used when embedding generation fails (e.g. OpenAI quota exceeded).
+ * Embed all deep dive conversation messages for the user into the vector store.
+ * Called before the Dify evaluation workflow so that KB retrieval inside Dify
+ * can find category-specific deep dive content.
+ *
+ * Non-fatal — logs errors without throwing so evaluation can still proceed.
  */
-function buildFallbackContexts(onboardingSummary) {
-  const contexts = {};
-  const categoriesMap = {};
-  if (onboardingSummary?.categories) {
-    for (const cat of onboardingSummary.categories) {
-      categoriesMap[cat.id] = cat;
-    }
-  }
+async function embedDeepDiveConversations(userId) {
+  try {
+    const supabase = getSupabaseAdmin();
 
-  for (const categoryId of Object.keys(CATEGORY_TITLES)) {
-    const cat = categoriesMap[categoryId];
-    const sections = ['## Onboarding Data'];
-    if (cat) {
-      sections.push(`Summary: ${cat.summary}`);
-      sections.push(`Completeness: ${cat.completeness}%`);
-      if (cat.highlights?.length) sections.push(`Highlights:\n${cat.highlights.map((h) => `- ${h}`).join('\n')}`);
-      if (cat.gaps?.length) sections.push(`Gaps:\n${cat.gaps.map((g) => `- ${g}`).join('\n')}`);
-      if (cat.keyMetrics && Object.keys(cat.keyMetrics).length > 0) {
-        sections.push(`Key Metrics:\n${Object.entries(cat.keyMetrics).map(([k, v]) => `- ${k}: ${v}`).join('\n')}`);
+    const { data: convs } = await supabase
+      .from('conversations')
+      .select('id, category_id')
+      .eq('user_id', userId)
+      .eq('workflow', 'deepdive');
+
+    if (!convs?.length) return;
+
+    // Fetch messages for all deep dive conversations in parallel
+    const convMessages = await Promise.all(
+      convs.map(async (conv) => {
+        const { data: msgs } = await supabase
+          .from('messages')
+          .select('role, content')
+          .eq('conversation_id', conv.id)
+          .order('created_at');
+        return { conv, msgs: msgs || [] };
+      }),
+    );
+
+    // Chunk all conversations and batch embed in one OpenAI call
+    const allChunks = [];
+    const chunkConvMap = []; // tracks which conv each chunk belongs to
+
+    for (const { conv, msgs } of convMessages) {
+      if (msgs.length === 0) continue;
+      const chunks = chunkConversation(msgs, { workflow: 'deepdive', category_id: conv.category_id });
+      for (const chunk of chunks) {
+        allChunks.push(chunk);
+        chunkConvMap.push(conv);
       }
-    } else {
-      sections.push('No onboarding data available for this category.');
     }
-    contexts[`context_${categoryId}`] = sections.join('\n');
-  }
 
-  return contexts;
+    if (allChunks.length === 0) return;
+
+    const embeddings = await generateEmbeddings(allChunks.map((c) => c.content));
+
+    const rows = allChunks.map((chunk, i) => ({
+      user_id: userId,
+      source_type: 'conversation',
+      source_id: chunkConvMap[i].id,
+      chunk_index: chunk.chunk_index ?? i,
+      content: chunk.content,
+      embedding: JSON.stringify(embeddings[i]),
+      metadata: chunk.metadata || {},
+    }));
+
+    const { error } = await supabase
+      .from('document_embeddings')
+      .upsert(rows, { onConflict: 'source_type,source_id,chunk_index' });
+
+    if (error) {
+      console.error('[generate] Failed to upsert deep dive embeddings:', error.message);
+    } else {
+      console.log(`[generate] Embedded ${rows.length} deep dive chunks for user ${userId}`);
+    }
+  } catch (err) {
+    console.error('[generate] Deep dive embedding failed (non-fatal):', err.message);
+  }
 }

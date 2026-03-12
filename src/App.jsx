@@ -138,10 +138,20 @@ export default function StartupPlatform() {
     try {
       const session = await getSession();
       if (!session) return;
+      const evalActionItems = actionItems
+        .filter((a) => a.sourceType === 'evaluation')
+        .map((a) => ({
+          title: a.title,
+          description: a.description,
+          priority: a.priority,
+          dimensionId: a.dimensionId,
+          actionKey: a.actionKey,
+          sourceId: a.sourceId,
+        }));
       const res = await fetch('/api/evaluation/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ evaluationData: data }),
+        body: JSON.stringify({ evaluationData: data, actionItems: evalActionItems }),
       });
       if (!res.ok) console.error('[persistEvaluation] HTTP', res.status);
     } catch (err) {
@@ -1021,6 +1031,40 @@ export default function StartupPlatform() {
             description: prev.description || `Evaluation in progress — ${dimensions.length}/10 dimensions complete.`,
           };
         });
+
+        // Convert gaps to action items (merge — skip any action_key already in state)
+        if (categoryData.gaps?.length > 0) {
+          const completeness = categoryData.completeness ?? 0;
+          const priority = completeness < 40 ? 'high' : 'medium';
+          setActionItems((prev) => {
+            const existingKeys = new Set(
+              prev.filter((a) => a.sourceType === 'evaluation').map((a) => a.actionKey).filter(Boolean),
+            );
+            const newItems = categoryData.gaps
+              .map((gap) => {
+                const slug = gap
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '-')
+                  .replace(/^-+|-+$/g, '')
+                  .slice(0, 50);
+                return {
+                  id: crypto.randomUUID(),
+                  title: gap,
+                  description: '',
+                  priority,
+                  status: 'pending',
+                  sourceType: 'evaluation',
+                  sourceId: null,
+                  dimensionId: categoryData.category_id,
+                  actionKey: `${categoryData.category_id}-${slug}`,
+                  files: [],
+                  inputs: {},
+                };
+              })
+              .filter((item) => !existingKeys.has(item.actionKey));
+            return [...prev, ...newItems];
+          });
+        }
       },
       onStatus: (message) => {
         setEvaluationStatus(message);

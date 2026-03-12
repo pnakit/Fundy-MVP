@@ -25,7 +25,7 @@
 
 import { verifyAuth } from './_auth.js';
 import { getSupabaseAdmin } from './_supabase.js';
-import { chunkSummary } from './_chunking.js';
+import { chunkSummary, chunkConversation } from './_chunking.js';
 import { generateEmbeddings } from './knowledge/embeddings.js';
 
 export default async function handler(req, res) {
@@ -97,5 +97,55 @@ export default async function handler(req, res) {
     console.error('[summary] Embedding step failed (summary still saved):', embedEx.message);
   }
 
-  return res.status(200).json({ success: true, summaryId, chunksEmbedded });
+  // Step 3: Embed onboarding conversation messages (non-fatal)
+  let conversationChunksEmbedded = 0;
+  try {
+    const { data: conv } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('workflow', 'onboarding')
+      .single();
+
+    if (conv) {
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('role, content')
+        .eq('conversation_id', conv.id)
+        .order('created_at');
+
+      if (msgs?.length > 0) {
+        const chunks = chunkConversation(msgs, { workflow: 'onboarding' });
+
+        if (chunks.length > 0) {
+          const texts = chunks.map((c) => c.content);
+          const embeddings = await generateEmbeddings(texts);
+
+          const rows = chunks.map((chunk, i) => ({
+            user_id: userId,
+            source_type: 'conversation',
+            source_id: conv.id,
+            chunk_index: chunk.chunk_index ?? i,
+            content: chunk.content,
+            embedding: JSON.stringify(embeddings[i]),
+            metadata: chunk.metadata || {},
+          }));
+
+          const { error: convEmbedErr } = await supabase
+            .from('document_embeddings')
+            .upsert(rows, { onConflict: 'source_type,source_id,chunk_index' });
+
+          if (convEmbedErr) {
+            console.error('[summary] Failed to upsert conversation embeddings:', convEmbedErr.message);
+          } else {
+            conversationChunksEmbedded = rows.length;
+          }
+        }
+      }
+    }
+  } catch (convEmbedEx) {
+    console.error('[summary] Conversation embedding failed (non-fatal):', convEmbedEx.message);
+  }
+
+  return res.status(200).json({ success: true, summaryId, chunksEmbedded, conversationChunksEmbedded });
 }

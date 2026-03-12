@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   }
 
   const userId = auth.user.sub;
-  const { evaluationData } = req.body;
+  const { evaluationData, actionItems: newActionItems = [] } = req.body;
 
   if (!evaluationData?.dimensions || !Array.isArray(evaluationData.dimensions)) {
     return res.status(400).json({ error: 'evaluationData with dimensions array is required' });
@@ -61,5 +61,43 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: `Failed to save evaluation: ${error.message}` });
   }
 
-  return res.status(200).json({ success: true });
+  // Merge evaluation action items — insert only new action_keys, preserve existing with user modifications
+  let actionItemsAdded = 0;
+  if (Array.isArray(newActionItems) && newActionItems.length > 0) {
+    const { data: existing } = await supabase
+      .from('action_items')
+      .select('action_key')
+      .eq('user_id', userId)
+      .eq('source_type', 'evaluation')
+      .not('action_key', 'is', null);
+
+    const existingKeys = new Set((existing || []).map((r) => r.action_key));
+
+    const toInsert = newActionItems
+      .filter((item) => !item.actionKey || !existingKeys.has(item.actionKey))
+      .map((item) => ({
+        user_id: userId,
+        title: item.title,
+        description: item.description || '',
+        priority: item.priority || 'medium',
+        status: 'pending',
+        source_type: 'evaluation',
+        source_id: item.sourceId || null,
+        dimension_id: item.dimensionId || null,
+        action_key: item.actionKey || null,
+        file_ids: [],
+        custom_data: {},
+      }));
+
+    if (toInsert.length > 0) {
+      const { error: actionErr } = await supabase.from('action_items').insert(toInsert);
+      if (actionErr) {
+        console.error('[evaluation/save] Failed to insert action items:', actionErr.message);
+      } else {
+        actionItemsAdded = toInsert.length;
+      }
+    }
+  }
+
+  return res.status(200).json({ success: true, actionItemsAdded });
 }
