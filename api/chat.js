@@ -84,8 +84,12 @@ export default async function handler(req, res) {
             // Dify chatflows may use 'id' or 'message_id' depending on version
             capturedMessageId = event.message_id || event.id || null;
             console.log(`[chat] message_end captured, message_id=${capturedMessageId} keys=${Object.keys(event).join(',')}`);
+          } else if (!['node_started', 'message', 'tts_message', 'tts_message_end', 'ping'].includes(event.event)) {
+            console.log(`[chat] SSE event=${event.event} keys=${Object.keys(event).join(',')}`);
           }
-        } catch (_) { /* ignore parse errors */ }
+        } catch (parseErr) {
+          console.log(`[chat] SSE parse error: ${parseErr.message} line=${line.slice(0, 80)}`);
+        }
       };
 
       while (true) {
