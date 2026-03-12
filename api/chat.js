@@ -81,8 +81,12 @@ export default async function handler(req, res) {
           if (!line.startsWith('data:')) continue;
           try {
             const event = JSON.parse(line.slice(5).trim());
-            if (event.event === 'node_finished' && event.data?.title === FILE_TEXT_RELAY_NODE) {
-              capturedFileText = event.data?.outputs?.file_text || null;
+            if (event.event === 'node_finished') {
+              console.log(`[chat] node_finished title="${event.data?.title}"`);
+              if (event.data?.title === FILE_TEXT_RELAY_NODE) {
+                capturedFileText = event.data?.outputs?.file_text || null;
+                console.log(`[chat] captured file text length=${capturedFileText?.length}`);
+              }
             } else if (event.event === 'message_end') {
               capturedMessageId = event.message_id;
             }
