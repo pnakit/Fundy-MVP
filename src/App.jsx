@@ -587,7 +587,7 @@ export default function StartupPlatform() {
       });
     };
 
-    if (DifyAPI.useStreaming && !DifyAPI.isMock) {
+    if (!DifyAPI.isMock) {
       appendAssistant('', { isStreaming: true });
 
       try {
