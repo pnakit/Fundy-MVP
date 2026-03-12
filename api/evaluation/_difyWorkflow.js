@@ -162,6 +162,16 @@ function transformDifyEvent(event) {
       return { type: 'investment_recommendations_complete', data: outputs };
     }
 
+    // Kickstart nodes — fire at two silent points to keep the SSE connection alive:
+    //   workflow_kickstart   → before KB Iteration (~1s in)
+    //   workflow_evaluating  → after KB Iteration / before 10 LLMs (~10-20s in)
+    if (nodeTitle === 'workflow_kickstart') {
+      return { type: 'status', message: outputs.status || 'Retrieving knowledge base context...' };
+    }
+    if (nodeTitle === 'workflow_evaluating') {
+      return { type: 'status', message: outputs.status || 'Evaluating categories...' };
+    }
+
     return null;
   }
 

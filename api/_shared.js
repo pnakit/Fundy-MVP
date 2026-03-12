@@ -2,6 +2,7 @@ const WORKFLOW_KEYS = {
   onboarding: () => process.env.DIFY_ONBOARDING_API_KEY,
   deepdive: () => process.env.DIFY_DEEPDIVE_API_KEY,
   evaluation: () => process.env.DIFY_EVALUATION_API_KEY,
+  investment: () => process.env.DIFY_INVESTMENT_API_KEY,
 };
 
 export function resolveApiKey(workflow) {

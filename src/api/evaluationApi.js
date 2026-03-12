@@ -196,11 +196,12 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
     return { success: false };
   }
 
-  // Parse SSE stream
+  // Parse Phase 1 SSE stream — collect category results for Phase 2
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let metadata = null;
+  const collectedCategories = {};
 
   try {
     while (true) {
@@ -223,22 +224,17 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
 
           case 'category_complete':
             onDebugLog?.('CAT✓', `${event.data?.category_id} score=${event.data?.completeness}`);
+            if (event.data?.category_id) {
+              collectedCategories[`eval_${event.data.category_id}`] = {
+                category_id: event.data.category_id,
+                completeness: event.data.completeness,
+                status: event.data.status,
+                highlights: event.data.highlights || [],
+                gaps: event.data.gaps || [],
+                summary: event.data.summary || '',
+              };
+            }
             if (onCategoryComplete) onCategoryComplete(event.data);
-            break;
-
-          case 'investment_matching_started':
-            onDebugLog?.('INVEST↑', 'Phase 2 started');
-            if (onInvestmentMatchingStarted) onInvestmentMatchingStarted();
-            break;
-
-          case 'maturity_calculated':
-            onDebugLog?.('MATURE', `stage=${event.data?.maturity_stage} score=${event.data?.maturity_score}`);
-            if (onMaturityCalculated) onMaturityCalculated(event.data);
-            break;
-
-          case 'investment_recommendations_complete':
-            onDebugLog?.('INVEST✓', `keys=${Object.keys(event.data || {}).join(',')}`);
-            if (onInvestmentRecommendationsComplete) onInvestmentRecommendationsComplete(event.data);
             break;
 
           case 'workflow_complete':
@@ -253,6 +249,97 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
           case 'error':
             onDebugLog?.('ERROR', event.message);
             if (onError) onError(event.message, event.category_id);
+            break;
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  // Phase 2: investment matching — separate API call with collected category data
+  if (Object.keys(collectedCategories).length > 0) {
+    onDebugLog?.('PHASE2', `Calling investment-match with ${Object.keys(collectedCategories).length} categories`);
+    const phase2Result = await runInvestmentMatch(collectedCategories, callbacks, authHeaders);
+    if (!phase2Result.success) return { success: false };
+    metadata = { ...metadata, ...phase2Result.metadata };
+  }
+
+  return { success: true, metadata };
+}
+
+/**
+ * Phase 2: call /api/evaluation/investment-match with the 10 collected category results.
+ * Streams maturity_calculated, investment_recommendations_complete, workflow_complete events.
+ */
+async function runInvestmentMatch(categoryResults, callbacks, authHeaders) {
+  const {
+    onInvestmentMatchingStarted,
+    onMaturityCalculated,
+    onInvestmentRecommendationsComplete,
+    onError,
+    onStatus,
+    onDebugLog,
+  } = callbacks;
+
+  onDebugLog?.('CONNECT2', 'POST /api/evaluation/investment-match');
+
+  let response;
+  try {
+    response = await fetch('/api/evaluation/investment-match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ categoryResults }),
+    });
+  } catch (fetchErr) {
+    if (onError) onError(`Network error (Phase 2): ${fetchErr.message}`);
+    return { success: false };
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    if (onError) onError(`Phase 2 failed (${response.status}): ${errorText}`);
+    return { success: false };
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let metadata = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        const event = parseSSELine(line);
+        if (!event) continue;
+        switch (event.type) {
+          case 'investment_matching_started':
+            onDebugLog?.('INVEST↑', 'Phase 2 started');
+            if (onInvestmentMatchingStarted) onInvestmentMatchingStarted();
+            break;
+          case 'maturity_calculated':
+            onDebugLog?.('MATURE', `stage=${event.data?.maturity_stage} score=${event.data?.maturity_score}`);
+            if (onMaturityCalculated) onMaturityCalculated(event.data);
+            break;
+          case 'investment_recommendations_complete':
+            onDebugLog?.('INVEST✓', `keys=${Object.keys(event.data || {}).join(',')}`);
+            if (onInvestmentRecommendationsComplete) onInvestmentRecommendationsComplete(event.data);
+            break;
+          case 'workflow_complete':
+            metadata = event.metadata;
+            onDebugLog?.('DONE2', `tokens=${event.metadata?.total_tokens} elapsed=${event.metadata?.elapsed_time}s`);
+            break;
+          case 'status':
+            if (onStatus) onStatus(event.message);
+            break;
+          case 'error':
+            onDebugLog?.('ERROR2', event.message);
+            if (onError) onError(event.message);
             break;
         }
       }
