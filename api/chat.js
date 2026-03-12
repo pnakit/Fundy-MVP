@@ -90,6 +90,7 @@ export default async function handler(req, res) {
               }
             } else if (event.event === 'message_end') {
               capturedMessageId = event.message_id;
+              console.log(`[chat] message_end captured, message_id=${capturedMessageId} keys=${Object.keys(event).join(',')}`);
             }
           } catch (_) { /* ignore parse errors */ }
         }
@@ -97,6 +98,7 @@ export default async function handler(req, res) {
 
       // Embed captured file text after stream completes, before closing the connection.
       // Adds ~1-2s latency only on messages that include files.
+      console.log(`[chat] Post-stream: fileText=${!!capturedFileText} messageId=${capturedMessageId}`);
       if (capturedFileText && capturedMessageId) {
         try {
           const chunks = chunkFileText(capturedFileText, { file_name: `msg:${capturedMessageId}` });
