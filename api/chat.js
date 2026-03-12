@@ -1,5 +1,12 @@
 import { resolveApiKey, getDifyBaseUrl } from './_shared.js';
 import { verifyAuth } from './_auth.js';
+import { getSupabaseAdmin } from './_supabase.js';
+import { chunkFileText } from './_chunking.js';
+import { generateEmbeddings } from './knowledge/embeddings.js';
+
+// Title of the Code node in both Dify chatflows that passes through File Extractor text.
+// The node emits a node_finished event with outputs.file_text = extracted file content.
+const FILE_TEXT_RELAY_NODE = 'File Text Relay';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,6 +18,7 @@ export default async function handler(req, res) {
     return res.status(auth.status).json({ error: auth.error });
   }
 
+  const userId = auth.user.sub;
   const { workflow, query, conversation_id, user, files, response_mode, inputs } = req.body;
   const { apiKey, usingFallback } = resolveApiKey(workflow || 'onboarding');
 
@@ -31,7 +39,7 @@ export default async function handler(req, res) {
         query,
         response_mode: response_mode || 'blocking',
         conversation_id: conversation_id || '',
-        user: user || auth.user.sub,
+        user: user || userId,
         files: files || [],
       }),
     });
@@ -57,13 +65,15 @@ export default async function handler(req, res) {
     const reader = difyResponse.body.getReader();
     const decoder = new TextDecoder();
     let sseBuffer = '';
+    let capturedFileText = null;
+    let capturedMessageId = null;
+
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         res.write(value);
 
-        // Temporary diagnostic: log all SSE events
         sseBuffer += decoder.decode(value, { stream: true });
         const lines = sseBuffer.split('\n');
         sseBuffer = lines.pop();
@@ -71,12 +81,43 @@ export default async function handler(req, res) {
           if (!line.startsWith('data:')) continue;
           try {
             const event = JSON.parse(line.slice(5).trim());
-            if (event.event === 'node_finished') {
-              console.log(`[chat/diag] node_finished title="${event.data?.title}" type="${event.data?.node_type}" outputs=${JSON.stringify(event.data?.outputs)}`);
-            } else {
-              console.log(`[chat/diag] event="${event.event}"`);
+            if (event.event === 'node_finished' && event.data?.title === FILE_TEXT_RELAY_NODE) {
+              capturedFileText = event.data?.outputs?.file_text || null;
+            } else if (event.event === 'message_end') {
+              capturedMessageId = event.message_id;
             }
           } catch (_) { /* ignore parse errors */ }
+        }
+      }
+
+      // Embed captured file text after stream completes, before closing the connection.
+      // Adds ~1-2s latency only on messages that include files.
+      if (capturedFileText && capturedMessageId) {
+        try {
+          const chunks = chunkFileText(capturedFileText, { file_name: `msg:${capturedMessageId}` });
+          if (chunks.length > 0) {
+            const embeddings = await generateEmbeddings(chunks.map((c) => c.content));
+            const rows = chunks.map((chunk, i) => ({
+              user_id: userId,
+              source_type: 'file',
+              source_id: capturedMessageId,
+              chunk_index: chunk.chunk_index ?? i,
+              content: chunk.content,
+              embedding: JSON.stringify(embeddings[i]),
+              metadata: { ...chunk.metadata, workflow: workflow || 'onboarding' },
+            }));
+            const supabase = getSupabaseAdmin();
+            const { error } = await supabase
+              .from('document_embeddings')
+              .upsert(rows, { onConflict: 'source_type,source_id,chunk_index' });
+            if (error) {
+              console.error('[chat] File embedding upsert failed:', error.message);
+            } else {
+              console.log(`[chat] Embedded ${rows.length} file chunks for message ${capturedMessageId}`);
+            }
+          }
+        } catch (embedErr) {
+          console.error('[chat] File embedding failed (non-fatal):', embedErr.message);
         }
       }
     } finally {
