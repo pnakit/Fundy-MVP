@@ -63,7 +63,7 @@ export default async function handler(req, res) {
         if (done) break;
         res.write(value);
 
-        // Parse SSE events to log node_finished outputs (temporary diagnostic)
+        // Temporary diagnostic: log all SSE events
         sseBuffer += decoder.decode(value, { stream: true });
         const lines = sseBuffer.split('\n');
         sseBuffer = lines.pop();
@@ -73,6 +73,8 @@ export default async function handler(req, res) {
             const event = JSON.parse(line.slice(5).trim());
             if (event.event === 'node_finished') {
               console.log(`[chat/diag] node_finished title="${event.data?.title}" type="${event.data?.node_type}" outputs=${JSON.stringify(event.data?.outputs)}`);
+            } else {
+              console.log(`[chat/diag] event="${event.event}"`);
             }
           } catch (_) { /* ignore parse errors */ }
         }
