@@ -611,10 +611,8 @@ export default function StartupPlatform() {
         );
 
         setUploadedFiles([]);
-        const prefix = response.fallback ? '[onboarding] ' : '';
-        const finalContent = prefix + response.message;
-        updateLastMessage(finalContent, { conversationId: response.conversationId });
-        persistConversationExchange('deepdive', categoryId, currentMessage, finalContent, response.conversationId);
+        updateLastMessage(response.message, { conversationId: response.conversationId });
+        persistConversationExchange('deepdive', categoryId, currentMessage, response.message, response.conversationId);
       } catch (error) {
         console.error('[deepdive/streaming] Send message failed:', error.message);
         updateLastMessage(CHAT_ERROR_MESSAGE);
@@ -627,8 +625,6 @@ export default function StartupPlatform() {
         );
 
         setUploadedFiles([]);
-        const prefix = response.fallback ? '[onboarding] ' : '';
-        const finalContent = prefix + response.message;
 
         setCategoryConversations(prev => {
           if (!prev[categoryId]) return prev;
@@ -638,12 +634,12 @@ export default function StartupPlatform() {
               conversationId: response.conversationId,
               messages: [
                 ...prev[categoryId].messages,
-                { role: 'assistant', content: finalContent }
+                { role: 'assistant', content: response.message }
               ],
             },
           };
         });
-        persistConversationExchange('deepdive', categoryId, currentMessage, finalContent, response.conversationId);
+        persistConversationExchange('deepdive', categoryId, currentMessage, response.message, response.conversationId);
       } catch (error) {
         console.error('[deepdive/blocking] Send message failed:', error.message);
         appendAssistant(CHAT_ERROR_MESSAGE);
@@ -799,14 +795,6 @@ export default function StartupPlatform() {
         <>
           <span className="mock-badge">mock</span>
           {msg.content.slice(7)}
-        </>
-      );
-    }
-    if (msg.content.startsWith('[onboarding] ')) {
-      return (
-        <>
-          <span className="onboarding-badge">onboarding</span>
-          {msg.content.slice(13)}
         </>
       );
     }
