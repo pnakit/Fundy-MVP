@@ -16,6 +16,8 @@
  */
 
 import { verifyAuth } from '../_auth.js';
+
+export const config = { runtime: 'edge' };
 import { getSupabaseAdmin } from '../_supabase.js';
 import { resolveApiKey } from '../_shared.js';
 import { chunkConversation } from '../_chunking.js';
@@ -149,79 +151,95 @@ const MOCK_INVESTMENT_RECOMMENDATIONS = {
   ],
 };
 
-export default async function handler(req, res) {
+export default async function handler(req) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   // Step 1: Authenticate user
   const auth = await verifyAuth(req);
   if (auth.error) {
-    return res.status(auth.status).json({ error: auth.error });
+    return new Response(JSON.stringify({ error: auth.error }), {
+      status: auth.status,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   const userId = auth.user.sub;
-  const { companyName, onboardingSummary } = req.body;
+  const { companyName, onboardingSummary } = await req.json();
 
   if (!companyName) {
-    return res.status(400).json({ error: 'companyName is required' });
+    return new Response(JSON.stringify({ error: 'companyName is required' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   // Step 2: Resolve Dify API key for evaluation workflow
   const { apiKey } = resolveApiKey('evaluation');
   const useMock = !apiKey || apiKey === resolveApiKey('onboarding').apiKey;
 
-  // Set up SSE response
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
+  // Set up SSE stream using Web Streams API (required for Edge Runtime)
+  const encoder = new TextEncoder();
 
-  const sendEvent = (event) => {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-  };
-
-  try {
-    if (useMock) {
-      // ── Mock mode: simulate evaluation from onboarding summary ──
-      sendEvent({ type: 'status', message: 'Mock mode — generating evaluation from onboarding data...' });
-
-      await streamMockEvaluation(sendEvent, onboardingSummary);
-    } else {
-      // ── Real mode: embed deep dive conversations, then run Dify workflow ──
-      // Dify's own iteration handles KB retrieval; we just ensure deep dive
-      // conversations are embedded so they're available for vector search.
-      sendEvent({ type: 'status', message: 'Preparing knowledge base...' });
-      await embedDeepDiveConversations(userId);
-
-      const inputs = {
-        company_name: companyName,
-        user_id: userId,
+  const stream = new ReadableStream({
+    async start(controller) {
+      const sendEvent = (event) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       };
 
-      sendEvent({ type: 'status', message: 'Starting evaluation workflow...' });
-      console.log(`[generate] Calling Dify workflow for user ${userId}, company="${companyName}"`);
+      try {
+        if (useMock) {
+          // ── Mock mode: simulate evaluation from onboarding summary ──
+          sendEvent({ type: 'status', message: 'Mock mode — generating evaluation from onboarding data...' });
 
-      for await (const event of streamEvaluation(inputs, apiKey, userId)) {
-        if (event.type === 'error') {
-          console.error(`[generate] Dify error event: ${event.message}`);
+          await streamMockEvaluation(sendEvent, onboardingSummary);
+        } else {
+          // ── Real mode: embed deep dive conversations, then run Dify workflow ──
+          // Dify's own iteration handles KB retrieval; we just ensure deep dive
+          // conversations are embedded so they're available for vector search.
+          sendEvent({ type: 'status', message: 'Preparing knowledge base...' });
+          await embedDeepDiveConversations(userId);
+
+          const inputs = {
+            company_name: companyName,
+            user_id: userId,
+          };
+
+          sendEvent({ type: 'status', message: 'Starting evaluation workflow...' });
+          console.log(`[generate] Calling Dify workflow for user ${userId}, company="${companyName}"`);
+
+          for await (const event of streamEvaluation(inputs, apiKey, userId)) {
+            if (event.type === 'error') {
+              console.error(`[generate] Dify error event: ${event.message}`);
+            }
+            sendEvent(event);
+            if (event.type === 'error' && !event.category_id) {
+              break;
+            }
+          }
+
+          console.log(`[generate] Dify workflow stream complete for user ${userId}`);
         }
-        sendEvent(event);
-        if (event.type === 'error' && !event.category_id) {
-          break;
-        }
+      } catch (err) {
+        console.error(`[generate] Uncaught error: ${err.message}`, err.stack);
+        sendEvent({ type: 'error', message: err.message || 'Evaluation generation failed' });
+      } finally {
+        controller.close();
       }
+    },
+  });
 
-      console.log(`[generate] Dify workflow stream complete for user ${userId}`);
-    }
-  } catch (err) {
-    console.error(`[generate] Uncaught error: ${err.message}`, err.stack);
-    sendEvent({ type: 'error', message: err.message || 'Evaluation generation failed' });
-  } finally {
-    res.end();
-  }
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+    },
+  });
 }
 
 /**

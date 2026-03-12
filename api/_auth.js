@@ -19,7 +19,9 @@ export async function verifyAuth(req) {
     return { error: 'SUPABASE_URL not configured', status: 500 };
   }
 
-  const authHeader = req.headers.authorization;
+  const authHeader = typeof req.headers.get === 'function'
+    ? req.headers.get('authorization')
+    : req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
   if (!token) {
