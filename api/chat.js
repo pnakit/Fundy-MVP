@@ -129,6 +129,9 @@ export default async function handler(req, res) {
       res.end();
     }
   } else {
+    if (files?.length > 0) {
+      console.warn(`[chat] Blocking mode with ${files.length} file(s) — file text cannot be embedded (no SSE node events). Switch to streaming mode to enable file embedding.`);
+    }
     const data = await difyResponse.json();
     res.status(200).json({ ...data, _fallback: usingFallback });
   }

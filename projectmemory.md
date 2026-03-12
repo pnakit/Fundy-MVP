@@ -511,11 +511,63 @@ dashboard.
 
 ---
 
+## v3.6 — Deep-Dive Chatflow, File Embedding, Evaluation Action Item Merge (Mar 2026)
+
+### What changed
+
+**Deep-dive dedicated Dify chatflow**
+- `DIFY_DEEPDIVE_API_KEY` now routes deep-dive conversations to a separate Dify chatflow
+  (distinct from onboarding). Previously fell back to the onboarding key.
+- Removed `[onboarding]` fallback badge from messages and CSS (dead code).
+
+**File upload improvements**
+- `src/utils/fileUpload.js`: added `DIFY_MAX_FILES=10` and `DIFY_MAX_FILE_SIZE_MB=15` constants.
+  `uploadFiles()` pre-validates file size before upload; returns `oversized: [{name, sizeMB}]`.
+- Both `handleFileUpload` and `handleDeepDiveFileUpload` in App.jsx validate file count and size
+  with specific user-facing error messages.
+- `buildUploadMessages` success note updated to include limits.
+
+**File text embedding (streaming path)**
+- `api/chat.js` now parses SSE events server-side while forwarding the stream to the client.
+- A Code node titled `"File Text Relay"` in the Dify chatflow emits a `node_finished` event
+  with `outputs.file_text` = the concatenated File Extractor output (joined from list to string).
+- Server captures this text + the `message_id` from `message_end`, then after stream close:
+  chunks with `chunkFileText()`, embeds with OpenAI `text-embedding-3-small`, upserts to
+  `document_embeddings` with `source_type='file'`, `source_id=message_id`.
+- Non-fatal: stream always closes normally even if embedding fails.
+- **Requires streaming mode**: only works when `response_mode=streaming`. Ensure
+  `VITE_DIFY_STREAMING=true` is set in Vercel env vars and redeployed so client uses streaming.
+  A `console.warn` fires if files are sent in blocking mode (so this is detectable in logs).
+
+**Evaluation action item merge**
+- `api/evaluation/save.js`: accepts optional `actionItems` array. Fetches existing `action_key`s
+  for the user, inserts only items whose `actionKey` is not already present. Preserves user edits
+  on re-evaluation. Returns `actionItemsAdded` count.
+- `src/App.jsx` `persistEvaluation`: passes evaluation-sourced action items from state.
+  Currently a no-op (Dify evaluation workflow doesn't emit action items yet); merge logic is
+  ready for when it does.
+
+### Dify chatflow setup notes
+
+- `File Text Relay` Code node: input variable type must be `Array[String]` (not plain String).
+  Output: `"\n\n---\n\n".join(str(t) for t in file_text)` — joins File Extractor list to string.
+- File Extractor node output key is `text` (a list, one entry per uploaded file).
+- Deep-dive chatflow must have streaming enabled in Dify Studio (Response mode: Streaming)
+  for `node_finished` events to appear in the SSE stream.
+
+---
+
 ## Next Steps (priority order)
 
 ### Immediate
 
-1. **Evaluation quality verification** — with a real user account (not seeded data), run the full
+1. **Verify file embedding end-to-end** — with streaming mode active in production, upload a file
+   in deep-dive chat and confirm Vercel logs show:
+   `[chat] node_finished title="File Text Relay"` → `[chat] captured file text length=...`
+   → `[chat] Embedded N file chunks for message msg_...`
+   Then run evaluation to confirm the file content appears in KB retrieval context.
+
+2. **Evaluation quality verification** — with a real user account (not seeded data), run the full
    onboarding → summary → evaluation flow and confirm:
    - Vercel logs show `context_*` variables populated in Dify inputs (non-empty KB retrieval)
    - Evaluation results reference company-specific facts, not generic text
