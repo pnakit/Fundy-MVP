@@ -55,11 +55,27 @@ export default async function handler(req, res) {
     }
 
     const reader = difyResponse.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = '';
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         res.write(value);
+
+        // Parse SSE events to log node_finished outputs (temporary diagnostic)
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          try {
+            const event = JSON.parse(line.slice(5).trim());
+            if (event.event === 'node_finished') {
+              console.log(`[chat/diag] node_finished title="${event.data?.title}" type="${event.data?.node_type}" outputs=${JSON.stringify(event.data?.outputs)}`);
+            }
+          } catch (_) { /* ignore parse errors */ }
+        }
       }
     } finally {
       res.end();
