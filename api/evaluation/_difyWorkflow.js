@@ -171,6 +171,11 @@ function transformDifyEvent(event) {
     if (nodeTitle === 'workflow_evaluating') {
       return { type: 'status', message: outputs.status || 'Evaluating categories...' };
     }
+    // Phase 2 keepalive — fires right before investment_recommendations LLM starts,
+    // resetting the idle timer to give the LLM a full 60s window.
+    if (nodeTitle === 'generate_matrix') {
+      return { type: 'status', message: 'Matching investment profiles...' };
+    }
 
     return null;
   }
