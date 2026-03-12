@@ -32,9 +32,12 @@ export async function* streamEvaluation(inputs, apiKey, userId) {
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error(`[_difyWorkflow] Dify API error ${response.status}: ${errorText}`);
     yield { type: 'error', message: `Dify API error (${response.status}): ${errorText}` };
     return;
   }
+
+  console.log('[_difyWorkflow] Dify stream opened, reading events...');
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
