@@ -1,19 +1,32 @@
 import DifyAPI from '../api/difyApi';
 
+export const DIFY_MAX_FILES = 10;
+export const DIFY_MAX_FILE_SIZE_MB = 15;
+const DIFY_MAX_FILE_SIZE_BYTES = DIFY_MAX_FILE_SIZE_MB * 1024 * 1024;
+
 /**
  * Upload files to Dify and return results.
+ *
+ * Pre-validates file sizes before uploading. Files exceeding DIFY_MAX_FILE_SIZE_MB
+ * are rejected client-side without hitting the API.
  *
  * @param {File[]} files - Array of File objects to upload
  * @param {string} [user='default-user'] - Dify user ID
  * @param {string} [workflow='onboarding'] - Dify workflow name
- * @returns {Promise<{ succeeded: string[], failed: string[], uploadedFiles: Array<{fileId: string, fileName: string}> }>}
+ * @returns {Promise<{ succeeded: string[], failed: string[], oversized: Array<{name: string, sizeMB: number}>, uploadedFiles: Array<{fileId: string, fileName: string}> }>}
  */
 export async function uploadFiles(files, user = 'default-user', workflow = 'onboarding') {
   const succeeded = [];
   const failed = [];
+  const oversized = [];
   const uploadedFiles = [];
 
   for (const file of files) {
+    if (file.size > DIFY_MAX_FILE_SIZE_BYTES) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      oversized.push({ name: file.name, sizeMB: parseFloat(sizeMB) });
+      continue;
+    }
     try {
       const result = await DifyAPI.uploadFile(file, user, workflow);
       uploadedFiles.push({ fileId: result.fileId, fileName: file.name });
@@ -24,7 +37,7 @@ export async function uploadFiles(files, user = 'default-user', workflow = 'onbo
     }
   }
 
-  return { succeeded, failed, uploadedFiles };
+  return { succeeded, failed, oversized, uploadedFiles };
 }
 
 /**
@@ -42,7 +55,7 @@ export function buildUploadMessages(succeeded, context = 'evaluation') {
     : context === 'onboarding' ? 'our conversation'
     : 'your evaluation';
 
-  const message = `I've received ${namesStr}. Send a message to incorporate ${pronoun} into ${contextWord}.`;
+  const message = `I've received ${namesStr}. Send a message to incorporate ${pronoun} into ${contextWord}. (Max ${DIFY_MAX_FILES} files per message, ${DIFY_MAX_FILE_SIZE_MB}MB each.)`;
 
   let prompt;
   if (context === 'onboarding') {

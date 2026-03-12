@@ -42,7 +42,7 @@ import {
 } from './api/dataAccess';
 import ErrorBoundary from './components/ErrorBoundary';
 import { addInvestmentActions, removeInvestmentActions } from './utils/actionItems';
-import { uploadFiles, buildUploadMessages } from './utils/fileUpload';
+import { uploadFiles, buildUploadMessages, DIFY_MAX_FILES, DIFY_MAX_FILE_SIZE_MB } from './utils/fileUpload';
 import { generateEvaluation } from './api/evaluationApi';
 
 const CHAT_ERROR_MESSAGE = 'I apologize, but I encountered an error. Please try again.';
@@ -438,17 +438,16 @@ export default function StartupPlatform() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
-    const DIFY_FILE_LIMIT = 3;
-    if (uploadedFiles.length + files.length > DIFY_FILE_LIMIT) {
-      const remaining = DIFY_FILE_LIMIT - uploadedFiles.length;
+    if (uploadedFiles.length + files.length > DIFY_MAX_FILES) {
+      const remaining = DIFY_MAX_FILES - uploadedFiles.length;
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
           content:
             remaining > 0
-              ? `Dify supports a maximum of ${DIFY_FILE_LIMIT} files per message. You have ${uploadedFiles.length} file(s) pending — you can add ${remaining} more. Send your message first to free up space.`
-              : `Dify supports a maximum of ${DIFY_FILE_LIMIT} files per message. Please send your current message before uploading more files.`,
+              ? `You can attach up to ${DIFY_MAX_FILES} files per message. You have ${uploadedFiles.length} file(s) pending — you can add ${remaining} more. Send your message first to free up space.`
+              : `You've reached the ${DIFY_MAX_FILES}-file limit for this message. Please send it first before uploading more files.`,
           isError: true,
         },
       ]);
@@ -459,7 +458,7 @@ export default function StartupPlatform() {
     setMessages((prev) => [...prev, { role: 'user', content: `Uploaded: ${files.map((f) => f.name).join(', ')}`, isFile: true }]);
     setIsTyping(true);
 
-    const { succeeded, failed, uploadedFiles: newFiles } = await uploadFiles(files);
+    const { succeeded, failed, oversized, uploadedFiles: newFiles } = await uploadFiles(files);
     setUploadedFiles((prev) => [...prev, ...newFiles]);
 
     if (succeeded.length > 0) {
@@ -468,8 +467,13 @@ export default function StartupPlatform() {
       setInputValue(prompt);
     }
 
+    if (oversized.length > 0) {
+      const details = oversized.map((f) => `"${f.name}" (${f.sizeMB}MB)`).join(', ');
+      setMessages((prev) => [...prev, { role: 'assistant', content: `${details} exceeded the ${DIFY_MAX_FILE_SIZE_MB}MB file size limit and was not uploaded.`, isError: true }]);
+    }
+
     if (failed.length > 0) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: `There was an issue uploading: ${failed.join(', ')}. Please try again.`, isError: true }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `Failed to upload: ${failed.join(', ')}. Please try again.`, isError: true }]);
     }
 
     setIsTyping(false);
@@ -654,9 +658,8 @@ export default function StartupPlatform() {
 
     const categoryId = activeCategory;
 
-    const DIFY_FILE_LIMIT = 3;
-    if (uploadedFiles.length + files.length > DIFY_FILE_LIMIT) {
-      const remaining = DIFY_FILE_LIMIT - uploadedFiles.length;
+    if (uploadedFiles.length + files.length > DIFY_MAX_FILES) {
+      const remaining = DIFY_MAX_FILES - uploadedFiles.length;
       setCategoryConversations((prev) => {
         if (!prev[categoryId]) return prev;
         return {
@@ -669,8 +672,8 @@ export default function StartupPlatform() {
                 role: 'assistant',
                 content:
                   remaining > 0
-                    ? `Dify supports a maximum of ${DIFY_FILE_LIMIT} files per message. You have ${uploadedFiles.length} file(s) pending — you can add ${remaining} more. Send your message first to free up space.`
-                    : `Dify supports a maximum of ${DIFY_FILE_LIMIT} files per message. Please send your current message before uploading more files.`,
+                    ? `You can attach up to ${DIFY_MAX_FILES} files per message. You have ${uploadedFiles.length} file(s) pending — you can add ${remaining} more. Send your message first to free up space.`
+                    : `You've reached the ${DIFY_MAX_FILES}-file limit for this message. Please send it first before uploading more files.`,
                 isError: true,
               },
             ],
@@ -693,7 +696,7 @@ export default function StartupPlatform() {
     });
     setIsTyping(true);
 
-    const { succeeded, failed, uploadedFiles: newFiles } = await uploadFiles(files, 'default-user', 'deepdive');
+    const { succeeded, failed, oversized, uploadedFiles: newFiles } = await uploadFiles(files, 'default-user', 'deepdive');
     setUploadedFiles((prev) => [...prev, ...newFiles]);
 
     if (succeeded.length > 0) {
@@ -711,6 +714,20 @@ export default function StartupPlatform() {
       setInputValue(prompt);
     }
 
+    if (oversized.length > 0) {
+      const details = oversized.map((f) => `"${f.name}" (${f.sizeMB}MB)`).join(', ');
+      setCategoryConversations((prev) => {
+        if (!prev[categoryId]) return prev;
+        return {
+          ...prev,
+          [categoryId]: {
+            ...prev[categoryId],
+            messages: [...prev[categoryId].messages, { role: 'assistant', content: `${details} exceeded the ${DIFY_MAX_FILE_SIZE_MB}MB file size limit and was not uploaded.`, isError: true }],
+          },
+        };
+      });
+    }
+
     if (failed.length > 0) {
       setCategoryConversations((prev) => {
         if (!prev[categoryId]) return prev;
@@ -718,7 +735,7 @@ export default function StartupPlatform() {
           ...prev,
           [categoryId]: {
             ...prev[categoryId],
-            messages: [...prev[categoryId].messages, { role: 'assistant', content: `There was an issue uploading: ${failed.join(', ')}. Please try again.`, isError: true }],
+            messages: [...prev[categoryId].messages, { role: 'assistant', content: `Failed to upload: ${failed.join(', ')}. Please try again.`, isError: true }],
           },
         };
       });
