@@ -323,12 +323,144 @@ describe('error handling', () => {
     expect(events[0].category_id).toBe('product_technology');
   });
 
-  it('ignores node_started for non-eval nodes', async () => {
+  it('ignores node_started for non-eval, non-investment nodes', async () => {
     global.fetch = mockFetchOk([
       { event: 'node_started', data: { title: 'Code 1 (define_categories)' } },
     ]);
 
     const events = await collectEvents(streamEvaluation({}, 'key', 'user'));
     expect(events).toHaveLength(0);
+  });
+});
+
+// ─── Investment matching events ───────────────────────────────────────────────
+
+describe('investment matching events', () => {
+  it('emits investment_matching_started when calculate_maturity node starts', async () => {
+    global.fetch = mockFetchOk([
+      { event: 'node_started', data: { title: 'calculate_maturity' } },
+    ]);
+
+    const events = await collectEvents(streamEvaluation({}, 'key', 'user'));
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('investment_matching_started');
+  });
+
+  it('emits maturity_calculated when calculate_maturity node finishes', async () => {
+    global.fetch = mockFetchOk([
+      {
+        event: 'node_finished',
+        data: {
+          title: 'calculate_maturity',
+          outputs: {
+            maturity_score: 320,
+            maturity_stage: 'early_traction',
+            maturity_label: 'Early Traction (201-400)',
+            performance_level: 'average',
+            performance_label: 'Average',
+            overall_completeness: 55,
+          },
+        },
+      },
+    ]);
+
+    const events = await collectEvents(streamEvaluation({}, 'key', 'user'));
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('maturity_calculated');
+    expect(events[0].data.maturity_score).toBe(320);
+    expect(events[0].data.maturity_stage).toBe('early_traction');
+    expect(events[0].data.performance_level).toBe('average');
+    expect(events[0].data.overall_completeness).toBe(55);
+  });
+
+  it('emits investment_recommendations_complete when outputs contain investment_readiness_summary', async () => {
+    const investmentOutput = {
+      investment_readiness_summary: { assessment: 'Strong early signals.', primary_recommendation: 'Pre-Seed', readiness_score: 'Moderate' },
+      recommended_funding: [{ investment_type: 'pre_seed', rating: 'strong_fit', fit_explanation: 'Good fit.' }],
+      conditional_options: [],
+      improvement_roadmap: [],
+      not_recommended: [],
+      next_steps: [{ priority: 1, action: 'Build pitch deck', timeline: '2 weeks', expected_outcome: 'Investor materials ready' }],
+    };
+
+    global.fetch = mockFetchOk([
+      {
+        event: 'node_finished',
+        data: {
+          title: 'investment_recommendations',
+          outputs: investmentOutput,
+        },
+      },
+    ]);
+
+    const events = await collectEvents(streamEvaluation({}, 'key', 'user'));
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('investment_recommendations_complete');
+    expect(events[0].data.investment_readiness_summary.readiness_score).toBe('Moderate');
+    expect(events[0].data.next_steps).toHaveLength(1);
+  });
+
+  it('emits status event when generate_matrix node finishes (Phase 2 keepalive)', async () => {
+    global.fetch = mockFetchOk([
+      {
+        event: 'node_finished',
+        data: {
+          title: 'generate_matrix',
+          outputs: { recommendations_json: '{}', suitable_types: '[]' },
+        },
+      },
+    ]);
+
+    const events = await collectEvents(streamEvaluation({}, 'key', 'user'));
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('status');
+    expect(events[0].message).toBe('Matching investment profiles...');
+  });
+});
+
+// ─── Case-insensitive node title matching ─────────────────────────────────────
+
+describe('case-insensitive node title matching', () => {
+  it('matches CALCULATE_MATURITY (uppercase) as investment_matching_started', async () => {
+    global.fetch = mockFetchOk([
+      { event: 'node_started', data: { title: 'CALCULATE_MATURITY' } },
+    ]);
+    const events = await collectEvents(streamEvaluation({}, 'key', 'user'));
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('investment_matching_started');
+  });
+
+  it('matches CALCULATE_MATURITY (uppercase) node_finished as maturity_calculated', async () => {
+    global.fetch = mockFetchOk([
+      {
+        event: 'node_finished',
+        data: {
+          title: 'CALCULATE_MATURITY',
+          outputs: { maturity_score: 300, maturity_stage: 'early_traction', maturity_label: 'L', performance_level: 'average', performance_label: 'P', overall_completeness: 50 },
+        },
+      },
+    ]);
+    const events = await collectEvents(streamEvaluation({}, 'key', 'user'));
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('maturity_calculated');
+  });
+
+  it('matches GENERATE_MATRIX (uppercase) as status keepalive', async () => {
+    global.fetch = mockFetchOk([
+      { event: 'node_finished', data: { title: 'GENERATE_MATRIX', outputs: {} } },
+    ]);
+    const events = await collectEvents(streamEvaluation({}, 'key', 'user'));
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('status');
+  });
+
+  it('matches EVAL_PRODUCT_TECHNOLOGY (uppercase) as category_started', async () => {
+    global.fetch = mockFetchOk([
+      { event: 'node_started', data: { title: 'EVAL_PRODUCT_TECHNOLOGY' } },
+    ]);
+    const events = await collectEvents(streamEvaluation({}, 'key', 'user'));
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('category_started');
+    expect(events[0].category_id).toBe('product_technology');
   });
 });

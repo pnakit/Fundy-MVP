@@ -56,6 +56,10 @@ export async function* streamEvaluation(inputs, apiKey, userId) {
         const event = parseSSELine(line);
         if (!event) continue;
 
+        if (event.event === 'node_started' || event.event === 'node_finished') {
+          console.log('[_difyWorkflow] node event:', event.event, JSON.stringify(event.data?.title));
+        }
+
         const transformed = transformDifyEvent(event);
         if (transformed) {
           yield transformed;
@@ -105,7 +109,7 @@ function transformDifyEvent(event) {
   const eventType = event.event;
 
   if (eventType === 'node_started') {
-    const nodeTitle = event.data?.title || '';
+    const nodeTitle = (event.data?.title || '').toLowerCase();
     const categoryId = extractCategoryFromNodeTitle(nodeTitle);
     if (categoryId) {
       return { type: 'category_started', category_id: categoryId };
@@ -117,7 +121,7 @@ function transformDifyEvent(event) {
   }
 
   if (eventType === 'node_finished') {
-    const nodeTitle = event.data?.title || '';
+    const nodeTitle = (event.data?.title || '').toLowerCase();
     const outputs = event.data?.outputs || {};
 
     // Category evaluation node (eval_* prefix)
