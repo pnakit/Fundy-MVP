@@ -20,6 +20,7 @@ export default async function handler(req, res) {
 
   const userId = auth.user.sub;
   const { workflow, query, conversation_id, user, files, response_mode, inputs } = req.body;
+  console.log(`[chat] REQUEST workflow=${workflow} mode=${response_mode} files=${files?.length ?? 0}`);
   const { apiKey, usingFallback } = resolveApiKey(workflow || 'onboarding');
 
   if (!apiKey) {
