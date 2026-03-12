@@ -554,6 +554,15 @@ dashboard.
 - File Extractor node output key is `text` (a list, one entry per uploaded file).
 - Deep-dive chatflow must have streaming enabled in Dify Studio (Response mode: Streaming)
   for `node_finished` events to appear in the SSE stream.
+- Workflow-based chatflows emit `workflow_finished` (not `message_end`) — `message_id` is at
+  the top level. Both event types are handled in `api/chat.js`.
+- Deep-dive always streams (not gated on `VITE_DIFY_STREAMING`); only `VITE_DIFY_MOCK=true`
+  triggers the blocking fallback path.
+
+### Verified end-to-end (v3.6)
+
+File upload in deep-dive → 28 file chunks embedded into `document_embeddings` with
+`source_type='file'`, `source_id=<message_id>`. Evaluation KB retrieval will now find file content.
 
 ---
 
@@ -561,13 +570,7 @@ dashboard.
 
 ### Immediate
 
-1. **Verify file embedding end-to-end** — with streaming mode active in production, upload a file
-   in deep-dive chat and confirm Vercel logs show:
-   `[chat] node_finished title="File Text Relay"` → `[chat] captured file text length=...`
-   → `[chat] Embedded N file chunks for message msg_...`
-   Then run evaluation to confirm the file content appears in KB retrieval context.
-
-2. **Evaluation quality verification** — with a real user account (not seeded data), run the full
+1. **Evaluation quality verification** — with a real user account (not seeded data), run the full
    onboarding → summary → evaluation flow and confirm:
    - Vercel logs show `context_*` variables populated in Dify inputs (non-empty KB retrieval)
    - Evaluation results reference company-specific facts, not generic text
