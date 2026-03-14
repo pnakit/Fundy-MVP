@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **IMPORTANT: Before starting any large project action, read `projectmemory.md` for context on past decisions and the app's evolution.**
 
+**IMPORTANT: Before building, modifying, or wiring up any Dify workflow — including node design, variable bindings, output type declarations, or SSE event handling — read `DifyTactics.md` first.**
+
 ## Build & Development Commands
 
 - `npm run dev` — Start Vite dev server (http://localhost:5173)

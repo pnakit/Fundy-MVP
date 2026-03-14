@@ -166,6 +166,24 @@ function transformDifyEvent(event) {
       return { type: 'investment_recommendations_complete', data: outputs };
     }
 
+    // Fallback: LLM outputs raw JSON text (no parse_recommendations Code node needed).
+    // Handles cases where Dify's type coercion prevents a downstream Code node from
+    // receiving the LLM text as a plain string.
+    if (outputs.text) {
+      try {
+        let text = outputs.text.trim();
+        const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (fenceMatch) text = fenceMatch[1].trim();
+        const parsed = JSON.parse(text);
+        if (parsed.investment_readiness_summary) {
+          console.log('[_difyWorkflow] investment_recommendations_complete parsed from LLM text');
+          return { type: 'investment_recommendations_complete', data: parsed };
+        }
+      } catch (_e) {
+        // Not parseable JSON — not the investment LLM node
+      }
+    }
+
     // Kickstart nodes — fire at two silent points to keep the SSE connection alive:
     //   workflow_kickstart   → before KB Iteration (~1s in)
     //   workflow_evaluating  → after KB Iteration / before 10 LLMs (~10-20s in)
