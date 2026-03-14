@@ -1915,65 +1915,71 @@ export default function StartupPlatform() {
             </div>
           )}
 
-          {/* Investment & Due Diligence Action Items */}
-          {(investmentActions.length > 0 || dueDiligenceItems.length > 0) && (
+          {/* Investment Readiness Action Items — always visible when LLM next_steps exist */}
+          {investmentActions.length > 0 && (
             <div className="invest-actions-section" ref={investmentActionsRef}>
               <h3 className="invest-section-heading">
-                Action Items <span className="action-count">{investmentActionCount} pending</span>
+                Investment Readiness Actions <span className="action-count">{investmentActions.filter((a) => a.status !== 'completed').length} pending</span>
               </h3>
-
-              {/* Investment Readiness sub-section */}
-              {investmentActions.length > 0 && (
-                <>
-                  <div className="invest-dd-group-heading">Investment Readiness</div>
-                  <div className="action-cards">
-                    {investmentActions.map((action) => (
-                      <div
-                        key={action.id}
-                        className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
-                      >
-                        <div className="action-card-header" onClick={() => { const opening = expandedAction !== action.id; setExpandedAction(opening ? action.id : null); if (opening) initActionConversation(action); }}>
-                          <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
-                          <div className="action-info">
-                            <h4>{action.title}</h4>
-                            <p>{action.description}</p>
-                          </div>
-                          <div className="action-meta">
-                            <span className={`action-status ${action.status}`}>{action.status.replace('_', ' ')}</span>
-                          </div>
-                          <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
-                        </div>
-                        {expandedAction === action.id && (
-                          <div className="action-card-body">
-                            <div className="action-chat-container">
-                              <ChatPanel
-                                messages={actionConversations[action.id]?.messages || []}
-                                isTyping={actionTyping === action.id}
-                                inputValue={actionConversations[action.id]?.inputValue || ''}
-                                onInputChange={(v) => handleActionChatInputChange(action.id, v)}
-                                onSend={() => handleActionChatSend(action.id)}
-                                onFileUpload={(e) => handleActionChatFileUpload(action.id, e)}
-                                placeholder="Ask for guidance, add notes, or upload documentation..."
-                              />
-                            </div>
-                            <div className="action-buttons">
-                              <button className="btn-complete" onClick={() => handleMarkComplete(action.id)}>Mark Complete</button>
-                            </div>
-                          </div>
-                        )}
+              <p className="invest-section-subtext">General steps to improve your investment readiness, regardless of which funding type you pursue.</p>
+              <div className="action-cards">
+                {investmentActions.map((action) => (
+                  <div
+                    key={action.id}
+                    className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
+                  >
+                    <div className="action-card-header" onClick={() => { const opening = expandedAction !== action.id; setExpandedAction(opening ? action.id : null); if (opening) initActionConversation(action); }}>
+                      <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
+                      <div className="action-info">
+                        <h4>{action.title}</h4>
+                        <p>{action.description}</p>
                       </div>
-                    ))}
+                      <div className="action-meta">
+                        <span className={`action-status ${action.status}`}>{action.status.replace('_', ' ')}</span>
+                      </div>
+                      <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
+                    </div>
+                    {expandedAction === action.id && (
+                      <div className="action-card-body">
+                        <div className="action-chat-container">
+                          <ChatPanel
+                            messages={actionConversations[action.id]?.messages || []}
+                            isTyping={actionTyping === action.id}
+                            inputValue={actionConversations[action.id]?.inputValue || ''}
+                            onInputChange={(v) => handleActionChatInputChange(action.id, v)}
+                            onSend={() => handleActionChatSend(action.id)}
+                            onFileUpload={(e) => handleActionChatFileUpload(action.id, e)}
+                            placeholder="Ask for guidance, add notes, or upload documentation..."
+                          />
+                        </div>
+                        <div className="action-buttons">
+                          <button className="btn-complete" onClick={() => handleMarkComplete(action.id)}>Mark Complete</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </>
-              )}
+                ))}
+              </div>
+            </div>
+          )}
 
-              {/* Due Diligence sub-sections grouped by investment type */}
+          {/* Due Diligence checklists — one group per pursued investment, shown only when pursuing */}
+          {selectedInvestments.some((id) => dueDiligenceItems.some((a) => a.sourceId === id)) && (
+            <div className="invest-dd-section">
+              <h3 className="invest-section-heading">
+                Due Diligence <span className="action-count">{dueDiligenceItems.filter((a) => a.status !== 'completed').length} pending</span>
+              </h3>
+              <p className="invest-section-subtext">Documents and evidence required for each funding type you are actively pursuing.</p>
               {selectedInvestments.map((invId) => {
                 const ddItems = dueDiligenceItems.filter((a) => a.sourceId === invId);
                 if (ddItems.length === 0) return null;
+                const pendingCount = ddItems.filter((a) => a.status !== 'completed').length;
                 return (
                   <div key={invId} className="invest-dd-group">
-                    <div className="invest-dd-group-heading">{investmentTypeNames[invId] || invId} — Due Diligence</div>
+                    <div className="invest-dd-group-heading">
+                      {investmentTypeNames[invId] || invId}
+                      <span className="invest-dd-count">{pendingCount} of {ddItems.length} remaining</span>
+                    </div>
                     <div className="action-cards">
                       {ddItems.map((action) => (
                         <div
@@ -1981,7 +1987,7 @@ export default function StartupPlatform() {
                           className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
                         >
                           <div className="action-card-header" onClick={() => { const opening = expandedAction !== action.id; setExpandedAction(opening ? action.id : null); if (opening) initActionConversation(action); }}>
-                            <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
+                            <div className={`action-priority-dot dd-doc ${action.priority}`}></div>
                             <div className="action-info">
                               <h4>{action.title}</h4>
                               <p>{action.description}</p>
@@ -2001,7 +2007,7 @@ export default function StartupPlatform() {
                                   onInputChange={(v) => handleActionChatInputChange(action.id, v)}
                                   onSend={() => handleActionChatSend(action.id)}
                                   onFileUpload={(e) => handleActionChatFileUpload(action.id, e)}
-                                  placeholder="Ask for guidance, add notes, or upload documentation..."
+                                  placeholder="Upload this document or ask for guidance..."
                                 />
                               </div>
                               <div className="action-buttons">

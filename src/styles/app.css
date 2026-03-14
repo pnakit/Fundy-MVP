@@ -1734,25 +1734,64 @@ body {
   margin-top: 12px;
 }
 
-/* Due Diligence sections */
+.invest-section-subtext {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 4px 0 14px;
+  line-height: 1.5;
+}
+
+/* Due Diligence section */
+.invest-dd-section {
+  margin-top: 32px;
+  padding-top: 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
 .invest-dd-group {
-  margin-top: 24px;
+  margin-top: 20px;
 }
 
 .invest-dd-group-heading {
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.35);
-  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 10px;
   padding-left: 2px;
+}
+
+.invest-dd-count {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.28);
+  margin-left: auto;
 }
 
 .invest-dd-group .action-cards {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* DD document indicator — neutral teal dot, dimmed when completed */
+.action-priority-dot.dd-doc {
+  background: rgba(20, 184, 166, 0.7) !important;
+  flex-shrink: 0;
+}
+
+.action-priority-dot.dd-doc.high {
+  background: rgba(20, 184, 166, 0.85) !important;
+}
+
+.action-priority-dot.dd-doc.medium {
+  background: rgba(20, 184, 166, 0.5) !important;
 }
 
 /* Clickable Action Items summary badge */
