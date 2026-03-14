@@ -1137,7 +1137,9 @@ export default function StartupPlatform() {
             ...prev,
             overallMaturity: { level: maturityLevel, name: maturityNames[data.maturity_stage] || prev.overallMaturity?.name || '—' },
             overallPerformance: {
-              score: Math.round((data.overall_completeness / 20) * 10) / 10,
+              score: data.overall_completeness > 0
+                ? Math.round((data.overall_completeness / 20) * 10) / 10
+                : prev.overallPerformance?.score ?? 0,
               label: perfLabels[data.performance_level] || prev.overallPerformance?.label || '—',
             },
           };
@@ -1146,6 +1148,15 @@ export default function StartupPlatform() {
       onInvestmentRecommendationsComplete: (data) => {
         capturedInvestmentRecommendations = data;
         setInvestmentData(data);
+        // Re-save evaluation now that Phase 2 investment data is available.
+        // persistEvaluation is called in result.success before this callback fires,
+        // so capturedInvestmentRecommendations was null at that point — re-save here.
+        setEvaluationData((prev) => {
+          if (prev?.dimensions?.length) {
+            persistEvaluation(prev, data);
+          }
+          return prev;
+        });
         // Auto-add next_steps as investment action items, replacing any previous ones
         const nextSteps = data.next_steps || [];
         if (nextSteps.length > 0) {
@@ -1292,9 +1303,9 @@ export default function StartupPlatform() {
                   className="eval-generate-btn"
                   onClick={handleGenerateEvaluation}
                   disabled={!onboardingSummary}
-                  title={onboardingSummary ? 'Generate AI evaluation' : 'Complete onboarding first'}
+                  title={onboardingSummary ? 'Generate AI evaluation and investment recommendations' : 'Complete onboarding first'}
                 >
-                  Generate Evaluation
+                  Generate Evaluation &amp; Investment Recommendation
                 </button>
               </>
             )}
@@ -1345,7 +1356,7 @@ export default function StartupPlatform() {
                 </div>
               </div>
               <div className="eval-overall-box">
-                <span className="eval-overall-label">Progress</span>
+                <span className="eval-overall-label">Overall Progress</span>
                 <span className="eval-overall-value">
                   {evaluationData?.overallPerformance?.score} <span className="eval-overall-unit">/ 5</span>
                 </span>
@@ -1485,76 +1496,6 @@ export default function StartupPlatform() {
                 </div>
               ))}
 
-              {investmentActions.length > 0 && (
-                <div className="action-dimension-group">
-                  <div className="action-dimension-header">
-                    <span>💰</span>
-                    <span className="action-dimension-name">Investment Actions</span>
-                  </div>
-                  {investmentActions.map((action) => (
-                    <div
-                      key={action.id}
-                      className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
-                    >
-                      <div className="action-card-header" onClick={() => setExpandedAction(expandedAction === action.id ? null : action.id)}>
-                        <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
-                        <div className="action-info">
-                          <h4>{action.title}</h4>
-                          <p>{action.description}</p>
-                        </div>
-                        <div className="action-meta">
-                          <span className={`action-status ${action.status}`}>
-                            {action.status.replace('_', ' ')}
-                          </span>
-                        </div>
-                        <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
-                      </div>
-
-                      {expandedAction === action.id && (
-                        <div className="action-card-body">
-                          <div className="action-input-group">
-                            <label>Notes / Response</label>
-                            <textarea
-                              value={action.inputs.notes || ''}
-                              onChange={(e) => handleActionInput(action.id, 'notes', e.target.value)}
-                              placeholder="Add your notes or response here..."
-                            />
-                          </div>
-
-                          <div className="action-files">
-                            <label>Attachments</label>
-                            <div className="file-upload-zone">
-                              <input
-                                type="file"
-                                id={`file-${action.id}`}
-                                onChange={(e) => handleActionFileUpload(action.id, e)}
-                                style={{ display: 'none' }}
-                              />
-                              <label htmlFor={`file-${action.id}`} className="file-upload-btn">
-                                <span>📎</span> Upload File
-                              </label>
-                              {action.files.map((file, idx) => (
-                                <div key={idx} className="uploaded-file-chip">
-                                  📄 {file.name}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="action-buttons">
-                            <button
-                              className="btn-complete"
-                              onClick={() => handleMarkComplete(action.id)}
-                            >
-                              Mark Complete
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
           </>
@@ -1587,17 +1528,36 @@ export default function StartupPlatform() {
             <p>Run an evaluation to see personalized investment recommendations</p>
           </div>
           <div className="invest-content">
-            <div style={{ textAlign: 'center', padding: '60px 24px', color: 'rgba(255,255,255,0.4)' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-              <p style={{ margin: 0, fontSize: 15 }}>Investment recommendations will appear here after you generate an evaluation in the Evaluation tab.</p>
-            </div>
+            {evaluationLoading ? (
+              <div className="eval-progress-indicator" style={{ justifyContent: 'center', padding: '60px 24px' }}>
+                <span className="eval-progress-icon">&#10022;</span>
+                <span>{evaluationStatus || 'Evaluating...'}</span>
+                <span className="eval-progress-count">{evaluationProgress.size}/10</span>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+                <p style={{ margin: '0 0 20px', fontSize: 15, color: 'rgba(255,255,255,0.4)' }}>
+                  Run a full evaluation to generate your investment recommendations.
+                </p>
+                <button
+                  className="eval-generate-btn"
+                  onClick={handleGenerateEvaluation}
+                  disabled={!onboardingSummary}
+                  title={onboardingSummary ? 'Generate AI evaluation and investment recommendations' : 'Complete onboarding first'}
+                >
+                  Generate Evaluation &amp; Investment Recommendation
+                </button>
+              </div>
+            )}
           </div>
         </div>
       );
     }
 
     const { investment_readiness_summary, recommended_funding = [], conditional_options = [], improvement_roadmap = [], not_recommended = [] } = investmentData;
-    const investmentActionCount = actionItems.filter((a) => a.sourceType === 'investment').length;
+    const investmentActions = actionItems.filter((a) => a.sourceType === 'investment');
+    const investmentActionCount = investmentActions.filter((a) => a.status !== 'completed').length;
 
     return (
       <div className="investment-window">
@@ -1619,7 +1579,7 @@ export default function StartupPlatform() {
             </div>
             <div className="summary-card">
               <span className="summary-value">{investmentActionCount}</span>
-              <span className="summary-label">Actions Added</span>
+              <span className="summary-label">Action Items</span>
             </div>
           </div>
 
@@ -1728,6 +1688,9 @@ export default function StartupPlatform() {
                     <div className="roadmap-item-header">
                       <span className="roadmap-priority">#{item.priority}</span>
                       <span className="roadmap-category">{item.category.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div className="roadmap-item-meta">
+                      <span className="roadmap-score-label">Readiness</span>
                       <span className="roadmap-score">{item.current_score} → {item.target_score}</span>
                       <span className="roadmap-timeline">{item.timeline}</span>
                     </div>
@@ -1752,10 +1715,74 @@ export default function StartupPlatform() {
             <div className="invest-not-recommended">
               <h3 className="invest-section-heading">Not Recommended</h3>
               <div className="not-rec-list">
-                {not_recommended.map((item) => (
-                  <div key={item.investment_type} className="not-rec-item">
-                    <span className="not-rec-name">{investmentTypeNames[item.investment_type] || item.investment_type}</span>
-                    <span className="not-rec-reason">{item.reason}</span>
+                {not_recommended.map((item) => {
+                  const isSelected = selectedInvestments.includes(item.investment_type);
+                  return (
+                    <div key={item.investment_type} className={`not-rec-item ${isSelected ? 'selected' : ''}`}>
+                      <div className="not-rec-info">
+                        <span className="not-rec-name">{investmentTypeNames[item.investment_type] || item.investment_type}</span>
+                        <span className="not-rec-reason">{item.reason}</span>
+                      </div>
+                      <button
+                        className={`invest-select-btn not-rec ${isSelected ? 'selected' : ''}`}
+                        onClick={() => toggleInvestment(item.investment_type)}
+                      >
+                        {isSelected ? '✓ Pursuing' : 'Pursue Anyway'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Investment Action Items */}
+          {investmentActions.length > 0 && (
+            <div className="invest-actions-section">
+              <h3 className="invest-section-heading">
+                Action Items <span className="action-count">{investmentActionCount} pending</span>
+              </h3>
+              <div className="action-cards">
+                {investmentActions.map((action) => (
+                  <div
+                    key={action.id}
+                    className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
+                  >
+                    <div className="action-card-header" onClick={() => setExpandedAction(expandedAction === action.id ? null : action.id)}>
+                      <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
+                      <div className="action-info">
+                        <h4>{action.title}</h4>
+                        <p>{action.description}</p>
+                      </div>
+                      <div className="action-meta">
+                        <span className={`action-status ${action.status}`}>
+                          {action.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
+                    </div>
+
+                    {expandedAction === action.id && (
+                      <div className="action-card-body">
+                        <div className="action-input-group">
+                          <label>Notes / Response</label>
+                          <textarea
+                            value={action.inputs.notes || ''}
+                            onChange={(e) => handleActionInput(action.id, 'notes', e.target.value)}
+                            placeholder="Add your notes or response here..."
+                          />
+                        </div>
+
+                        <div className="action-buttons">
+                          <button
+                            className="btn-complete"
+                            onClick={() => handleMarkComplete(action.id)}
+                          >
+                            Mark Complete
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
