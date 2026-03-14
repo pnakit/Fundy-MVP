@@ -129,7 +129,12 @@ function transformDifyEvent(event) {
     if (categoryId) {
       // Extract the LLM output — Dify puts structured output in outputs.text or outputs.result.
       // structured_output is preferred (already parsed); text is the fallback JSON string.
-      const rawOutput = outputs.structured_output || outputs.text || outputs.result || '';
+      let rawOutput = outputs.structured_output || outputs.text || outputs.result || '';
+      // Strip markdown code fences — LLMs sometimes wrap JSON in ```json ... ``` blocks.
+      if (typeof rawOutput === 'string') {
+        const fenceMatch = rawOutput.trim().match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (fenceMatch) rawOutput = fenceMatch[1].trim();
+      }
       try {
         const categoryData = typeof rawOutput === 'string' ? JSON.parse(rawOutput) : rawOutput;
         // Override category_id with the node-title-derived value — the node title is the
