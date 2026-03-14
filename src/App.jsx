@@ -4,6 +4,7 @@ import {
   MOCK_ONBOARDING_SUMMARY,
   EVALUATION_DIMENSIONS,
   MATURITY_STAGES,
+  DUE_DILIGENCE_CHECKLISTS,
 } from './data/mockData';
 import DifyAPI from './api/difyApi';
 import { extractOnboardingSummary, SUMMARY_START_MARKER } from './utils/extractSummary';
@@ -110,6 +111,8 @@ export default function StartupPlatform() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [expandedDimension, setExpandedDimension] = useState(null);
   const [debugLogs, setDebugLogs] = useState([]);
+  const [actionConversations, setActionConversations] = useState({});
+  const [actionTyping, setActionTyping] = useState(null);
 
   const addDebugLog = useCallback((label, detail) => {
     if (!debugEnabled) return;
@@ -121,6 +124,8 @@ export default function StartupPlatform() {
   // issues in fire-and-forget async helpers called from streaming callbacks.
   const conversationDbIdRef = useRef(null);    // onboarding conversation DB UUID
   const deepDiveConvDbIdsRef = useRef({});     // { [categoryId]: DB UUID }
+  const actionConvDbIdsRef = useRef({});       // { [actionId]: DB UUID }
+  const investmentActionsRef = useRef(null);   // scroll target for investment actions section
 
   // ─── Persistence helpers ──────────────────────────────────────────────
 
@@ -189,12 +194,17 @@ export default function StartupPlatform() {
     const userId = session.user.id;
     try {
       let dbId =
-        workflow === 'onboarding' ? conversationDbIdRef.current : deepDiveConvDbIdsRef.current[categoryId];
+        workflow === 'onboarding'
+          ? conversationDbIdRef.current
+          : workflow === 'action_item'
+          ? actionConvDbIdsRef.current[categoryId]
+          : deepDiveConvDbIdsRef.current[categoryId];
 
       if (!dbId) {
         dbId = await createConversation(workflow, categoryId);
         if (!dbId) return;
         if (workflow === 'onboarding') conversationDbIdRef.current = dbId;
+        else if (workflow === 'action_item') actionConvDbIdsRef.current = { ...actionConvDbIdsRef.current, [categoryId]: dbId };
         else deepDiveConvDbIdsRef.current = { ...deepDiveConvDbIdsRef.current, [categoryId]: dbId };
       }
 
@@ -520,12 +530,39 @@ export default function StartupPlatform() {
 
   const toggleInvestment = (investmentId) => {
     const isSelected = selectedInvestments.includes(investmentId);
+    const userId = session?.user?.id;
+
     if (isSelected) {
       setSelectedInvestments((prev) => prev.filter((id) => id !== investmentId));
       upsertInvestmentSelection(investmentId, false);
+      // Remove due diligence items for this investment — content already embedded in KB
+      setActionItems((prev) => prev.filter((a) => !(a.sourceType === 'due_diligence' && a.sourceId === investmentId)));
+      if (userId) deleteActionItemsBySourceId(investmentId);
     } else {
       setSelectedInvestments((prev) => [...prev, investmentId]);
       upsertInvestmentSelection(investmentId, true);
+      // Add predefined due diligence checklist items
+      const checklist = DUE_DILIGENCE_CHECKLISTS[investmentId] || [];
+      setActionItems((prev) => {
+        const existingKeys = new Set(prev.filter((a) => a.sourceId === investmentId).map((a) => a.actionKey));
+        const newItems = checklist
+          .filter((item) => !existingKeys.has(`dd-${investmentId}-${item.key}`))
+          .map((item) => ({
+            id: crypto.randomUUID(),
+            title: item.title,
+            description: item.description,
+            priority: item.priority,
+            status: 'pending',
+            sourceType: 'due_diligence',
+            sourceId: investmentId,
+            dimensionId: null,
+            actionKey: `dd-${investmentId}-${item.key}`,
+            files: [],
+            inputs: {},
+          }));
+        if (userId) newItems.forEach((item) => saveActionItem(item, userId));
+        return [...prev, ...newItems];
+      });
     }
   };
 
@@ -744,6 +781,168 @@ export default function StartupPlatform() {
     }
 
     setIsTyping(false);
+    e.target.value = '';
+  };
+
+  // ─── Action item chat helpers ─────────────────────────────────────────
+
+  /** Initialise conversation state for an action item on first expand. */
+  const initActionConversation = (action) => {
+    if (actionConversations[action.id]) return;
+    setActionConversations((prev) => ({
+      ...prev,
+      [action.id]: {
+        messages: [{ role: 'assistant', content: `I can help you work through this: **${action.title}**\n\n${action.description}\n\nWhat do you need help with, or are you ready to upload documentation?` }],
+        conversationId: null,
+        inputValue: '',
+      },
+    }));
+  };
+
+  const handleActionChatInputChange = (actionId, value) => {
+    setActionConversations((prev) => ({
+      ...prev,
+      [actionId]: { ...prev[actionId], inputValue: value },
+    }));
+  };
+
+  /** Embed a completed action item chat exchange into the KB. Fire-and-forget. */
+  const embedActionItemExchange = async (actionId, userMsg, assistantMsg) => {
+    try {
+      const s = await getSession();
+      if (!s) return;
+      const conversationDbId = actionConvDbIdsRef.current[actionId] || null;
+      await fetch('/api/action-items/embed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.access_token}` },
+        body: JSON.stringify({ conversationDbId, actionItemId: actionId, userMessage: userMsg, assistantMessage: assistantMsg }),
+      });
+    } catch (err) {
+      console.error('[embedActionItemExchange] Failed:', err.message);
+    }
+  };
+
+  const handleActionChatSend = async (actionId) => {
+    const conv = actionConversations[actionId];
+    if (!conv?.inputValue?.trim()) return;
+    const currentMessage = conv.inputValue;
+
+    setActionConversations((prev) => ({
+      ...prev,
+      [actionId]: {
+        ...prev[actionId],
+        inputValue: '',
+        messages: [...prev[actionId].messages, { role: 'user', content: currentMessage }],
+      },
+    }));
+
+    const appendAssistant = (content, extra = {}) => {
+      setActionConversations((prev) => {
+        if (!prev[actionId]) return prev;
+        return {
+          ...prev,
+          [actionId]: { ...prev[actionId], messages: [...prev[actionId].messages, { role: 'assistant', content, ...extra }] },
+        };
+      });
+    };
+
+    const updateLastMessage = (content, extra = {}) => {
+      setActionConversations((prev) => {
+        if (!prev[actionId]) return prev;
+        const msgs = [...prev[actionId].messages];
+        msgs[msgs.length - 1] = { role: 'assistant', content, ...extra };
+        return { ...prev, [actionId]: { ...prev[actionId], ...extra, messages: msgs } };
+      });
+    };
+
+    if (!DifyAPI.isMock) {
+      appendAssistant('', { isStreaming: true });
+      try {
+        const response = await DifyAPI.sendMessageStreaming(
+          currentMessage, conv.conversationId, [], 'default-user',
+          (accumulated) => updateLastMessage(accumulated, { isStreaming: true }),
+          'action_item',
+        );
+        updateLastMessage(response.message);
+        setActionConversations((prev) => ({
+          ...prev,
+          [actionId]: { ...prev[actionId], conversationId: response.conversationId },
+        }));
+        await persistConversationExchange('action_item', actionId, currentMessage, response.message, response.conversationId);
+        embedActionItemExchange(actionId, currentMessage, response.message);
+      } catch (error) {
+        console.error('[action-chat/streaming] Send failed:', error.message);
+        updateLastMessage(CHAT_ERROR_MESSAGE);
+      }
+    } else {
+      setActionTyping(actionId);
+      try {
+        const response = await DifyAPI.sendMessage(currentMessage, conv.conversationId, [], 'default-user', 'action_item');
+        setActionConversations((prev) => ({
+          ...prev,
+          [actionId]: {
+            ...prev[actionId],
+            conversationId: response.conversationId,
+            messages: [...prev[actionId].messages, { role: 'assistant', content: response.message }],
+          },
+        }));
+        await persistConversationExchange('action_item', actionId, currentMessage, response.message, response.conversationId);
+        embedActionItemExchange(actionId, currentMessage, response.message);
+      } catch (error) {
+        console.error('[action-chat/blocking] Send failed:', error.message);
+        appendAssistant(CHAT_ERROR_MESSAGE);
+      }
+      setActionTyping(null);
+    }
+  };
+
+  const handleActionChatFileUpload = async (actionId, e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    setActionConversations((prev) => ({
+      ...prev,
+      [actionId]: {
+        ...prev[actionId],
+        messages: [...prev[actionId].messages, { role: 'user', content: `Uploaded: ${files.map((f) => f.name).join(', ')}`, isFile: true }],
+      },
+    }));
+    setActionTyping(actionId);
+
+    const { succeeded, failed, oversized } = await uploadFiles(files, 'default-user', 'action_item');
+
+    if (succeeded.length > 0) {
+      const { message, prompt } = buildUploadMessages(succeeded, 'discussion');
+      setActionConversations((prev) => ({
+        ...prev,
+        [actionId]: {
+          ...prev[actionId],
+          messages: [...prev[actionId].messages, { role: 'assistant', content: message }],
+          inputValue: prev[actionId].inputValue || prompt,
+        },
+      }));
+    }
+    if (oversized.length > 0) {
+      const details = oversized.map((f) => `"${f.name}" (${f.sizeMB}MB)`).join(', ');
+      setActionConversations((prev) => ({
+        ...prev,
+        [actionId]: {
+          ...prev[actionId],
+          messages: [...prev[actionId].messages, { role: 'assistant', content: `${details} exceeded the ${DIFY_MAX_FILE_SIZE_MB}MB limit and was not uploaded.`, isError: true }],
+        },
+      }));
+    }
+    if (failed.length > 0) {
+      setActionConversations((prev) => ({
+        ...prev,
+        [actionId]: {
+          ...prev[actionId],
+          messages: [...prev[actionId].messages, { role: 'assistant', content: `Failed to upload: ${failed.join(', ')}. Please try again.`, isError: true }],
+        },
+      }));
+    }
+
+    setActionTyping(null);
     e.target.value = '';
   };
 
@@ -1436,7 +1635,7 @@ export default function StartupPlatform() {
                       key={action.id}
                       className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
                     >
-                      <div className="action-card-header" onClick={() => setExpandedAction(expandedAction === action.id ? null : action.id)}>
+                      <div className="action-card-header" onClick={() => { const opening = expandedAction !== action.id; setExpandedAction(opening ? action.id : null); if (opening) initActionConversation(action); }}>
                         <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
                         <div className="action-info">
                           <h4>{action.title}</h4>
@@ -1452,40 +1651,19 @@ export default function StartupPlatform() {
 
                       {expandedAction === action.id && (
                         <div className="action-card-body">
-                          <div className="action-input-group">
-                            <label>Notes / Response</label>
-                            <textarea
-                              value={action.inputs.notes || ''}
-                              onChange={(e) => handleActionInput(action.id, 'notes', e.target.value)}
-                              placeholder="Add your notes or response here..."
+                          <div className="action-chat-container">
+                            <ChatPanel
+                              messages={actionConversations[action.id]?.messages || []}
+                              isTyping={actionTyping === action.id}
+                              inputValue={actionConversations[action.id]?.inputValue || ''}
+                              onInputChange={(v) => handleActionChatInputChange(action.id, v)}
+                              onSend={() => handleActionChatSend(action.id)}
+                              onFileUpload={(e) => handleActionChatFileUpload(action.id, e)}
+                              placeholder="Ask for guidance, add notes, or upload documentation..."
                             />
                           </div>
-
-                          <div className="action-files">
-                            <label>Attachments</label>
-                            <div className="file-upload-zone">
-                              <input
-                                type="file"
-                                id={`file-${action.id}`}
-                                onChange={(e) => handleActionFileUpload(action.id, e)}
-                                style={{ display: 'none' }}
-                              />
-                              <label htmlFor={`file-${action.id}`} className="file-upload-btn">
-                                <span>📎</span> Upload File
-                              </label>
-                              {action.files.map((file, idx) => (
-                                <div key={idx} className="uploaded-file-chip">
-                                  📄 {file.name}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
                           <div className="action-buttons">
-                            <button
-                              className="btn-complete"
-                              onClick={() => handleMarkComplete(action.id)}
-                            >
+                            <button className="btn-complete" onClick={() => handleMarkComplete(action.id)}>
                               Mark Complete
                             </button>
                           </div>
@@ -1557,7 +1735,8 @@ export default function StartupPlatform() {
 
     const { investment_readiness_summary, recommended_funding = [], conditional_options = [], improvement_roadmap = [], not_recommended = [] } = investmentData;
     const investmentActions = actionItems.filter((a) => a.sourceType === 'investment');
-    const investmentActionCount = investmentActions.filter((a) => a.status !== 'completed').length;
+    const dueDiligenceItems = actionItems.filter((a) => a.sourceType === 'due_diligence');
+    const investmentActionCount = [...investmentActions, ...dueDiligenceItems].filter((a) => a.status !== 'completed').length;
 
     return (
       <div className="investment-window">
@@ -1577,9 +1756,9 @@ export default function StartupPlatform() {
               <span className="summary-value">{selectedInvestments.length}</span>
               <span className="summary-label">Pursuing</span>
             </div>
-            <div className="summary-card">
+            <div className="summary-card summary-card-link" onClick={() => investmentActionsRef.current?.scrollIntoView({ behavior: 'smooth' })}>
               <span className="summary-value">{investmentActionCount}</span>
-              <span className="summary-label">Action Items</span>
+              <span className="summary-label">Action Items ↓</span>
             </div>
           </div>
 
@@ -1736,56 +1915,106 @@ export default function StartupPlatform() {
             </div>
           )}
 
-          {/* Investment Action Items */}
-          {investmentActions.length > 0 && (
-            <div className="invest-actions-section">
+          {/* Investment & Due Diligence Action Items */}
+          {(investmentActions.length > 0 || dueDiligenceItems.length > 0) && (
+            <div className="invest-actions-section" ref={investmentActionsRef}>
               <h3 className="invest-section-heading">
                 Action Items <span className="action-count">{investmentActionCount} pending</span>
               </h3>
-              <div className="action-cards">
-                {investmentActions.map((action) => (
-                  <div
-                    key={action.id}
-                    className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
-                  >
-                    <div className="action-card-header" onClick={() => setExpandedAction(expandedAction === action.id ? null : action.id)}>
-                      <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
-                      <div className="action-info">
-                        <h4>{action.title}</h4>
-                        <p>{action.description}</p>
-                      </div>
-                      <div className="action-meta">
-                        <span className={`action-status ${action.status}`}>
-                          {action.status.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
-                    </div>
 
-                    {expandedAction === action.id && (
-                      <div className="action-card-body">
-                        <div className="action-input-group">
-                          <label>Notes / Response</label>
-                          <textarea
-                            value={action.inputs.notes || ''}
-                            onChange={(e) => handleActionInput(action.id, 'notes', e.target.value)}
-                            placeholder="Add your notes or response here..."
-                          />
+              {/* Investment Readiness sub-section */}
+              {investmentActions.length > 0 && (
+                <>
+                  <div className="invest-dd-group-heading">Investment Readiness</div>
+                  <div className="action-cards">
+                    {investmentActions.map((action) => (
+                      <div
+                        key={action.id}
+                        className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
+                      >
+                        <div className="action-card-header" onClick={() => { const opening = expandedAction !== action.id; setExpandedAction(opening ? action.id : null); if (opening) initActionConversation(action); }}>
+                          <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
+                          <div className="action-info">
+                            <h4>{action.title}</h4>
+                            <p>{action.description}</p>
+                          </div>
+                          <div className="action-meta">
+                            <span className={`action-status ${action.status}`}>{action.status.replace('_', ' ')}</span>
+                          </div>
+                          <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
                         </div>
-
-                        <div className="action-buttons">
-                          <button
-                            className="btn-complete"
-                            onClick={() => handleMarkComplete(action.id)}
-                          >
-                            Mark Complete
-                          </button>
-                        </div>
+                        {expandedAction === action.id && (
+                          <div className="action-card-body">
+                            <div className="action-chat-container">
+                              <ChatPanel
+                                messages={actionConversations[action.id]?.messages || []}
+                                isTyping={actionTyping === action.id}
+                                inputValue={actionConversations[action.id]?.inputValue || ''}
+                                onInputChange={(v) => handleActionChatInputChange(action.id, v)}
+                                onSend={() => handleActionChatSend(action.id)}
+                                onFileUpload={(e) => handleActionChatFileUpload(action.id, e)}
+                                placeholder="Ask for guidance, add notes, or upload documentation..."
+                              />
+                            </div>
+                            <div className="action-buttons">
+                              <button className="btn-complete" onClick={() => handleMarkComplete(action.id)}>Mark Complete</button>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              )}
+
+              {/* Due Diligence sub-sections grouped by investment type */}
+              {selectedInvestments.map((invId) => {
+                const ddItems = dueDiligenceItems.filter((a) => a.sourceId === invId);
+                if (ddItems.length === 0) return null;
+                return (
+                  <div key={invId} className="invest-dd-group">
+                    <div className="invest-dd-group-heading">{investmentTypeNames[invId] || invId} — Due Diligence</div>
+                    <div className="action-cards">
+                      {ddItems.map((action) => (
+                        <div
+                          key={action.id}
+                          className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
+                        >
+                          <div className="action-card-header" onClick={() => { const opening = expandedAction !== action.id; setExpandedAction(opening ? action.id : null); if (opening) initActionConversation(action); }}>
+                            <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
+                            <div className="action-info">
+                              <h4>{action.title}</h4>
+                              <p>{action.description}</p>
+                            </div>
+                            <div className="action-meta">
+                              <span className={`action-status ${action.status}`}>{action.status.replace('_', ' ')}</span>
+                            </div>
+                            <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
+                          </div>
+                          {expandedAction === action.id && (
+                            <div className="action-card-body">
+                              <div className="action-chat-container">
+                                <ChatPanel
+                                  messages={actionConversations[action.id]?.messages || []}
+                                  isTyping={actionTyping === action.id}
+                                  inputValue={actionConversations[action.id]?.inputValue || ''}
+                                  onInputChange={(v) => handleActionChatInputChange(action.id, v)}
+                                  onSend={() => handleActionChatSend(action.id)}
+                                  onFileUpload={(e) => handleActionChatFileUpload(action.id, e)}
+                                  placeholder="Ask for guidance, add notes, or upload documentation..."
+                                />
+                              </div>
+                              <div className="action-buttons">
+                                <button className="btn-complete" onClick={() => handleMarkComplete(action.id)}>Mark Complete</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

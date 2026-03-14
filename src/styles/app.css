@@ -1734,6 +1734,45 @@ body {
   margin-top: 12px;
 }
 
+/* Due Diligence sections */
+.invest-dd-group {
+  margin-top: 24px;
+}
+
+.invest-dd-group-heading {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+  margin-bottom: 8px;
+  padding-left: 2px;
+}
+
+.invest-dd-group .action-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Clickable Action Items summary badge */
+.summary-card-link {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.summary-card-link:hover .summary-value {
+  color: #6366f1;
+}
+
+/* Action item chat panel */
+.action-chat-container {
+  height: 320px;
+  overflow: hidden;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
 /* Password Screen */
 .password-screen {
   min-height: 100vh;

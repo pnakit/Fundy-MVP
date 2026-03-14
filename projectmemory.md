@@ -566,19 +566,91 @@ File upload in deep-dive → 28 file chunks embedded into `document_embeddings` 
 
 ---
 
+## v3.7 — Investment Matching Integration (Mar 2026)
+
+Replaces static `MOCK_INVESTMENT_DATA` with a live LLM-driven investment matching pipeline.
+Phase 2 of the Dify evaluation workflow (4 new nodes) calculates maturity, scores the investment
+matrix, and generates a personalized recommendation report streamed to the frontend.
+
+### Architecture decisions
+
+- **Phase 2 extends the existing evaluation workflow** — no separate Dify app. After the 10 `eval_*`
+  LLM nodes complete, a Variable Aggregator feeds their outputs into: `calculate_maturity` (Python
+  code node) → `generate_matrix` (Python code node) → `investment_recommendations` (LLM node).
+- **SSE event ordering**: `investment_matching_started` fires when `calculate_maturity` starts,
+  then `maturity_calculated` fires when it finishes. `investment_recommendations_complete` fires
+  when the LLM node completes. All 3 are emitted before `workflow_complete`.
+- **Stale closure pattern**: `capturedInvestmentRecommendations` local variable in
+  `handleGenerateEvaluation` captures investment data synchronously in the callback, so
+  `persistEvaluation` can safely pass it to `/api/evaluation/save` after `workflow_complete` fires.
+- **Investment actions from evaluation, not toggle**: `toggleInvestment` now only tracks selection
+  intent (`upsertInvestmentSelection`). Action items come from `next_steps[]` in the LLM output,
+  auto-added in `onInvestmentRecommendationsComplete`. Static `INVESTMENT_ACTIONS` is gone.
+- **`investment_data` column in `evaluations`**: full LLM output (`investment_readiness_summary`,
+  `recommended_funding[]`, etc.) persisted as JSONB. Restored on login like evaluation results.
+- **Investment ID migration**: Old IDs (`grants`, `strategic`, `crowdfunding`) replaced by
+  `grant_funding`, `pre_seed`, `revenue_based_financing`. Old `investment_selections` rows are
+  orphaned (accepted MVP break).
+
+### New investment data shape (LLM output)
+
+```json
+{
+  "investment_readiness_summary": { "assessment": "...", "primary_recommendation": "...", "readiness_score": "Moderate" },
+  "recommended_funding": [{ "investment_type": "pre_seed", "rating": "strong_fit", "fit_explanation": "..." }],
+  "conditional_options": [{ "investment_type": "seed", "conditions_for_fit": "...", "improvements_needed": [] }],
+  "improvement_roadmap": [{ "priority": 1, "category": "market_traction", "current_score": 45, "target_score": 70, "unlocks": ["seed"], "specific_actions": [], "timeline": "..." }],
+  "not_recommended": [{ "investment_type": "series_a", "reason": "..." }],
+  "next_steps": [{ "priority": 1, "action": "...", "timeline": "2 weeks", "expected_outcome": "..." }]
+}
+```
+
+### Rating → suitability mapping (frontend rendering)
+
+`ideal`→95, `strong_fit`→80, `acceptable`→65, `conditional`→50, `marginal`→40, `not_suitable`→15
+
+### Modified files
+
+| File | Change |
+|------|--------|
+| `api/evaluation/_difyWorkflow.js` | 3 new event types in `transformDifyEvent()` |
+| `api/evaluation/save.js` | Accept + persist `investmentRecommendations` as `investment_data` |
+| `api/evaluation/generate.js` | Mock Phase 2: `MOCK_INVESTMENT_RECOMMENDATIONS` constant + 3 mock events in `streamMockEvaluation()` |
+| `src/api/evaluationApi.js` | 3 new callbacks + mock Phase 2 events using `MOCK_INVESTMENT_DATA` |
+| `src/api/dataAccess.js` | `loadEvaluation()` SELECT now includes `investment_data` |
+| `src/data/mockData.js` | `MOCK_INVESTMENT_DATA` replaced with new LLM output shape; `INVESTMENT_ACTIONS` removed |
+| `src/App.jsx` | `investmentData` starts `null`; `setInvestmentData` wired; new callbacks; `persistEvaluation` passes `investmentRecommendations`; `toggleInvestment` simplified; `renderInvestmentWindow()` rewritten |
+| `src/styles/app.css` | New CSS classes for readiness block, roadmap, conditional cards, not-recommended |
+| `api/evaluation/_difyWorkflow.test.js` | 4 new investment matching event tests (21 total) |
+| `src/api/dataAccess.test.js` | 3 new `loadEvaluation` tests (21 total) |
+| `src/api/evaluationApi.test.js` | NEW — 10 tests for investment callbacks in mock + real SSE modes |
+| `src/components/InvestmentToggle.test.jsx` | Rewritten for new toggle-only behavior (8 tests) |
+
+**Test totals:** 159 tests across 11 files (up from 140 across 10 files)
+
+### Pending (manual steps)
+
+1. **Supabase migration**: `ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS investment_data jsonb;`
+2. **Dify Studio**: Add 4 nodes after the 10 `eval_*` nodes:
+   - **Variable Aggregator** (`aggregator`) — collects all 10 `eval_*` node outputs
+   - **Code Node** (`calculate_maturity`) — Python: weighted maturity score 1–1000, stage, performance level
+   - **Code Node** (`generate_matrix`) — Python: score each investment type against the matrix
+   - **LLM Node** (`investment_recommendations`) — structured output matching the shape above
+
 ## Next Steps (priority order)
 
 ### Immediate
 
-1. **Evaluation quality verification** — with a real user account (not seeded data), run the full
-   onboarding → summary → evaluation flow and confirm:
-   - Vercel logs show `context_*` variables populated in Dify inputs (non-empty KB retrieval)
-   - Evaluation results reference company-specific facts, not generic text
-   - If context is still empty: check `document_embeddings` rows exist for the user after summary save
+1. **Supabase migration** — run `ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS investment_data jsonb;`
+   in the Supabase SQL editor before deploying v3.7.
 
-2. **Investment matching Dify workflow** — replace static `MOCK_INVESTMENT_DATA` with a real Dify
-   workflow: takes evaluation results + onboarding summary → returns ranked investor matches.
-   Save results to `investment_recommendations` table. Restore on login like evaluations.
+2. **Dify Studio Phase 2 nodes** — add Variable Aggregator + 2 Python code nodes + 1 LLM node
+   after the 10 `eval_*` nodes. Python code from `Guide_investment_matching.md` Parts 6–7.
+
+3. **Evaluation quality verification** — with a real user account, run the full pipeline and confirm:
+   - Investment recommendation section renders after evaluation completes
+   - `investment_data` column populated in `evaluations` table
+   - Refreshing restores investment recommendations
 
 ### Medium term
 

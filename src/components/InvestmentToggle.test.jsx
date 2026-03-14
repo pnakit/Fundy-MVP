@@ -1,47 +1,47 @@
+/**
+ * Tests for investment select/deselect toggle behaviour.
+ *
+ * Since v3.7 (investment matching integration), toggleInvestment only tracks
+ * selection intent — it does NOT add or remove action items. Action items now
+ * come from the evaluation pipeline's LLM-generated next_steps, not from
+ * static per-investment action templates.
+ *
+ * Key invariants:
+ * - Selecting an investment adds it to selectedInvestments; action count unchanged
+ * - Deselecting removes it; action count still unchanged
+ * - Multiple investments toggle independently
+ */
+
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { useState } from 'react';
-import { MOCK_INVESTMENT_DATA, INVESTMENT_ACTIONS, INITIAL_ACTION_ITEMS } from '../data/mockData';
-import { addInvestmentActions, removeInvestmentActions } from '../utils/actionItems';
+import { INITIAL_ACTION_ITEMS } from '../data/mockData';
 
 afterEach(cleanup);
 
-// Test harness that uses the same utility functions as App.jsx
-let nextId = 1000;
-function generateTestId() {
-  return nextId++;
-}
+// Investment IDs that exist in the new MOCK_INVESTMENT_DATA shape.
+// Using a small fixed set so tests are not coupled to the full mock data file.
+const TEST_INVESTMENT_IDS = ['pre_seed', 'grant_funding', 'seed', 'series_a'];
 
-function TestInvestmentToggle() {
+function TestInvestmentToggle({ initialActionItems = INITIAL_ACTION_ITEMS }) {
   const [selectedInvestments, setSelectedInvestments] = useState([]);
-  const [actionItems, setActionItems] = useState([...INITIAL_ACTION_ITEMS]);
+  // Action items start from initial evaluation items and are NOT modified by toggle
+  const [actionItems] = useState([...initialActionItems]);
 
   const toggleInvestment = (investmentId) => {
     setSelectedInvestments((prev) => {
       const isSelected = prev.includes(investmentId);
-      if (isSelected) {
-        setActionItems((prevActions) => removeInvestmentActions(prevActions, investmentId));
-        return prev.filter((id) => id !== investmentId);
-      } else {
-        const rawActions = INVESTMENT_ACTIONS[investmentId] || [];
-        setActionItems((prevActions) => addInvestmentActions(prevActions, investmentId, rawActions, generateTestId));
-        return [...prev, investmentId];
-      }
+      return isSelected ? prev.filter((id) => id !== investmentId) : [...prev, investmentId];
     });
   };
-
-  const investmentActions = actionItems.filter((a) => a.sourceType === 'investment');
 
   return (
     <div>
       <div data-testid="action-count">{actionItems.length}</div>
-      <div data-testid="investment-action-sources">
-        {investmentActions.map((a) => a.sourceId).join(',')}
-      </div>
       <div data-testid="selected">{selectedInvestments.join(',')}</div>
-      {MOCK_INVESTMENT_DATA.investments.map((inv) => (
-        <button key={inv.id} data-testid={`toggle-${inv.id}`} onClick={() => toggleInvestment(inv.id)}>
-          {selectedInvestments.includes(inv.id) ? 'Deselect' : 'Select'} {inv.type}
+      {TEST_INVESTMENT_IDS.map((id) => (
+        <button key={id} data-testid={`toggle-${id}`} onClick={() => toggleInvestment(id)}>
+          {selectedInvestments.includes(id) ? 'Deselect' : 'Select'} {id}
         </button>
       ))}
     </div>
@@ -49,77 +49,65 @@ function TestInvestmentToggle() {
 }
 
 describe('Investment Toggle', () => {
-  it('starts with only initial action items', () => {
+  it('starts with no selections and initial action item count', () => {
     render(<TestInvestmentToggle />);
+    expect(screen.getByTestId('selected').textContent).toBe('');
     expect(screen.getByTestId('action-count').textContent).toBe(String(INITIAL_ACTION_ITEMS.length));
-    expect(screen.getByTestId('investment-action-sources').textContent).toBe('');
+  });
+
+  it('adds investment to selectedInvestments on select', () => {
+    render(<TestInvestmentToggle />);
+    fireEvent.click(screen.getByTestId('toggle-pre_seed'));
+    expect(screen.getByTestId('selected').textContent).toBe('pre_seed');
+  });
+
+  it('does not change action item count when selecting', () => {
+    render(<TestInvestmentToggle />);
+    fireEvent.click(screen.getByTestId('toggle-pre_seed'));
+    expect(screen.getByTestId('action-count').textContent).toBe(String(INITIAL_ACTION_ITEMS.length));
+  });
+
+  it('removes investment from selectedInvestments on deselect', () => {
+    render(<TestInvestmentToggle />);
+    fireEvent.click(screen.getByTestId('toggle-pre_seed'));
+    fireEvent.click(screen.getByTestId('toggle-pre_seed'));
     expect(screen.getByTestId('selected').textContent).toBe('');
   });
 
-  it('adds actions when selecting an investment', () => {
+  it('does not change action item count when deselecting', () => {
     render(<TestInvestmentToggle />);
-
-    fireEvent.click(screen.getByTestId('toggle-series_a'));
-
-    const expectedCount = INITIAL_ACTION_ITEMS.length + INVESTMENT_ACTIONS.series_a.length;
-    expect(screen.getByTestId('action-count').textContent).toBe(String(expectedCount));
-    expect(screen.getByTestId('selected').textContent).toBe('series_a');
-    expect(screen.getByTestId('investment-action-sources').textContent).toContain('series_a');
-  });
-
-  it('removes actions when deselecting an investment', () => {
-    render(<TestInvestmentToggle />);
-
-    fireEvent.click(screen.getByTestId('toggle-series_a'));
-    fireEvent.click(screen.getByTestId('toggle-series_a'));
-
-    expect(screen.getByTestId('action-count').textContent).toBe(String(INITIAL_ACTION_ITEMS.length));
-    expect(screen.getByTestId('investment-action-sources').textContent).toBe('');
-    expect(screen.getByTestId('selected').textContent).toBe('');
-  });
-
-  it('handles multiple investments independently', () => {
-    render(<TestInvestmentToggle />);
-
-    fireEvent.click(screen.getByTestId('toggle-seed'));
-    fireEvent.click(screen.getByTestId('toggle-grants'));
-
-    const expectedCount =
-      INITIAL_ACTION_ITEMS.length + INVESTMENT_ACTIONS.seed.length + INVESTMENT_ACTIONS.grants.length;
-    expect(screen.getByTestId('action-count').textContent).toBe(String(expectedCount));
-
-    // Deselect only seed — grants actions should remain
-    fireEvent.click(screen.getByTestId('toggle-seed'));
-
-    const afterDeselectCount = INITIAL_ACTION_ITEMS.length + INVESTMENT_ACTIONS.grants.length;
-    expect(screen.getByTestId('action-count').textContent).toBe(String(afterDeselectCount));
-    // All remaining sourced actions should be from grants only
-    const sources = screen
-      .getByTestId('investment-action-sources')
-      .textContent.split(',')
-      .filter(Boolean);
-    expect(sources.every((s) => s === 'grants')).toBe(true);
-    expect(sources.length).toBe(INVESTMENT_ACTIONS.grants.length);
-  });
-
-  it('does not remove evaluation action items on deselect', () => {
-    render(<TestInvestmentToggle />);
-
-    fireEvent.click(screen.getByTestId('toggle-seed'));
-    fireEvent.click(screen.getByTestId('toggle-seed'));
-
-    // All initial (evaluation-sourced) items should survive
+    fireEvent.click(screen.getByTestId('toggle-pre_seed'));
+    fireEvent.click(screen.getByTestId('toggle-pre_seed'));
     expect(screen.getByTestId('action-count').textContent).toBe(String(INITIAL_ACTION_ITEMS.length));
   });
 
-  it('investment actions have correct metadata fields', () => {
+  it('handles multiple investments selected independently', () => {
     render(<TestInvestmentToggle />);
+    fireEvent.click(screen.getByTestId('toggle-pre_seed'));
+    fireEvent.click(screen.getByTestId('toggle-grant_funding'));
 
+    const selected = screen.getByTestId('selected').textContent.split(',');
+    expect(selected).toContain('pre_seed');
+    expect(selected).toContain('grant_funding');
+    expect(selected).toHaveLength(2);
+  });
+
+  it('deselecting one investment does not affect others', () => {
+    render(<TestInvestmentToggle />);
+    fireEvent.click(screen.getByTestId('toggle-pre_seed'));
+    fireEvent.click(screen.getByTestId('toggle-grant_funding'));
+    fireEvent.click(screen.getByTestId('toggle-pre_seed')); // deselect only pre_seed
+
+    expect(screen.getByTestId('selected').textContent).toBe('grant_funding');
+    expect(screen.getByTestId('action-count').textContent).toBe(String(INITIAL_ACTION_ITEMS.length));
+  });
+
+  it('button label reflects current selection state', () => {
+    render(<TestInvestmentToggle />);
+    expect(screen.getByTestId('toggle-seed').textContent).toContain('Select');
     fireEvent.click(screen.getByTestId('toggle-seed'));
-
-    // Verify the sources contain proper sourceId values
-    const sources = screen.getByTestId('investment-action-sources').textContent.split(',');
-    expect(sources.every((s) => s === 'seed')).toBe(true);
-    expect(sources.length).toBe(INVESTMENT_ACTIONS.seed.length);
+    expect(screen.getByTestId('toggle-seed').textContent).toContain('Deselect');
+    fireEvent.click(screen.getByTestId('toggle-seed'));
+    expect(screen.getByTestId('toggle-seed').textContent).toContain('Select');
   });
 });

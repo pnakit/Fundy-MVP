@@ -44,6 +44,7 @@ import {
   loadMessages,
   loadOnboardingConversation,
   loadDeepDiveConversations,
+  loadEvaluation,
 } from './dataAccess';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,6 +58,54 @@ function mockUser(id = USER_ID) {
 function mockNoUser() {
   mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 }
+
+// ─── loadEvaluation ───────────────────────────────────────────────────────────
+
+describe('loadEvaluation', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('selects investment_data along with other evaluation fields', async () => {
+    const row = {
+      maturity_stage: 'early_traction',
+      dimensions: { product_technology: { completeness: 70 } },
+      performance_metrics: { overall: 55 },
+      investment_data: { investment_readiness_summary: { readiness_score: 'Moderate' } },
+    };
+    const chain = makeChain({ single: vi.fn().mockResolvedValue({ data: row }) });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await loadEvaluation();
+
+    expect(result).toEqual(row);
+    expect(mockFrom).toHaveBeenCalledWith('evaluations');
+    expect(chain.select).toHaveBeenCalledWith(expect.stringContaining('investment_data'));
+  });
+
+  it('returns null when no evaluation exists yet', async () => {
+    const chain = makeChain({ single: vi.fn().mockResolvedValue({ data: null }) });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await loadEvaluation();
+
+    expect(result).toBeNull();
+  });
+
+  it('returns data with null investment_data for users who ran evaluation before investment matching', async () => {
+    const row = {
+      maturity_stage: 'early_traction',
+      dimensions: {},
+      performance_metrics: {},
+      investment_data: null,
+    };
+    const chain = makeChain({ single: vi.fn().mockResolvedValue({ data: row }) });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await loadEvaluation();
+
+    expect(result).toEqual(row);
+    expect(result.investment_data).toBeNull();
+  });
+});
 
 // ─── createConversation ───────────────────────────────────────────────────────
 

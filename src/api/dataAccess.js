@@ -100,7 +100,7 @@ export async function loadOnboardingSummary() {
 export async function loadEvaluation() {
   const { data } = await supabase
     .from('evaluations')
-    .select('maturity_stage, dimensions, performance_metrics')
+    .select('maturity_stage, dimensions, performance_metrics, investment_data')
     .single();
   return data || null;
 }

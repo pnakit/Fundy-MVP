@@ -22,7 +22,24 @@
       "Bash(npm run test:run)",
       "Read(//c/Users/jamot/.claude/projects/c--Users-jamot-OneDrive-Nusu-Git-LOCAL-Fundy-MVP/memory/**)",
       "Bash(npx vercel logs fundy-8oqh4iix0-peters-projects-31a5d738.vercel.app)",
-      "Bash(npx vercel --prod)"
+      "Bash(npx vercel --prod)",
+      "Bash(npm run test:run -- src/utils/fileUpload.test.js)",
+      "Bash(npm run test:run -- src/utils/extractSummary.test.js)",
+      "Read(//c/Users/jamot/OneDrive/Nusu/ Git/ LOCAL/Fundy-MVP/src/**)",
+      "Read(//c/Users/jamot/OneDrive/Nusu/ Git/ LOCAL/Fundy-MVP/api/evaluation/**)",
+      "Read(//c/Users/jamot/OneDrive/Nusu/ Git/ LOCAL/Fundy-MVP/src/data/**)",
+      "Read(//c/Users/jamot/OneDrive/Nusu/ Git/ LOCAL/Fundy-MVP/**)",
+      "Read(//c/Users/jamot/OneDrive/Nusu/ Git/ LOCAL/Fundy-MVP/supabase/migrations/**)",
+      "Bash(node --version)",
+      "Bash(node --env-file=.env scripts/clear-user-data.js --email peter@nusufi.com)",
+      "Bash(npm run test:run -- src/api/dataAccess.test.js)",
+      "Bash(node scripts/clear-user-data.js)",
+      "Bash(node --env-file=.env scripts/clear-user-data.js)",
+      "Bash(npx vitest run src/api/evaluationApi.test.js)",
+      "Bash(npx supabase --version)",
+      "Bash(npx supabase db execute --sql \"ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS investment_data jsonb;\")",
+      "Bash(npx vitest run api/evaluation/_difyWorkflow.test.js)",
+      "Bash(node -e \":*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\jamot\\.claude\\projects\\c--Users-jamot-OneDrive-Nusu-Git-LOCAL-Fundy-MVP\\memory"
