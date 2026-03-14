@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { signInWithOtp, verifyOtp } from '../api/dataAccess';
+import { signInWithOtp, verifyOtp, signInWithPassword } from '../api/dataAccess';
 
 export default function LoginScreen({ onAuthenticated }) {
   const [step, setStep] = useState('email'); // 'email' | 'otp'
@@ -7,6 +7,7 @@ export default function LoginScreen({ onAuthenticated }) {
   const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
@@ -43,6 +44,22 @@ export default function LoginScreen({ onAuthenticated }) {
       setError(err.message || 'Invalid verification code');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setDemoLoading(true);
+    setError('');
+    try {
+      await signInWithPassword(
+        import.meta.env.VITE_DEMO_USER_EMAIL,
+        import.meta.env.VITE_DEMO_USER_PASSWORD,
+      );
+      onAuthenticated();
+    } catch (err) {
+      setError(err.message || 'Demo login failed');
+    } finally {
+      setDemoLoading(false);
     }
   };
 
@@ -104,6 +121,20 @@ export default function LoginScreen({ onAuthenticated }) {
         <button type="submit" className="password-submit" disabled={loading}>
           {loading ? 'Sending code...' : 'Continue with email'}
         </button>
+        {import.meta.env.VITE_DEMO_USER_EMAIL && (
+          <>
+            <div className="login-divider">or</div>
+            <button
+              type="button"
+              className="demo-login-btn"
+              onClick={handleDemoLogin}
+              disabled={demoLoading || loading}
+            >
+              {demoLoading ? 'Loading demo...' : 'Try Demo'}
+            </button>
+            <p className="demo-login-note">Explore with a pre-populated startup profile</p>
+          </>
+        )}
       </form>
     </div>
   );

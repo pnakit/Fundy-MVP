@@ -39,6 +39,15 @@ export async function verifyOtp(email, token) {
 }
 
 /**
+ * Sign in with email + password (used for demo account — no OTP required).
+ */
+export async function signInWithPassword(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data;
+}
+
+/**
  * Sign out the current user. Clears the session from localStorage.
  */
 export async function signOut() {

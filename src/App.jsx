@@ -87,6 +87,7 @@ function replaceLastMessage(messages, newMsg) {
 export default function StartupPlatform() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [deleteConfirmState, setDeleteConfirmState] = useState('idle'); // 'idle' | 'confirming' | 'deleting'
   const [activeWindow, setActiveWindow] = useState(0);
   const [messages, setMessages] = useState([
     { role: 'assistant', content: "Welcome to Fundy MVP! I'm here to help understand your business and provide tailored insights. Let's start with the basics — what's your company name and what problem are you solving?" }
@@ -310,12 +311,48 @@ export default function StartupPlatform() {
     setOnboardingSummary(null);
     setOnboardingPhase('chat');
     setEvaluationData(null);
+    setInvestmentData(null);
     setSelectedInvestments([]);
     setActionItems([]);
     setConversationId(null);
     setCategoryConversations({});
+    setActionConversations({});
     conversationDbIdRef.current = null;
     deepDiveConvDbIdsRef.current = {};
+    actionConvDbIdsRef.current = {};
+  };
+
+  const handleDeleteData = async () => {
+    setDeleteConfirmState('deleting');
+    try {
+      const s = await getSession();
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.access_token}` },
+      });
+      if (res.ok || res.status === 207) {
+        // Reset all state — keep session (user stays logged in, clean slate)
+        setOnboardingSummary(null);
+        setOnboardingPhase('chat');
+        setEvaluationData(null);
+        setInvestmentData(null);
+        setSelectedInvestments([]);
+        setActionItems([]);
+        setConversationId(null);
+        setCategoryConversations({});
+        setActionConversations({});
+        setMessages([{ role: 'assistant', content: "Welcome to Fundy MVP! I'm here to help understand your business and provide tailored insights. Let's start with the basics — what's your company name and what problem are you solving?" }]);
+        conversationDbIdRef.current = null;
+        deepDiveConvDbIdsRef.current = {};
+        actionConvDbIdsRef.current = {};
+        setActiveWindow(0);
+      } else {
+        console.error('[handleDeleteData] Server error', res.status);
+      }
+    } catch (err) {
+      console.error('[handleDeleteData] Failed:', err.message);
+    }
+    setDeleteConfirmState('idle');
   };
 
   // Process a completed Dify response — check for summary, update messages.
@@ -2077,6 +2114,22 @@ export default function StartupPlatform() {
 
         <div className="header-actions">
           <span className="header-email">{session.user?.email}</span>
+          {deleteConfirmState === 'confirming' ? (
+            <>
+              <button className="delete-data-btn confirming" onClick={handleDeleteData}>
+                Confirm delete
+              </button>
+              <button className="delete-data-cancel" onClick={() => setDeleteConfirmState('idle')}>
+                Cancel
+              </button>
+            </>
+          ) : deleteConfirmState === 'deleting' ? (
+            <button className="delete-data-btn deleting" disabled>Deleting...</button>
+          ) : (
+            <button className="delete-data-btn" onClick={() => setDeleteConfirmState('confirming')}>
+              Delete my data
+            </button>
+          )}
           <button className="sign-out-btn" onClick={handleSignOut}>Sign out</button>
         </div>
       </header>
