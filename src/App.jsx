@@ -1503,9 +1503,6 @@ export default function StartupPlatform() {
                           <p>{action.description}</p>
                         </div>
                         <div className="action-meta">
-                          {action.sourceId && (
-                            <span className="action-source">{MOCK_INVESTMENT_DATA.investments.find((i) => i.id === action.sourceId)?.type}</span>
-                          )}
                           <span className={`action-status ${action.status}`}>
                             {action.status.replace('_', ' ')}
                           </span>
