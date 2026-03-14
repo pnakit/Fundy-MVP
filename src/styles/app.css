@@ -1515,6 +1515,172 @@ body {
   color: white;
 }
 
+/* Investment Readiness Summary block */
+.invest-readiness-block {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.readiness-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.readiness-score-badge {
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.readiness-header strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+}
+
+.readiness-assessment {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Investment section headings */
+.invest-section-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 24px 0 12px;
+}
+
+/* Conditional investment card variant */
+.investment-card.conditional {
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+.investment-card.conditional:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+/* Improvement Roadmap */
+.invest-roadmap-section {
+  margin-top: 8px;
+}
+
+.roadmap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.roadmap-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.roadmap-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.roadmap-priority {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+
+.roadmap-category {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+  flex: 1;
+}
+
+.roadmap-score {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.roadmap-timeline {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.roadmap-unlocks {
+  font-size: 12px;
+  color: #10b981;
+  margin-bottom: 6px;
+}
+
+.roadmap-actions {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.roadmap-actions li {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+
+/* Not Recommended section */
+.invest-not-recommended {
+  margin-top: 8px;
+}
+
+.not-rec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.not-rec-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.not-rec-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  flex-shrink: 0;
+  min-width: 160px;
+}
+
+.not-rec-reason {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
 /* Password Screen */
 .password-screen {
   min-height: 100vh;
