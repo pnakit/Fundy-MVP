@@ -21,7 +21,7 @@ export const config = { runtime: 'edge' };
 import { getSupabaseAdmin } from '../_supabase.js';
 import { resolveApiKey } from '../_shared.js';
 import { chunkConversation } from '../_chunking.js';
-import { generateEmbeddings } from '../knowledge/embeddings.js';
+import { generateEmbeddings } from '../knowledge/_embeddings.js';
 import { streamEvaluation } from './_difyWorkflow.js';
 
 const CATEGORY_TITLES = {

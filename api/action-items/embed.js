@@ -18,7 +18,7 @@
 
 import { verifyAuth } from '../_auth.js';
 import { getSupabaseAdmin } from '../_supabase.js';
-import { generateEmbeddings } from '../knowledge/embeddings.js';
+import { generateEmbeddings } from '../knowledge/_embeddings.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

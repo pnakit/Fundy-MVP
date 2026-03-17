@@ -2,7 +2,7 @@ import { resolveApiKey, getDifyBaseUrl } from './_shared.js';
 import { verifyAuth } from './_auth.js';
 import { getSupabaseAdmin } from './_supabase.js';
 import { chunkFileText } from './_chunking.js';
-import { generateEmbeddings } from './knowledge/embeddings.js';
+import { generateEmbeddings } from './knowledge/_embeddings.js';
 
 // Title of the Code node in both Dify chatflows that passes through File Extractor text.
 // The node emits a node_finished event with outputs.file_text = extracted file content.

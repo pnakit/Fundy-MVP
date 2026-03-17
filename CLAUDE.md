@@ -110,10 +110,14 @@ api/
   upload.js               # POST /api/upload → Dify /files/upload (bodyParser disabled for multipart)
   chat/stop.js            # POST /api/chat/stop → Dify /chat-messages/{task_id}/stop
   knowledge/
-    knowledgeBase.js      # KB abstraction layer (swappable internal/external pgvector)
-    embeddings.js         # OpenAI embedding client (text-embedding-3-small)
+    _knowledgeBase.js     # KB abstraction layer (swappable internal/external pgvector)
+    _embeddings.js        # OpenAI embedding client (text-embedding-3-small)
+    _search.js            # Vector search endpoint (unused, `_`-prefixed to save Vercel function slot)
     embed.js              # POST /api/knowledge/embed — embedding ingestion endpoint
+    context.js            # GET/POST /api/knowledge/context — per-category context for Dify
   summary.js              # POST /api/summary — upsert onboarding summary + embed into pgvector
+  account/
+    delete.js             # POST /api/account/delete — reset all user data (preserves auth account)
   action-items/
     embed.js              # POST /api/action-items/embed — embed action item chat exchanges into KB
     refresh.js            # POST /api/action-items/refresh — vector search + LLM analysis per action item

@@ -21,8 +21,8 @@
 
 import { verifyAuth } from '../_auth.js';
 import { getSupabaseAdmin } from '../_supabase.js';
-import { generateEmbeddings } from '../knowledge/embeddings.js';
-import { semanticSearch } from '../knowledge/knowledgeBase.js';
+import { generateEmbeddings } from '../knowledge/_embeddings.js';
+import { semanticSearch } from '../knowledge/_knowledgeBase.js';
 import { analyzeActionItem } from './_analyze.js';
 
 const SEARCH_TOP_K = 5;

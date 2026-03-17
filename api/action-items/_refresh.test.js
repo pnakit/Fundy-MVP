@@ -21,8 +21,8 @@ const mockAnalyzeActionItem = vi.fn();
 
 vi.mock('../_auth.js', () => ({ verifyAuth: (...args) => mockVerifyAuth(...args) }));
 vi.mock('../_supabase.js', () => ({ getSupabaseAdmin: () => mockGetSupabaseAdmin() }));
-vi.mock('../knowledge/embeddings.js', () => ({ generateEmbeddings: (...args) => mockGenerateEmbeddings(...args) }));
-vi.mock('../knowledge/knowledgeBase.js', () => ({ semanticSearch: (...args) => mockSemanticSearch(...args) }));
+vi.mock('../knowledge/_embeddings.js', () => ({ generateEmbeddings: (...args) => mockGenerateEmbeddings(...args) }));
+vi.mock('../knowledge/_knowledgeBase.js', () => ({ semanticSearch: (...args) => mockSemanticSearch(...args) }));
 vi.mock('./_analyze.js', () => ({ analyzeActionItem: (...args) => mockAnalyzeActionItem(...args) }));
 
 import handler from './refresh.js';

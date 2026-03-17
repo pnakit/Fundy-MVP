@@ -1,6 +1,6 @@
 import { verifyWebhook } from '../_webhookAuth.js';
-import { generateEmbedding } from './embeddings.js';
-import { semanticSearch } from './knowledgeBase.js';
+import { generateEmbedding } from './_embeddings.js';
+import { semanticSearch } from './_knowledgeBase.js';
 
 /**
  * POST /api/knowledge/search
