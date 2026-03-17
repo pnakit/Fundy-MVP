@@ -31,7 +31,7 @@ const ChatPanel = React.memo(function ChatPanel({
       <div className="chat-messages">
         {messages.map((msg, idx) => (
           <div key={idx} className={`message ${msg.role}`}>
-            {msg.role === 'assistant' && <div className="message-avatar">S</div>}
+            {msg.role === 'assistant' && <div className="message-avatar">F</div>}
             <div className="message-content">
               {renderMsg(msg)}
             </div>
@@ -39,7 +39,7 @@ const ChatPanel = React.memo(function ChatPanel({
         ))}
         {isTyping && (
           <div className="message assistant">
-            <div className="message-avatar">S</div>
+            <div className="message-avatar">F</div>
             <div className="message-content typing">
               <span></span><span></span><span></span>
             </div>

@@ -73,7 +73,7 @@ export default function LoginScreen({ onAuthenticated }) {
     return (
       <div className="password-screen">
         <form className="password-box" onSubmit={handleOtpSubmit}>
-          <div className="logo-mark">S</div>
+          <div className="logo-mark">Fundy</div>
           <h2>Check your email</h2>
           <p>
             We sent a verification code to<br />

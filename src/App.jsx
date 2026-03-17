@@ -1583,9 +1583,9 @@ export default function StartupPlatform() {
                   className="eval-generate-btn"
                   onClick={handleGenerateEvaluation}
                   disabled={!onboardingSummary}
-                  title={onboardingSummary ? 'Generate AI evaluation and investment recommendations' : 'Complete onboarding first'}
+                  title={onboardingSummary ? 'Run AI evaluation' : 'Complete onboarding first'}
                 >
-                  Generate Evaluation &amp; Investment Recommendation
+                  Run Evaluation
                 </button>
               </>
             )}
@@ -1611,7 +1611,7 @@ export default function StartupPlatform() {
               <h3>{onboardingSummary ? 'Ready to evaluate' : 'Complete onboarding to begin'}</h3>
               <p>
                 {onboardingSummary
-                  ? 'Click "Generate Evaluation" to analyze your company across 10 key business dimensions.'
+                  ? 'Click "Run Evaluation" to analyze your company across 10 key business dimensions.'
                   : 'Complete the onboarding conversation first, or load sample data to test the evaluation flow.'}
               </p>
             </div>
@@ -1700,7 +1700,7 @@ export default function StartupPlatform() {
             <div className="actions-header">
               <h3>Action Items <span className="action-count">{actionItems.filter((a) => a.status !== 'completed').length} pending</span></h3>
               <button
-                className="refresh-btn"
+                className="eval-generate-btn"
                 onClick={handleRefreshActionItems}
                 disabled={refreshLoading || actionItems.filter((a) => a.status !== 'completed').length === 0}
               >
@@ -1853,9 +1853,9 @@ export default function StartupPlatform() {
                   className="eval-generate-btn"
                   onClick={handleGenerateEvaluation}
                   disabled={!onboardingSummary}
-                  title={onboardingSummary ? 'Generate AI evaluation and investment recommendations' : 'Complete onboarding first'}
+                  title={onboardingSummary ? 'Recommend investments based on evaluation' : 'Complete onboarding first'}
                 >
-                  Generate Evaluation &amp; Investment Recommendation
+                  Recommend Investments
                 </button>
               </div>
             )}
@@ -2163,7 +2163,7 @@ export default function StartupPlatform() {
     return (
       <div className="password-screen">
         <div className="password-box">
-          <div className="logo-mark">S</div>
+          <div className="logo-mark">Fundy</div>
           <p>Loading...</p>
         </div>
       </div>
