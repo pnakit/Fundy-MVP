@@ -107,6 +107,7 @@ export default function StartupPlatform() {
   const [actionItems, setActionItems] = useState([]);
   const [selectedInvestments, setSelectedInvestments] = useState([]);
   const [expandedAction, setExpandedAction] = useState(null);
+  const [expandedStretch, setExpandedStretch] = useState(new Set());
   const [onboardingPhase, setOnboardingPhase] = useState('chat');
   const [onboardingSummary, setOnboardingSummary] = useState(null);
   const [activeCategory, setActiveCategory] = useState(null);
@@ -1351,41 +1352,51 @@ export default function StartupPlatform() {
           };
         });
 
-        // Convert gaps to action items (merge — skip any action_key already in state)
+        // Convert gaps to action items — gated by type:
+        //   • All table_stakes gaps (must-haves for current maturity stage)
+        //   • Top MAX_STRETCH_PER_CATEGORY stretch gaps (future readiness)
         // Gaps are objects: { action: string, type: 'table_stakes'|'stretch', evidence_items: number[] }
         // Falls back to plain string gaps for backward compatibility
+        const MAX_STRETCH_PER_CATEGORY = 2;
         if (categoryData.gaps?.length > 0) {
+          const tableStakesGaps = categoryData.gaps.filter((g) =>
+            typeof g === 'string' ? true : g.type !== 'stretch',
+          );
+          const stretchGaps = categoryData.gaps
+            .filter((g) => typeof g !== 'string' && g.type === 'stretch')
+            .slice(0, MAX_STRETCH_PER_CATEGORY);
+          const gatedGaps = [...tableStakesGaps, ...stretchGaps];
+
           setActionItems((prev) => {
-            const existingKeys = new Set(
-              prev.filter((a) => a.sourceType === 'evaluation').map((a) => a.actionKey).filter(Boolean),
+            // Remove old evaluation items for this category before adding new ones
+            const withoutOldCategory = prev.filter(
+              (a) => !(a.sourceType === 'evaluation' && a.dimensionId === categoryData.category_id),
             );
-            const newItems = categoryData.gaps
-              .map((gap) => {
-                const gapText = typeof gap === 'string' ? gap : gap.action;
-                const gapType = typeof gap === 'string' ? 'table_stakes' : gap.type;
-                const slug = gapText
-                  .toLowerCase()
-                  .replace(/[^a-z0-9]+/g, '-')
-                  .replace(/^-+|-+$/g, '')
-                  .slice(0, 50);
-                return {
-                  id: crypto.randomUUID(),
-                  title: gapText,
-                  description: '',
-                  priority: gapType === 'table_stakes' ? 'high' : 'medium',
-                  status: 'pending',
-                  sourceType: 'evaluation',
-                  sourceId: null,
-                  dimensionId: categoryData.category_id,
-                  actionKey: `${categoryData.category_id}-${slug}`,
-                  gapType,
-                  evidenceItems: typeof gap === 'string' ? [] : (gap.evidence_items || []),
-                  files: [],
-                  inputs: {},
-                };
-              })
-              .filter((item) => !existingKeys.has(item.actionKey));
-            return [...prev, ...newItems];
+            const newItems = gatedGaps.map((gap) => {
+              const gapText = typeof gap === 'string' ? gap : gap.action;
+              const gapType = typeof gap === 'string' ? 'table_stakes' : gap.type;
+              const slug = gapText
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 50);
+              return {
+                id: crypto.randomUUID(),
+                title: gapText,
+                description: '',
+                priority: gapType === 'table_stakes' ? 'high' : 'medium',
+                status: 'pending',
+                sourceType: 'evaluation',
+                sourceId: null,
+                dimensionId: categoryData.category_id,
+                actionKey: `${categoryData.category_id}-${slug}`,
+                gapType,
+                evidenceItems: typeof gap === 'string' ? [] : (gap.evidence_items || []),
+                files: [],
+                inputs: {},
+              };
+            });
+            return [...withoutOldCategory, ...newItems];
           });
         }
       },
@@ -1530,16 +1541,19 @@ export default function StartupPlatform() {
         })
       : [];
 
-    // Group evaluation action items by dimension, sorted worst-performing first
+    // Group evaluation action items by dimension, split into must-haves and stretch
     const evaluationActions = actionItems.filter((a) => a.sourceType === 'evaluation');
     const actionsByDimension = enrichedDimensions
       .filter((d) => evaluationActions.some((a) => a.dimensionId === d.id))
-      .map((d) => ({
-        dimension: d,
-        actions: evaluationActions
-          .filter((a) => a.dimensionId === d.id)
-          .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 4) - (PRIORITY_ORDER[b.priority] ?? 4)),
-      }));
+      .map((d) => {
+        const dimActions = evaluationActions.filter((a) => a.dimensionId === d.id);
+        const sortByPriority = (a, b) => (PRIORITY_ORDER[a.priority] ?? 4) - (PRIORITY_ORDER[b.priority] ?? 4);
+        return {
+          dimension: d,
+          mustHaves: dimActions.filter((a) => a.gapType !== 'stretch').sort(sortByPriority),
+          stretch: dimActions.filter((a) => a.gapType === 'stretch').sort(sortByPriority),
+        };
+      });
 
     // Investment-sourced actions (shown after evaluation groups)
     const investmentActions = actionItems.filter((a) => a.sourceType === 'investment');
@@ -1695,74 +1709,101 @@ export default function StartupPlatform() {
             </div>
 
             <div className="action-cards">
-              {actionsByDimension.map(({ dimension, actions }) => (
-                <div key={dimension.id} className="action-dimension-group">
-                  <div className="action-dimension-header">
-                    <span>{dimension.icon}</span>
-                    <span className="action-dimension-name">{dimension.title}</span>
-                    <span className="action-dimension-perf-badge" style={{ background: `${getPerformanceColor(dimension.performanceScore)}20`, color: getPerformanceColor(dimension.performanceScore), borderColor: `${getPerformanceColor(dimension.performanceScore)}40` }}>
-                      {getPerformanceLabel(dimension.performanceScore)}
-                    </span>
-                  </div>
-                  {actions.map((action) => (
-                    <div
-                      key={action.id}
-                      className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
-                    >
-                      <div className="action-card-header" onClick={() => { const opening = expandedAction !== action.id; setExpandedAction(opening ? action.id : null); if (opening) initActionConversation(action); }}>
-                        <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
-                        <div className="action-info">
-                          <h4>{action.title}</h4>
-                          {action.gapType && (
-                            <span className={`gap-type-badge ${action.gapType}`}>
-                              {action.gapType === 'table_stakes' ? 'Must-have' : 'Stretch'}
-                            </span>
-                          )}
-                          {action.customData?.refresh && (
-                            <span
-                              className={`refresh-badge ${action.customData.refresh.status}`}
-                              title={action.customData.refresh.summary}
-                            >
-                              {action.customData.refresh.status === 'addressed' ? 'Addressed'
-                                : action.customData.refresh.status === 'partially_addressed' ? 'Partial'
-                                : action.customData.refresh.status === 'not_addressed' ? 'Not addressed'
-                                : 'No evidence'}
-                            </span>
-                          )}
-                          <p>{action.description}</p>
-                        </div>
-                        <div className="action-meta">
-                          <span className={`action-status ${action.status}`}>
-                            {action.status.replace('_', ' ')}
+              {actionsByDimension.map(({ dimension, mustHaves, stretch }) => {
+                const stretchOpen = expandedStretch.has(dimension.id);
+                const renderActionCard = (action) => (
+                  <div
+                    key={action.id}
+                    className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
+                  >
+                    <div className="action-card-header" onClick={() => { const opening = expandedAction !== action.id; setExpandedAction(opening ? action.id : null); if (opening) initActionConversation(action); }}>
+                      <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
+                      <div className="action-info">
+                        <h4>{action.title}</h4>
+                        {action.gapType && (
+                          <span className={`gap-type-badge ${action.gapType}`}>
+                            {action.gapType === 'table_stakes' ? 'Must-have' : 'Stretch'}
                           </span>
-                        </div>
-                        <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
+                        )}
+                        {action.customData?.refresh && (
+                          <span
+                            className={`refresh-badge ${action.customData.refresh.status}`}
+                            title={action.customData.refresh.summary}
+                          >
+                            {action.customData.refresh.status === 'addressed' ? 'Addressed'
+                              : action.customData.refresh.status === 'partially_addressed' ? 'Partial'
+                              : action.customData.refresh.status === 'not_addressed' ? 'Not addressed'
+                              : 'No evidence'}
+                          </span>
+                        )}
+                        <p>{action.description}</p>
                       </div>
-
-                      {expandedAction === action.id && (
-                        <div className="action-card-body">
-                          <div className="action-chat-container">
-                            <ChatPanel
-                              messages={actionConversations[action.id]?.messages || []}
-                              isTyping={actionTyping === action.id}
-                              inputValue={actionConversations[action.id]?.inputValue || ''}
-                              onInputChange={(v) => handleActionChatInputChange(action.id, v)}
-                              onSend={() => handleActionChatSend(action.id)}
-                              onFileUpload={(e) => handleActionChatFileUpload(action.id, e)}
-                              placeholder="Ask for guidance, add notes, or upload documentation..."
-                            />
-                          </div>
-                          <div className="action-buttons">
-                            <button className="btn-complete" onClick={() => handleMarkComplete(action.id)}>
-                              Mark Complete
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <div className="action-meta">
+                        <span className={`action-status ${action.status}`}>
+                          {action.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
                     </div>
-                  ))}
-                </div>
-              ))}
+
+                    {expandedAction === action.id && (
+                      <div className="action-card-body">
+                        <div className="action-chat-container">
+                          <ChatPanel
+                            messages={actionConversations[action.id]?.messages || []}
+                            isTyping={actionTyping === action.id}
+                            inputValue={actionConversations[action.id]?.inputValue || ''}
+                            onInputChange={(v) => handleActionChatInputChange(action.id, v)}
+                            onSend={() => handleActionChatSend(action.id)}
+                            onFileUpload={(e) => handleActionChatFileUpload(action.id, e)}
+                            placeholder="Ask for guidance, add notes, or upload documentation..."
+                          />
+                        </div>
+                        <div className="action-buttons">
+                          <button className="btn-complete" onClick={() => handleMarkComplete(action.id)}>
+                            Mark Complete
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+
+                return (
+                  <div key={dimension.id} className="action-dimension-group">
+                    <div className="action-dimension-header">
+                      <span>{dimension.icon}</span>
+                      <span className="action-dimension-name">{dimension.title}</span>
+                      <span className="action-dimension-perf-badge" style={{ background: `${getPerformanceColor(dimension.performanceScore)}20`, color: getPerformanceColor(dimension.performanceScore), borderColor: `${getPerformanceColor(dimension.performanceScore)}40` }}>
+                        {getPerformanceLabel(dimension.performanceScore)}
+                      </span>
+                    </div>
+                    {mustHaves.map(renderActionCard)}
+                    {stretch.length > 0 && (
+                      <div className="stretch-goals-section">
+                        <button
+                          className="stretch-goals-toggle"
+                          onClick={() => setExpandedStretch((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(dimension.id)) next.delete(dimension.id);
+                            else next.add(dimension.id);
+                            return next;
+                          })}
+                        >
+                          <span className="stretch-goals-icon">{stretchOpen ? '▾' : '▸'}</span>
+                          <span>Stretch Goals</span>
+                          <span className="stretch-goals-count">{stretch.length}</span>
+                        </button>
+                        {stretchOpen && (
+                          <div className="stretch-goals-cards">
+                            {stretch.map(renderActionCard)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
             </div>
           </div>
