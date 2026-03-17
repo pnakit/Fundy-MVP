@@ -1915,8 +1915,9 @@ body {
 }
 
 .password-box .logo-mark {
-  width: 48px;
-  height: 48px;
+  width: auto;
+  height: auto;
+  padding: 0.5rem 1rem;
   margin: 0 auto 1.5rem;
   font-size: 1.375rem;
 }
