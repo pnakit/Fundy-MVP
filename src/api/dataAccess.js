@@ -172,7 +172,7 @@ export async function saveActionItem(item, userId) {
       dimension_id: item.dimensionId || null,
       action_key: item.actionKey || null,
       file_ids: [],
-      custom_data: {},
+      custom_data: item.customData || {},
     },
     { onConflict: 'id' },
   );

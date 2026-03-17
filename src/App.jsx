@@ -43,6 +43,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import DebugPanel from './components/DebugPanel';
 import { uploadFiles, buildUploadMessages, DIFY_MAX_FILES, DIFY_MAX_FILE_SIZE_MB } from './utils/fileUpload';
 import { generateEvaluation } from './api/evaluationApi';
+import { refreshActionItems } from './api/actionItemRefreshApi';
 
 const CHAT_ERROR_MESSAGE = 'I apologize, but I encountered an error. Please try again.';
 
@@ -72,6 +73,7 @@ function mapDbActionToState(dbRow) {
     sourceId: dbRow.source_id || null,
     dimensionId: dbRow.dimension_id || null,
     actionKey: dbRow.action_key || null,
+    customData: dbRow.custom_data || {},
     files: [],
     inputs: {},
   };
@@ -114,6 +116,7 @@ export default function StartupPlatform() {
   const [debugLogs, setDebugLogs] = useState([]);
   const [actionConversations, setActionConversations] = useState({});
   const [actionTyping, setActionTyping] = useState(null);
+  const [refreshLoading, setRefreshLoading] = useState(false);
 
   const addDebugLog = useCallback((label, detail) => {
     if (!debugEnabled) return;
@@ -563,6 +566,26 @@ export default function StartupPlatform() {
       }
       return item;
     }));
+  };
+
+  const handleRefreshActionItems = async () => {
+    const nonCompleted = actionItems.filter((a) => a.status !== 'completed');
+    if (nonCompleted.length === 0) return;
+    setRefreshLoading(true);
+    try {
+      const { results } = await refreshActionItems(nonCompleted.map((a) => a.id));
+      setActionItems((prev) =>
+        prev.map((item) => {
+          const refresh = results[item.id];
+          if (!refresh) return item;
+          return { ...item, customData: { ...item.customData, refresh } };
+        }),
+      );
+    } catch (err) {
+      console.error('[handleRefreshActionItems]', err.message);
+    } finally {
+      setRefreshLoading(false);
+    }
   };
 
   const toggleInvestment = (investmentId) => {
@@ -1184,13 +1207,16 @@ export default function StartupPlatform() {
                     </div>
                   )}
 
-                  {category.gaps.length > 0 && (
-                    <div className="category-gaps">
-                      <span className="gaps-label">
-                        {category.gaps.length} area{category.gaps.length > 1 ? 's' : ''} to explore
-                      </span>
-                    </div>
-                  )}
+                  {category.gaps.length > 0 && (() => {
+                    const tableStakes = category.gaps.filter((g) => (typeof g === 'string' ? false : g.type === 'table_stakes')).length;
+                    const stretch = category.gaps.length - tableStakes;
+                    return (
+                      <div className="category-gaps">
+                        {tableStakes > 0 && <span className="gaps-label gaps-table-stakes">{tableStakes} must-have{tableStakes > 1 ? 's' : ''}</span>}
+                        {stretch > 0 && <span className="gaps-label gaps-stretch">{stretch} stretch goal{stretch > 1 ? 's' : ''}</span>}
+                      </div>
+                    );
+                  })()}
 
                   <div className="category-action">
                     <span>Deep dive</span>
@@ -1326,30 +1352,34 @@ export default function StartupPlatform() {
         });
 
         // Convert gaps to action items (merge — skip any action_key already in state)
+        // Gaps are objects: { action: string, type: 'table_stakes'|'stretch', evidence_items: number[] }
+        // Falls back to plain string gaps for backward compatibility
         if (categoryData.gaps?.length > 0) {
-          const completeness = categoryData.completeness ?? 0;
-          const priority = completeness < 40 ? 'high' : 'medium';
           setActionItems((prev) => {
             const existingKeys = new Set(
               prev.filter((a) => a.sourceType === 'evaluation').map((a) => a.actionKey).filter(Boolean),
             );
             const newItems = categoryData.gaps
               .map((gap) => {
-                const slug = gap
+                const gapText = typeof gap === 'string' ? gap : gap.action;
+                const gapType = typeof gap === 'string' ? 'table_stakes' : gap.type;
+                const slug = gapText
                   .toLowerCase()
                   .replace(/[^a-z0-9]+/g, '-')
                   .replace(/^-+|-+$/g, '')
                   .slice(0, 50);
                 return {
                   id: crypto.randomUUID(),
-                  title: gap,
+                  title: gapText,
                   description: '',
-                  priority,
+                  priority: gapType === 'table_stakes' ? 'high' : 'medium',
                   status: 'pending',
                   sourceType: 'evaluation',
                   sourceId: null,
                   dimensionId: categoryData.category_id,
                   actionKey: `${categoryData.category_id}-${slug}`,
+                  gapType,
+                  evidenceItems: typeof gap === 'string' ? [] : (gap.evidence_items || []),
                   files: [],
                   inputs: {},
                 };
@@ -1655,6 +1685,13 @@ export default function StartupPlatform() {
           <div className="actions-section">
             <div className="actions-header">
               <h3>Action Items <span className="action-count">{actionItems.filter((a) => a.status !== 'completed').length} pending</span></h3>
+              <button
+                className="refresh-btn"
+                onClick={handleRefreshActionItems}
+                disabled={refreshLoading || actionItems.filter((a) => a.status !== 'completed').length === 0}
+              >
+                {refreshLoading ? 'Analyzing...' : 'Refresh Status'}
+              </button>
             </div>
 
             <div className="action-cards">
@@ -1676,6 +1713,22 @@ export default function StartupPlatform() {
                         <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
                         <div className="action-info">
                           <h4>{action.title}</h4>
+                          {action.gapType && (
+                            <span className={`gap-type-badge ${action.gapType}`}>
+                              {action.gapType === 'table_stakes' ? 'Must-have' : 'Stretch'}
+                            </span>
+                          )}
+                          {action.customData?.refresh && (
+                            <span
+                              className={`refresh-badge ${action.customData.refresh.status}`}
+                              title={action.customData.refresh.summary}
+                            >
+                              {action.customData.refresh.status === 'addressed' ? 'Addressed'
+                                : action.customData.refresh.status === 'partially_addressed' ? 'Partial'
+                                : action.customData.refresh.status === 'not_addressed' ? 'Not addressed'
+                                : 'No evidence'}
+                            </span>
+                          )}
                           <p>{action.description}</p>
                         </div>
                         <div className="action-meta">
@@ -2084,8 +2137,7 @@ export default function StartupPlatform() {
     <div className="app-container">
       <header className="main-header">
         <div className="logo">
-          <div className="logo-mark">S</div>
-          <span className="logo-text">Fundy MVP</span>
+          <div className="logo-mark">Fundy</div>
         </div>
 
         <div className="window-tabs">

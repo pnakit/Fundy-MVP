@@ -28,6 +28,7 @@ function makeChain(terminalOverrides = {}) {
     select: vi.fn(() => chain),
     insert: vi.fn(() => chain),
     update: vi.fn(() => chain),
+    upsert: vi.fn(() => chain),
     eq: vi.fn(() => chain),
     order: vi.fn(() => chain),
     single: terminalOverrides.single ?? vi.fn(),
@@ -45,6 +46,8 @@ import {
   loadOnboardingConversation,
   loadDeepDiveConversations,
   loadEvaluation,
+  saveActionItem,
+  loadActionItems,
 } from './dataAccess';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -382,5 +385,84 @@ describe('loadDeepDiveConversations', () => {
     const result = await loadDeepDiveConversations();
 
     expect(result).toEqual({});
+  });
+});
+
+// ─── saveActionItem — customData round-trip ──────────────────────────────────
+
+describe('saveActionItem', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('preserves customData in the upsert payload', async () => {
+    const chain = makeChain();
+    chain.upsert.mockReturnValue({ error: null });
+    mockFrom.mockReturnValue(chain);
+
+    const item = {
+      id: 'action-uuid-1',
+      title: 'Build financial model',
+      description: 'Create 3-year projections',
+      priority: 'high',
+      status: 'pending',
+      sourceType: 'evaluation',
+      sourceId: null,
+      dimensionId: 'financials',
+      actionKey: 'financials-build-model',
+      customData: { refresh: { status: 'addressed', confidence: 0.9, summary: 'Found evidence.' } },
+    };
+
+    await saveActionItem(item, USER_ID);
+
+    expect(chain.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        custom_data: { refresh: { status: 'addressed', confidence: 0.9, summary: 'Found evidence.' } },
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('defaults customData to empty object when not provided', async () => {
+    const chain = makeChain();
+    chain.upsert.mockReturnValue({ error: null });
+    mockFrom.mockReturnValue(chain);
+
+    const item = { id: 'action-uuid-2', title: 'Test item' };
+    await saveActionItem(item, USER_ID);
+
+    expect(chain.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ custom_data: {} }),
+      expect.any(Object),
+    );
+  });
+});
+
+// ─── loadActionItems — customData mapping ────────────────────────────────────
+
+describe('loadActionItems', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns raw DB rows (customData mapping happens in App.jsx)', async () => {
+    const rows = [
+      { id: 'a1', title: 'Item 1', custom_data: { refresh: { status: 'addressed' } } },
+      { id: 'a2', title: 'Item 2', custom_data: {} },
+    ];
+    const chain = makeChain();
+    chain.order.mockResolvedValue({ data: rows });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await loadActionItems();
+
+    expect(result).toEqual(rows);
+    expect(result[0].custom_data).toEqual({ refresh: { status: 'addressed' } });
+  });
+
+  it('returns empty array when no action items exist', async () => {
+    const chain = makeChain();
+    chain.order.mockResolvedValue({ data: null });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await loadActionItems();
+
+    expect(result).toEqual([]);
   });
 });

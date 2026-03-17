@@ -33,13 +33,13 @@ body {
 }
 
 .logo-mark {
-  width: 36px;
-  height: 36px;
+  padding: 0.4rem 0.75rem;
   background: linear-gradient(135deg, #6366f1, #a855f7);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-weight: 700;
   font-size: 1.125rem;
 }
@@ -609,11 +609,46 @@ body {
 
 .category-gaps {
   padding-top: 0.25rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .gaps-label {
-  font-size: 0.75rem;
-  color: #fbbf24;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.gaps-table-stakes {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.gaps-stretch {
+  color: #818cf8;
+  background: rgba(129, 140, 248, 0.12);
+}
+
+.gap-type-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  margin-top: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.gap-type-badge.table_stakes {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.gap-type-badge.stretch {
+  color: #818cf8;
+  background: rgba(129, 140, 248, 0.12);
 }
 
 .category-action {
@@ -1145,6 +1180,53 @@ body {
   padding: 0.25rem 0.75rem;
   border-radius: 100px;
   font-size: 0.8125rem;
+}
+
+.refresh-btn {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  padding: 0.4rem 1rem;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.refresh-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.refresh-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  margin-top: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.refresh-badge.addressed {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+}
+.refresh-badge.partially_addressed {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+.refresh-badge.not_addressed {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+.refresh-badge.insufficient_evidence {
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .action-cards {
