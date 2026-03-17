@@ -243,8 +243,8 @@ export const MOCK_ONBOARDING_SUMMARY = {
         "API-first architecture enables rapid integration"
       ],
       gaps: [
-        "No patent filings documented",
-        "Technical debt assessment missing"
+        { action: "Develop an IP protection strategy — file provisional patents or document trade secrets for your proprietary ML model", type: "stretch", evidence_items: [13, 14] },
+        { action: "Establish a technical debt tracking process with regular assessment cycles", type: "stretch", evidence_items: [12] }
       ],
       keyMetrics: { techStackMaturity: "Advanced", ipProtection: "Low", productStage: "Growth" },
       deepDivePrompt: "Let's dive deeper into your product and technology. Based on what you shared, I'd like to explore your IP strategy, technical debt, and product roadmap in more detail."
@@ -252,7 +252,7 @@ export const MOCK_ONBOARDING_SUMMARY = {
     {
       id: "market_traction",
       title: "Market Traction & Revenue",
-      summary: "Growing MRR with strong net retention. Customer acquisition cost trending down but market size validation needed.",
+      summary: "Growing MRR with strong net retention. At Validated stage with strong revenue signals but market sizing needs work.",
       completeness: 72,
       status: "complete",
       highlights: [
@@ -260,8 +260,8 @@ export const MOCK_ONBOARDING_SUMMARY = {
         "Net revenue retention at 120%"
       ],
       gaps: [
-        "Total addressable market analysis incomplete",
-        "Competitor market share data missing"
+        { action: "Complete a bottoms-up total addressable market analysis with clear SAM/SOM breakdown", type: "table_stakes", evidence_items: [11] },
+        { action: "Build a repeatable sales process with documented pipeline stages and conversion metrics", type: "table_stakes", evidence_items: [12] }
       ],
       keyMetrics: { mrr: "$45K", mrrGrowth: "15% MoM", netRetention: "120%" },
       deepDivePrompt: "Let's explore your market traction in more detail. I'd like to understand your customer acquisition channels, unit economics, and market sizing better."
@@ -269,7 +269,7 @@ export const MOCK_ONBOARDING_SUMMARY = {
     {
       id: "business_model",
       title: "Business Model & Economics",
-      summary: "SaaS subscription model with tiered pricing. Unit economics are promising but need validation at scale.",
+      summary: "SaaS subscription model with tiered pricing. At Early stage — unit economics are promising but need validation at scale.",
       completeness: 60,
       status: "needs_attention",
       highlights: [
@@ -277,8 +277,8 @@ export const MOCK_ONBOARDING_SUMMARY = {
         "Gross margins above 70%"
       ],
       gaps: [
-        "Customer lifetime value calculation incomplete",
-        "Pricing strategy documentation needed"
+        { action: "Calculate customer lifetime value using cohort data to validate your LTV:CAC ratio", type: "stretch", evidence_items: [8, 9] },
+        { action: "Document and test your pricing strategy — run pricing experiments to validate willingness to pay at each tier", type: "stretch", evidence_items: [11] }
       ],
       keyMetrics: { grossMargin: "72%", pricingModel: "Tiered SaaS", avgContractValue: "$1,200/yr" },
       deepDivePrompt: "Let's examine your business model more closely. I'd like to understand your pricing strategy, unit economics, and path to profitability."
@@ -286,7 +286,7 @@ export const MOCK_ONBOARDING_SUMMARY = {
     {
       id: "team_organization",
       title: "Team & Organization",
-      summary: "Strong founding team with complementary skills. Key engineering hires needed for next growth phase.",
+      summary: "Strong founding team with complementary skills. At Validated stage — key hiring gaps need closing for next growth phase.",
       completeness: 78,
       status: "complete",
       highlights: [
@@ -294,8 +294,8 @@ export const MOCK_ONBOARDING_SUMMARY = {
         "CTO previously built systems at scale (100M+ users)"
       ],
       gaps: [
-        "VP of Sales position unfilled",
-        "Advisory board composition not discussed"
+        { action: "Hire a VP of Sales to formalize your go-to-market execution — this is critical for Series A readiness", type: "table_stakes", evidence_items: [12] },
+        { action: "Establish an advisory board with industry-specific domain experts and investor-network connectors", type: "stretch", evidence_items: [13] }
       ],
       keyMetrics: { teamSize: "12", keyHiresNeeded: "3", founderExperience: "Strong" },
       deepDivePrompt: "Let's discuss your team and organizational structure. I'd like to explore your hiring plan, team gaps, and organizational design for scaling."
@@ -303,7 +303,7 @@ export const MOCK_ONBOARDING_SUMMARY = {
     {
       id: "go_to_market",
       title: "Go-to-Market",
-      summary: "Product-led growth motion with emerging enterprise sales. Channel strategy needs formalization.",
+      summary: "Product-led growth motion with emerging enterprise sales. At Validated stage — channel strategy needs formalization.",
       completeness: 55,
       status: "needs_attention",
       highlights: [
@@ -311,8 +311,8 @@ export const MOCK_ONBOARDING_SUMMARY = {
         "First enterprise deals closing via inbound"
       ],
       gaps: [
-        "Enterprise sales playbook not documented",
-        "Partner channel strategy undefined"
+        { action: "Document your enterprise sales playbook — capture your demo flow, objection handling, and close process while deals are fresh", type: "table_stakes", evidence_items: [12] },
+        { action: "Define and test a partner or channel strategy to diversify acquisition beyond PLG and inbound", type: "stretch", evidence_items: [13, 15] }
       ],
       keyMetrics: { primaryMotion: "PLG", conversionRate: "4.2%", salesCycle: "45 days" },
       deepDivePrompt: "Let's explore your go-to-market strategy. I'd like to understand your sales motion, channel strategy, and customer acquisition approach in more detail."
@@ -320,7 +320,7 @@ export const MOCK_ONBOARDING_SUMMARY = {
     {
       id: "financial_health",
       title: "Financial Health",
-      summary: "18 months of runway remaining. Burn rate manageable but increasing with planned hires.",
+      summary: "18 months of runway remaining. At Validated stage — burn rate manageable but financial planning needs strengthening.",
       completeness: 65,
       status: "needs_attention",
       highlights: [
@@ -328,8 +328,8 @@ export const MOCK_ONBOARDING_SUMMARY = {
         "Revenue covering 40% of monthly expenses"
       ],
       gaps: [
-        "Detailed financial projections not provided",
-        "Cash flow forecast needed"
+        { action: "Build a 3-year financial model with revenue projections, expense assumptions, and scenario analysis", type: "table_stakes", evidence_items: [10] },
+        { action: "Create a monthly cash flow forecast with sensitivity analysis for different growth/burn scenarios", type: "table_stakes", evidence_items: [9] }
       ],
       keyMetrics: { runway: "18 months", burnRate: "$80K/mo", revenueVsBurn: "40%" },
       deepDivePrompt: "Let's look at your financial health more closely. I'd like to review your burn rate trends, runway projections, and financial planning."
@@ -337,7 +337,7 @@ export const MOCK_ONBOARDING_SUMMARY = {
     {
       id: "fundraising_capital",
       title: "Fundraising & Capital",
-      summary: "Seed round completed. Series A timeline and strategy need clarification.",
+      summary: "Seed round completed. At Validated stage — Series A timeline and strategy need clarification.",
       completeness: 50,
       status: "needs_attention",
       highlights: [
@@ -345,9 +345,9 @@ export const MOCK_ONBOARDING_SUMMARY = {
         "Warm introductions to 3 Series A funds"
       ],
       gaps: [
-        "Series A target valuation not discussed",
-        "Use of funds breakdown needed",
-        "Investor pipeline details missing"
+        { action: "Define your Series A target — set a valuation range, round size, and use-of-funds breakdown backed by your financial model", type: "table_stakes", evidence_items: [10] },
+        { action: "Prepare a data room and due diligence package so you can move quickly when a lead investor engages", type: "table_stakes", evidence_items: [9] },
+        { action: "Build a structured investor pipeline — track warm intros, meeting stages, and follow-up cadence", type: "table_stakes", evidence_items: [11] }
       ],
       keyMetrics: { lastRound: "Seed ($1.5M)", nextRound: "Series A", targetTimeline: "Q3 2026" },
       deepDivePrompt: "Let's discuss your fundraising strategy. I'd like to understand your capital needs, target investors, and fundraising timeline in detail."
@@ -355,7 +355,7 @@ export const MOCK_ONBOARDING_SUMMARY = {
     {
       id: "competitive_position",
       title: "Competitive Position",
-      summary: "Clear technical moat but competitive landscape analysis is surface-level.",
+      summary: "Clear technical moat but competitive landscape analysis is surface-level. At Validated stage.",
       completeness: 45,
       status: "incomplete",
       highlights: [
@@ -363,9 +363,9 @@ export const MOCK_ONBOARDING_SUMMARY = {
         "First-mover advantage in AI-powered segment"
       ],
       gaps: [
-        "Detailed competitive matrix not provided",
-        "Barrier to entry analysis missing",
-        "Switching cost evaluation needed"
+        { action: "Build a detailed competitive matrix comparing features, pricing, and positioning against your top 5 competitors", type: "table_stakes", evidence_items: [9] },
+        { action: "Conduct win/loss analysis on recent deals to understand why customers choose you (or don't)", type: "table_stakes", evidence_items: [9] },
+        { action: "Document your barriers to entry — quantify what it would take a competitor to replicate your ML advantage", type: "table_stakes", evidence_items: [11] }
       ],
       keyMetrics: { primaryDifferentiator: "AI Performance", competitorCount: "5 direct", moatStrength: "Moderate" },
       deepDivePrompt: "Let's analyze your competitive position. I'd like to map out your competitive landscape, understand your moats, and evaluate your defensibility."
@@ -373,7 +373,7 @@ export const MOCK_ONBOARDING_SUMMARY = {
     {
       id: "operations",
       title: "Operations",
-      summary: "Lean operations with strong engineering processes. Customer support and compliance frameworks need attention.",
+      summary: "Lean operations with strong engineering processes. At Early stage — customer support and compliance frameworks need attention.",
       completeness: 40,
       status: "incomplete",
       highlights: [
@@ -381,9 +381,9 @@ export const MOCK_ONBOARDING_SUMMARY = {
         "Agile development with 2-week sprints"
       ],
       gaps: [
-        "Customer support scaling plan not discussed",
-        "Vendor management processes undefined",
-        "Disaster recovery plan not documented"
+        { action: "Define SLA commitments for customer support and establish a scalable support model (response times, channels, tooling)", type: "stretch", evidence_items: [8] },
+        { action: "Document vendor relationships and set up basic procurement and contract management processes", type: "stretch", evidence_items: [9] },
+        { action: "Create a disaster recovery plan covering your critical infrastructure and customer data", type: "stretch", evidence_items: [13] }
       ],
       keyMetrics: { uptime: "99.9%", deployFrequency: "Daily", supportModel: "Not defined" },
       deepDivePrompt: "Let's review your operations. I'd like to understand your infrastructure, support processes, and operational scaling plans."
@@ -391,7 +391,7 @@ export const MOCK_ONBOARDING_SUMMARY = {
     {
       id: "legal_compliance",
       title: "Legal & Compliance",
-      summary: "Basic corporate structure in place. Data privacy and regulatory compliance need review.",
+      summary: "Basic corporate structure in place. At Early stage — data privacy and regulatory compliance need review.",
       completeness: 35,
       status: "incomplete",
       highlights: [
@@ -399,9 +399,9 @@ export const MOCK_ONBOARDING_SUMMARY = {
         "Standard employee agreements in place"
       ],
       gaps: [
-        "GDPR/data privacy compliance status unknown",
-        "IP assignment agreements not confirmed",
-        "Regulatory requirements not mapped"
+        { action: "Audit your data handling practices for GDPR/CCPA compliance — document what data you collect, how it's processed, and where it's stored", type: "stretch", evidence_items: [9] },
+        { action: "Confirm IP assignment agreements are signed by all employees and contractors — this is critical for due diligence", type: "table_stakes", evidence_items: [6] },
+        { action: "Map the regulatory requirements for your target markets to identify compliance gaps before they become blockers", type: "stretch", evidence_items: [12] }
       ],
       keyMetrics: { entityType: "Delaware C-Corp", gdprStatus: "Unknown", ipProtection: "Partial" },
       deepDivePrompt: "Let's discuss your legal and compliance posture. I'd like to review your corporate structure, IP protection, data privacy compliance, and regulatory requirements."

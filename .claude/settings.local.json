@@ -39,7 +39,16 @@
       "Bash(npx supabase --version)",
       "Bash(npx supabase db execute --sql \"ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS investment_data jsonb;\")",
       "Bash(npx vitest run api/evaluation/_difyWorkflow.test.js)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(ls -la \"c:\\\\Users\\\\jamot\\\\OneDrive\\\\Nusu Git LOCAL\\\\Fundy-MVP\\\\api\\\\account\"\" 2>/dev/null || echo \"No account directory found \")",
+      "Bash(vercel env add VITE_DEMO_USER_EMAIL production)",
+      "Bash(npx vitest run src/components/LoginScreen.test.jsx)",
+      "Bash(ls -la *.md)",
+      "Bash(grep \"^### \\\\`eval_\" dify-evaluation-workflow.md)",
+      "Bash(npx vitest run api/action-items/_analyze.test.js)",
+      "Bash(npx vitest run src/api/dataAccess.test.js)",
+      "Bash(npx vitest run api/action-items/refresh.test.js)",
+      "Bash(npx vitest run src/api/actionItemRefreshApi.test.js)"
     ],
     "additionalDirectories": [
       "c:\\Users\\jamot\\.claude\\projects\\c--Users-jamot-OneDrive-Nusu-Git-LOCAL-Fundy-MVP\\memory"

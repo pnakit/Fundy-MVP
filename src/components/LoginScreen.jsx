@@ -105,8 +105,8 @@ export default function LoginScreen({ onAuthenticated }) {
   return (
     <div className="password-screen">
       <form className="password-box" onSubmit={handleEmailSubmit}>
-        <div className="logo-mark">S</div>
-        <h2>Fundy MVP</h2>
+        <div className="logo-mark">Fundy</div>
+        <h2>Fundy</h2>
         <p>Enter your email to get started</p>
         <input
           type="email"

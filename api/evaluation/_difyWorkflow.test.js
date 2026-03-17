@@ -252,7 +252,10 @@ describe('rich LLM output fields are passed through', () => {
       summary: 'Good SaaS model.',
       status: 'partial',
       highlights: ['72% gross margin', '$45K MRR'],
-      gaps: ['No LTV/CAC', 'No path to profitability'],
+      gaps: [
+        { action: 'Calculate LTV/CAC ratio using cohort data', type: 'table_stakes', evidence_items: [9] },
+        { action: 'Map a clear path to profitability with timeline', type: 'stretch', evidence_items: [12] },
+      ],
       keyMetrics: { mrr: 45000, grossMarginPercent: 72 },
       deepDivePrompt: 'Tell me about your CAC.',
     };

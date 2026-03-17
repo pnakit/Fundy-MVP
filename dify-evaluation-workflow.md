@@ -12,11 +12,27 @@ This document describes how to create the evaluation workflow in Dify Studio. Th
 - In Dify Studio, click **Create App** → select **Workflow** (not Chatflow)
 - Name it something like "Startup Evaluation"
 
-### Step 2: Set up the evaluation framework as an Environment Variable
+### Step 2: Set up per-category Environment Variables
+
+Each of the 10 LLM nodes has its own environment variable containing the category-specific evaluation scorecard. This allows each node to reference only its own evidence items and maturity interpretation.
+
 - Go to **Settings** (gear icon) → **Environment Variables**
-- Create `EVALUATION_FRAMEWORK` (type: String)
-- Paste the full evaluation framework text (scorecard items, scoring rules, maturity thresholds — see "Evaluation Framework" section below)
-- This is where you edit evaluation criteria — all 10 LLM nodes reference it via `{{EVALUATION_FRAMEWORK}}`
+- Create **10 environment variables** (type: String), one per category:
+
+| Env Variable | Referenced by node |
+|---|---|
+| `eval_product_technology` | `eval_product_technology` LLM node |
+| `eval_market_traction` | `eval_market_traction` LLM node |
+| `eval_business_model` | `eval_business_model` LLM node |
+| `eval_team_organization` | `eval_team_organization` LLM node |
+| `eval_go_to_market` | `eval_go_to_market` LLM node |
+| `eval_financial_health` | `eval_financial_health` LLM node |
+| `eval_fundraising_capital` | `eval_fundraising_capital` LLM node |
+| `eval_competitive_position` | `eval_competitive_position` LLM node |
+| `eval_operations` | `eval_operations` LLM node |
+| `eval_legal_compliance` | `eval_legal_compliance` LLM node |
+
+For each env variable, paste the corresponding category scorecard from the **"Environment Variable Content"** section below. Each scorecard contains the 20 evidence items table and the maturity stage interpretation for that category.
 
 ### Step 3: Configure the Start node
 - The **Start** node is already on the canvas
@@ -24,25 +40,17 @@ This document describes how to create the evaluation workflow in Dify Studio. Th
 - See "Input Variables" section below for the full list
 - The Start node receives these via our API call (`POST /workflows/run`)
 
-### Step 4: Add IF/ELSE context fallback
-- Add an **IF/ELSE** node after Start
-- Condition: check if `context_product_technology` is empty/blank
-- **IF empty** → route to an **HTTP Request** node:
-  - Method: POST
-  - URL: `https://fundy.nusuai.com/api/knowledge/context`
-  - Headers: `X-Webhook-Secret: {{DIFY_WEBHOOK_SECRET}}` (add as Dify env var)
-  - Body: `{ "user_id": "{{user_id}}" }`
-  - This fetches all 10 context blocks from our API
-- **IF not empty** → route directly to the LLM nodes (context already provided)
+### Step 4: Context fallback (DEFERRED)
 
-This means:
-- **Testing in Dify Studio**: leave context_* inputs blank → HTTP fallback fetches real context
-- **Production (from app)**: context_* inputs are pre-filled → HTTP fallback is skipped
+> **Skipped for now.** Context is always provided by our API (`/api/evaluation/generate`) which does KB retrieval before calling the Dify workflow. The IF/ELSE fallback node (which would let Dify fetch context itself when `context_*` inputs are empty) is only needed if an external knowledge base is used that bypasses our API. Implement this fallback only if/when that use case arises.
+>
+> For Dify Studio testing without our API, use the "Run" panel and paste context manually into the `context_*` input fields, or leave them blank to test the zero-context path (all items score UNPROVEN).
 
 ### Step 5: Add 10 LLM nodes (parallel)
 - Drag 10 LLM nodes — they will run in **parallel**
 - Name each node exactly as specified in the "Node Naming Convention" section
-- Each LLM node reads: `{{EVALUATION_FRAMEWORK}}` (env var) + its `context_*` variable
+- Each LLM node reads: its `{{#env.eval_[CATEGORY_ID]#}}` env var + its `context_*` variable
+- Use the Prompt Template from the section below for each node's system prompt
 
 ### Step 6: Connect to End
 - Connect all 10 LLM node outputs directly to the **End** node
@@ -57,10 +65,10 @@ Dify Workflow apps are **API-triggered**. Our serverless function `api/evaluatio
 
 | Component | Location | How to edit |
 |-----------|----------|-------------|
-| Evaluation criteria (scorecard, scoring rules) | Dify env var `EVALUATION_FRAMEWORK` | Dify Studio → Settings → Environment Variables |
+| Evaluation criteria (per-category scorecards) | 10 Dify env vars `eval_<category_id>` | Dify Studio → Settings → Environment Variables |
 | Search queries for KB retrieval | Supabase `app_config` table, key `evaluation_search_queries` | Supabase Dashboard → Table Editor |
 | KB retrieval logic | `api/knowledge/context.js` + `api/evaluation/_categoryContext.js` | Code (serverless functions) |
-| LLM prompts | Dify LLM nodes (reference `{{EVALUATION_FRAMEWORK}}`) | Dify Studio → node editor |
+| LLM prompts | Dify LLM nodes (reference `{{#env.eval_<category_id>#}}`) | Dify Studio → node editor |
 
 ## How it's called
 
@@ -77,20 +85,20 @@ Our API endpoint `POST /api/evaluation/generate` does:
 
 Each of the 10 evaluation dimensions has a dedicated onboarding category that feeds it. The mapping is 1:1 — no shared fields.
 
-> **NOTE — Deferred**: The current Dify onboarding chatflow only tracks 8 questions/variables, not 10. The onboarding prompt and variable extraction need to be expanded to cover all 10 dimensions (adding dedicated questions for Operations and Legal & Compliance). This should be done **after** the Evaluation and Investment workflows are developed and tested.
+**Onboarding question mapping**: The onboarding chatflow uses 10 primary questions (one per category) designed to elicit evidence for Concept + Early gate items (items 1-8), with adaptive escalation to probe Validated and Scaling gates when the founder demonstrates maturity. See **`dify-onboarding-prompt.md`** for the full question bank, evidence item mapping, and escalation rules.
 
-| Evaluation Dimension | Category ID | Onboarding Question Focus | Context Variable |
-|---------------------|-------------|--------------------------|------------------|
-| Product & Technology | `product_technology` | Product features, tech stack, IP, technical debt | `context_product_technology` |
-| Market Traction & Revenue | `market_traction` | Revenue metrics, growth, customer acquisition, TAM | `context_market_traction` |
-| Business Model & Economics | `business_model` | Pricing, unit economics, margins, LTV | `context_business_model` |
-| Team & Organization | `team_organization` | Founders, team size, key hires, advisory | `context_team_organization` |
-| Go-to-Market | `go_to_market` | Sales channels, distribution, GTM motion | `context_go_to_market` |
-| Financial Health | `financial_health` | Runway, burn rate, revenue coverage, projections | `context_financial_health` |
-| Fundraising & Capital | `fundraising_capital` | Funding history, target raise, investor pipeline | `context_fundraising_capital` |
-| Competitive Position | `competitive_position` | Moat, differentiation, competitive matrix | `context_competitive_position` |
-| Operations | `operations` | Processes, infrastructure, uptime, support scaling | `context_operations` |
-| Legal & Compliance | `legal_compliance` | Entity structure, IP protection, regulatory, GDPR | `context_legal_compliance` |
+| Evaluation Dimension | Category ID | Primary Question | Evidence Items Targeted | Context Variable |
+|---------------------|-------------|-----------------|------------------------|------------------|
+| Product & Technology | `product_technology` | "Tell me about your product — what problem does it solve, who is it for, and where are you in building it?" | #1-7 (product, problem, users, architecture, customers, features, feedback) | `context_product_technology` |
+| Market Traction & Revenue | `market_traction` | "How are you acquiring customers and generating revenue? Walk me through your traction so far." | #1-7 (market, value prop, first customer, revenue model, MRR, channels, retention) | `context_market_traction` |
+| Business Model & Economics | `business_model` | "How does your business make money? Tell me about your pricing, costs, and how the economics work." | #1-7 (model, pricing, WTP, tiers, margins, costs, ARPU) | `context_business_model` |
+| Team & Organization | `team_organization` | "Tell me about your team — who are the founders, what's everyone's background, and who else have you brought on?" | #1-7 (founders, domain expertise, technical, full-time, hires, roles, compensation) | `context_team_organization` |
+| Go-to-Market | `go_to_market` | "How do you find and sell to customers? Walk me through your go-to-market approach." | #1-7 (ICP, distribution, manual sales, motion, website, leads, conversion) | `context_go_to_market` |
+| Financial Health | `financial_health` | "What does your financial picture look like — burn rate, runway, and how you track your finances?" | #1-7 (records, burn, revenue, reporting, runway, budget, rev vs expenses) | `context_financial_health` |
+| Fundraising & Capital | `fundraising_capital` | "Where are you in your fundraising journey? Have you raised capital, and what are your plans?" | #1-7 (need, use of funds, materials, seed, cap table, relationships, valuation) | `context_fundraising_capital` |
+| Competitive Position | `competitive_position` | "Who are your main competitors, and what makes you different?" | #1-7 (competitors, differentiation, awareness, matrix, UVP, preference, switching costs) | `context_competitive_position` |
+| Operations | `operations` | "How does your team work day-to-day? What tools and processes keep things running?" | #1-7 (tools, communication, PM, dev process, support, uptime, incidents) | `context_operations` |
+| Legal & Compliance | `legal_compliance` | "What's your legal setup? Are you incorporated, and do you have key agreements in place?" | #1-7 (incorporated, founder agreements, ToS, employment, contractor, IP, privacy) | `context_legal_compliance` |
 
 ## Input Variables (Start Node)
 
@@ -210,53 +218,108 @@ Each LLM node should output **structured JSON** matching this schema:
 {
   "category_id": "product_technology",
   "category_title": "Product & Technology",
-  "summary": "2-3 sentence assessment of this dimension",
-  "completeness": 85,
-  "status": "proven",
-  "highlights": ["Key strength 1", "Key strength 2"],
-  "gaps": ["Gap or area for improvement 1"],
+  "summary": "2-3 sentence assessment. States the determined maturity stage and references concrete evidence.",
+  "completeness": 35,
+  "status": "unproven",
+  "highlights": ["Specific strength citing evidence from the data"],
+  "gaps": [
+    {
+      "action": "Implement systematic user feedback collection (NPS surveys, feature request tracking) to demonstrate you are listening to customers",
+      "type": "table_stakes",
+      "evidence_items": [7]
+    },
+    {
+      "action": "Document measurable customer outcomes and early retention signals to build product-market fit evidence",
+      "type": "stretch",
+      "evidence_items": [8, 9]
+    }
+  ],
   "keyMetrics": { "metricName": "value" },
-  "deepDivePrompt": "2-3 sentence natural follow-up opener referencing what was shared"
+  "deepDivePrompt": "2-3 sentence natural follow-up opener referencing what was shared and probing the most impactful gap"
 }
 ```
 
 **Field rules:**
 - `category_id`: Must exactly match the dimension ID (e.g., `product_technology`)
 - `category_title`: Human-readable name
-- `completeness`: Integer 0-100 based on scoring guidelines below
-- `status`: Derived from completeness — `>= 70` = `"proven"`, `>= 40` = `"partial"`, `< 40` = `"unproven"`
-- `highlights`: Array of strings, specific to actual information provided
-- `gaps`: Array of strings, actionable areas to explore
-- `keyMetrics`: Object of key-value pairs (string values)
-- `deepDivePrompt`: Natural conversation opener for follow-up
+- `completeness`: Integer 0-100, calculated as `(total_points / 20) × 100` where PROVEN=1, PARTIAL=0.5, UNPROVEN=0
+- `status`: Derived from completeness — `>= 70` → `"proven"`, `>= 40` → `"partial"`, `< 40` → `"unproven"`
+- `highlights`: Up to 5 strings citing specific evidence (metrics, facts, quotes) from PROVEN items. Prioritize items impressive for the company's maturity stage.
+- `gaps`: Up to 5 objects, each with:
+  - `action` (string): A specific, actionable recommendation the founder can take. Framed as what would make an investor confident at this stage. Related UNPROVEN/PARTIAL items should be consolidated into a single gap.
+  - `type` (`"table_stakes"` | `"stretch"`): `table_stakes` = missing/partial items at the company's current maturity gate (must close to meet expectations). `stretch` = items at the next gate up (signals readiness to advance).
+  - `evidence_items` (number[]): Which evidence item numbers (1-20) from the scorecard this gap addresses.
+- `keyMetrics`: Object of key-value pairs (string values). Extract quantitative metrics from the data. Use `{}` if none found.
+- `deepDivePrompt`: Natural 2-3 sentence follow-up opener that references what was shared and probes the most impactful gap.
+
+**Dify output variable schema** (paste into each LLM node's output variable config):
+```json
+{
+  "type": "object",
+  "properties": {
+    "category_id": { "type": "string" },
+    "category_title": { "type": "string" },
+    "summary": { "type": "string" },
+    "completeness": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "status": { "type": "string", "enum": ["proven", "partial", "unproven"] },
+    "highlights": { "type": "array", "items": { "type": "string" } },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string" },
+          "type": { "type": "string", "enum": ["table_stakes", "stretch"] },
+          "evidence_items": { "type": "array", "items": { "type": "integer" } }
+        },
+        "required": ["action", "type", "evidence_items"]
+      }
+    },
+    "keyMetrics": { "type": "object", "additionalProperties": { "type": "string" } },
+    "deepDivePrompt": { "type": "string" }
+  },
+  "required": ["category_id", "category_title", "summary", "completeness", "status", "highlights", "gaps", "keyMetrics", "deepDivePrompt"]
+}
+```
 
 ---
 
-## Evaluation Framework — Category Scorecards
+## Environment Variable Content — Per-Category Scorecards
 
-Each category has 20 evidence items. For each item, the evaluator determines whether it is **proven** (clear evidence), **partial** (some evidence, gaps remain), or **unproven** (no evidence or not addressed).
+Each category's environment variable should contain the content shown below. Copy everything between the `--- BEGIN ---` and `--- END ---` markers for each category into the corresponding Dify environment variable.
+
+Each scorecard contains:
+1. The 20 evidence items table with maturity gates
+2. The maturity stage thresholds
+3. The maturity stage interpretation specific to that category
+
+### Query Design Philosophy
+
+The semantic search queries in each scorecard are written to match **how founders describe evidence**, not how investors look for it. A founder won't write "cap table clean maintained accurate" — they'll write "founders own 65%, option pool is 15%". Queries use natural founder speech patterns, specific numbers, tool names, and concrete outcomes rather than evaluation jargon.
+
+---
+
+### `eval_product_technology`
+
+`--- BEGIN env variable content ---`
+
+## Product & Technology — Evaluation Scorecard
+
+Each evidence item is scored as: PROVEN (1 point), PARTIAL (0.5 points), or UNPROVEN (0 points).
 
 ### Maturity Stage Thresholds
-
-The maturity stage is derived from how many items are proven across the scorecard:
 
 | Stage | Proven Items | Description |
 |-------|-------------|-------------|
 | **Concept** | 0–4 | Idea stage, minimal evidence |
 | **Early** | 5–8 | Some traction, foundational work underway |
-| **Validated** | 9–13 | Core claims substantiated, gaps in secondary areas |
+| **Validated** | 9–13 | Core claims substantiated |
 | **Scaling** | 14–17 | Strong evidence across most items |
 | **Leader** | 18–20 | Comprehensive evidence, market-leading position |
 
 Partial items count as 0.5 toward the proven count.
 
-### Query Design Philosophy
-
-Search queries are written to match **how founders describe evidence**, not how investors look for it. A founder won't write "cap table clean maintained accurate" — they'll write "founders own 65%, option pool is 15%". Queries use natural founder speech patterns, specific numbers, tool names, and concrete outcomes rather than evaluation jargon. This ensures the vector search finds genuine evidence in onboarding transcripts, pitch decks, and uploaded documents.
-
----
-
-### Category 1: Product & Technology (`product_technology`)
+### Evidence Items
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
@@ -281,16 +344,38 @@ Search queries are written to match **how founders describe evidence**, not how 
 | 19 | Industry-recognized technical excellence | Leader | `won recognized benchmark compared top ranked award featured in` |
 | 20 | Innovation pipeline active | Leader | `building next R&D exploring research upcoming capabilities working on new` |
 
-**Maturity stage interpretation for Product & Technology:**
+### Maturity Stage Interpretation for Product & Technology
 - **Concept** (0–4): Has an idea or early prototype but no real users
 - **Early** (5–8): Working product with initial users, basic architecture in place
 - **Validated** (9–13): Product-market fit signals, customers getting measurable value, scalable architecture
 - **Scaling** (14–17): Enterprise-ready security, IP protected, extensible platform, data-driven development
 - **Leader** (18–20): Industry-recognized technology, active innovation pipeline, comprehensive technical excellence
 
+`--- END env variable content ---`
+
 ---
 
-### Category 2: Market Traction & Revenue (`market_traction`)
+### `eval_market_traction`
+
+`--- BEGIN env variable content ---`
+
+## Market Traction & Revenue — Evaluation Scorecard
+
+Each evidence item is scored as: PROVEN (1 point), PARTIAL (0.5 points), or UNPROVEN (0 points).
+
+### Maturity Stage Thresholds
+
+| Stage | Proven Items | Description |
+|-------|-------------|-------------|
+| **Concept** | 0–4 | Idea stage, minimal evidence |
+| **Early** | 5–8 | Some traction, foundational work underway |
+| **Validated** | 9–13 | Core claims substantiated |
+| **Scaling** | 14–17 | Strong evidence across most items |
+| **Leader** | 18–20 | Comprehensive evidence, market-leading position |
+
+Partial items count as 0.5 toward the proven count.
+
+### Evidence Items
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
@@ -315,16 +400,38 @@ Search queries are written to match **how founders describe evidence**, not how 
 | 19 | Revenue at scale (>$1M ARR) | Leader | `ARR is million annual revenue run rate crossed million dollar` |
 | 20 | Organic growth engine working | Leader | `customers find us without paid ads word of mouth referral came from` |
 
-**Maturity stage interpretation for Market Traction & Revenue:**
+### Maturity Stage Interpretation for Market Traction & Revenue
 - **Concept** (0–4): Has an idea of target market but no revenue
 - **Early** (5–8): First customers, initial MRR, basic acquisition channel
 - **Validated** (9–13): Growing revenue, known unit economics, repeatable sales
 - **Scaling** (14–17): Multi-channel, positive unit economics, predictable revenue
 - **Leader** (18–20): Market leader, revenue at scale, organic growth flywheel
 
+`--- END env variable content ---`
+
 ---
 
-### Category 3: Business Model & Economics (`business_model`)
+### `eval_business_model`
+
+`--- BEGIN env variable content ---`
+
+## Business Model & Economics — Evaluation Scorecard
+
+Each evidence item is scored as: PROVEN (1 point), PARTIAL (0.5 points), or UNPROVEN (0 points).
+
+### Maturity Stage Thresholds
+
+| Stage | Proven Items | Description |
+|-------|-------------|-------------|
+| **Concept** | 0–4 | Idea stage, minimal evidence |
+| **Early** | 5–8 | Some traction, foundational work underway |
+| **Validated** | 9–13 | Core claims substantiated |
+| **Scaling** | 14–17 | Strong evidence across most items |
+| **Leader** | 18–20 | Comprehensive evidence, market-leading position |
+
+Partial items count as 0.5 toward the proven count.
+
+### Evidence Items
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
@@ -349,16 +456,38 @@ Search queries are written to match **how founders describe evidence**, not how 
 | 19 | Business model proven at scale | Leader | `economics hold as we scale proven across cohorts replicable` |
 | 20 | Best-in-class unit economics | Leader | `our margins LTV CAC ratio better than industry average benchmark comparison` |
 
-**Maturity stage interpretation for Business Model & Economics:**
+### Maturity Stage Interpretation for Business Model & Economics
 - **Concept** (0–4): Basic pricing idea, no validated economics
 - **Early** (5–8): Pricing defined, gross margins known, tracking ARPU
 - **Validated** (9–13): Healthy LTV:CAC, good margins, path to profitability mapped
 - **Scaling** (14–17): Operating leverage, upsell working, pricing power proven
 - **Leader** (18–20): Profitable or near, best-in-class economics, model proven at scale
 
+`--- END env variable content ---`
+
 ---
 
-### Category 4: Team & Organization (`team_organization`)
+### `eval_team_organization`
+
+`--- BEGIN env variable content ---`
+
+## Team & Organization — Evaluation Scorecard
+
+Each evidence item is scored as: PROVEN (1 point), PARTIAL (0.5 points), or UNPROVEN (0 points).
+
+### Maturity Stage Thresholds
+
+| Stage | Proven Items | Description |
+|-------|-------------|-------------|
+| **Concept** | 0–4 | Idea stage, minimal evidence |
+| **Early** | 5–8 | Some traction, foundational work underway |
+| **Validated** | 9–13 | Core claims substantiated |
+| **Scaling** | 14–17 | Strong evidence across most items |
+| **Leader** | 18–20 | Comprehensive evidence, market-leading position |
+
+Partial items count as 0.5 toward the proven count.
+
+### Evidence Items
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
@@ -383,16 +512,38 @@ Search queries are written to match **how founders describe evidence**, not how 
 | 19 | Team scaled past 50+ employees | Leader | `grew from to fifty employees headcount scaling hiring rapidly organization` |
 | 20 | Board of directors active | Leader | `board meets quarterly directors include independent board member governance` |
 
-**Maturity stage interpretation for Team & Organization:**
+### Maturity Stage Interpretation for Team & Organization
 - **Concept** (0–4): Founders with an idea, minimal team
 - **Early** (5–8): Core team hired, key roles filled, full-time commitment
 - **Validated** (9–13): Complementary skills, healthy culture, active hiring
 - **Scaling** (14–17): Management layer, advisory board, org structure
 - **Leader** (18–20): Industry talent, 50+ employees, active board governance
 
+`--- END env variable content ---`
+
 ---
 
-### Category 5: Go-to-Market (`go_to_market`)
+### `eval_go_to_market`
+
+`--- BEGIN env variable content ---`
+
+## Go-to-Market — Evaluation Scorecard
+
+Each evidence item is scored as: PROVEN (1 point), PARTIAL (0.5 points), or UNPROVEN (0 points).
+
+### Maturity Stage Thresholds
+
+| Stage | Proven Items | Description |
+|-------|-------------|-------------|
+| **Concept** | 0–4 | Idea stage, minimal evidence |
+| **Early** | 5–8 | Some traction, foundational work underway |
+| **Validated** | 9–13 | Core claims substantiated |
+| **Scaling** | 14–17 | Strong evidence across most items |
+| **Leader** | 18–20 | Comprehensive evidence, market-leading position |
+
+Partial items count as 0.5 toward the proven count.
+
+### Evidence Items
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
@@ -417,16 +568,38 @@ Search queries are written to match **how founders describe evidence**, not how 
 | 19 | Self-sustaining growth engine | Leader | `growth compounds each cohort brings others flywheel growing without spending` |
 | 20 | International GTM execution | Leader | `launched in UK Europe international team hiring local market sales` |
 
-**Maturity stage interpretation for Go-to-Market:**
+### Maturity Stage Interpretation for Go-to-Market
 - **Concept** (0–4): Target customer identified, first manual sales
 - **Early** (5–8): Sales motion defined, website up, leads coming in
 - **Validated** (9–13): Repeatable acquisition, known sales cycle, playbook documented
 - **Scaling** (14–17): Multi-channel, enterprise sales, partner strategy
 - **Leader** (18–20): Category ownership, self-sustaining growth, international
 
+`--- END env variable content ---`
+
 ---
 
-### Category 6: Financial Health (`financial_health`)
+### `eval_financial_health`
+
+`--- BEGIN env variable content ---`
+
+## Financial Health — Evaluation Scorecard
+
+Each evidence item is scored as: PROVEN (1 point), PARTIAL (0.5 points), or UNPROVEN (0 points).
+
+### Maturity Stage Thresholds
+
+| Stage | Proven Items | Description |
+|-------|-------------|-------------|
+| **Concept** | 0–4 | Idea stage, minimal evidence |
+| **Early** | 5–8 | Some traction, foundational work underway |
+| **Validated** | 9–13 | Core claims substantiated |
+| **Scaling** | 14–17 | Strong evidence across most items |
+| **Leader** | 18–20 | Comprehensive evidence, market-leading position |
+
+Partial items count as 0.5 toward the proven count.
+
+### Evidence Items
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
@@ -451,16 +624,38 @@ Search queries are written to match **how founders describe evidence**, not how 
 | 19 | Financial operations scaled | Leader | `CFO controller FP&A finance team running numbers reporting` |
 | 20 | Capital efficient growth demonstrated | Leader | `grew revenue efficiently low burn multiple capital efficient ratio` |
 
-**Maturity stage interpretation for Financial Health:**
+### Maturity Stage Interpretation for Financial Health
 - **Concept** (0–4): Basic tracking, knows burn rate
 - **Early** (5–8): Monthly reporting, runway calculated, budget in place
 - **Validated** (9–13): 12+ months runway, forecasts exist, revenue growing
 - **Scaling** (14–17): 18+ months runway, financial controls, operating leverage
 - **Leader** (18–20): Near profitable, scaled finance ops, capital efficient
 
+`--- END env variable content ---`
+
 ---
 
-### Category 7: Fundraising & Capital (`fundraising_capital`)
+### `eval_fundraising_capital`
+
+`--- BEGIN env variable content ---`
+
+## Fundraising & Capital — Evaluation Scorecard
+
+Each evidence item is scored as: PROVEN (1 point), PARTIAL (0.5 points), or UNPROVEN (0 points).
+
+### Maturity Stage Thresholds
+
+| Stage | Proven Items | Description |
+|-------|-------------|-------------|
+| **Concept** | 0–4 | Idea stage, minimal evidence |
+| **Early** | 5–8 | Some traction, foundational work underway |
+| **Validated** | 9–13 | Core claims substantiated |
+| **Scaling** | 14–17 | Strong evidence across most items |
+| **Leader** | 18–20 | Comprehensive evidence, market-leading position |
+
+Partial items count as 0.5 toward the proven count.
+
+### Evidence Items
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
@@ -485,16 +680,38 @@ Search queries are written to match **how founders describe evidence**, not how 
 | 19 | Strong investor brand association | Leader | `Sequoia Andreessen Y Combinator top tier investor backed portfolio` |
 | 20 | Capital markets optionality (IPO/M&A) | Leader | `thinking about IPO acquisition conversations exit options preparing readiness` |
 
-**Maturity stage interpretation for Fundraising & Capital:**
+### Maturity Stage Interpretation for Fundraising & Capital
 - **Concept** (0–4): Knows funding need, pitch deck exists
 - **Early** (5–8): Seed raised, cap table clean, investor network started
 - **Validated** (9–13): Lead investor engaged, due diligence ready, target set
 - **Scaling** (14–17): Institutional round, board governance, multiple capital options
 - **Leader** (18–20): Growth rounds complete, top investors, exit optionality
 
+`--- END env variable content ---`
+
 ---
 
-### Category 8: Competitive Position (`competitive_position`)
+### `eval_competitive_position`
+
+`--- BEGIN env variable content ---`
+
+## Competitive Position — Evaluation Scorecard
+
+Each evidence item is scored as: PROVEN (1 point), PARTIAL (0.5 points), or UNPROVEN (0 points).
+
+### Maturity Stage Thresholds
+
+| Stage | Proven Items | Description |
+|-------|-------------|-------------|
+| **Concept** | 0–4 | Idea stage, minimal evidence |
+| **Early** | 5–8 | Some traction, foundational work underway |
+| **Validated** | 9–13 | Core claims substantiated |
+| **Scaling** | 14–17 | Strong evidence across most items |
+| **Leader** | 18–20 | Comprehensive evidence, market-leading position |
+
+Partial items count as 0.5 toward the proven count.
+
+### Evidence Items
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
@@ -519,16 +736,38 @@ Search queries are written to match **how founders describe evidence**, not how 
 | 19 | Multiple defensible moats | Leader | `combination of technology data network brand all working together` |
 | 20 | Competitors benchmark against you | Leader | `competitors mention us in their marketing compare themselves to us reference` |
 
-**Maturity stage interpretation for Competitive Position:**
+### Maturity Stage Interpretation for Competitive Position
 - **Concept** (0–4): Knows competitors exist, basic differentiation idea
 - **Early** (5–8): Competitive matrix, clear UVP, some customer preference
 - **Validated** (9–13): Technical moat, market positioning, win/loss data
 - **Scaling** (14–17): Sustainable advantage, network effects, pricing power
 - **Leader** (18–20): Category definer, multiple moats, competitors benchmark against you
 
+`--- END env variable content ---`
+
 ---
 
-### Category 9: Operations (`operations`)
+### `eval_operations`
+
+`--- BEGIN env variable content ---`
+
+## Operations — Evaluation Scorecard
+
+Each evidence item is scored as: PROVEN (1 point), PARTIAL (0.5 points), or UNPROVEN (0 points).
+
+### Maturity Stage Thresholds
+
+| Stage | Proven Items | Description |
+|-------|-------------|-------------|
+| **Concept** | 0–4 | Idea stage, minimal evidence |
+| **Early** | 5–8 | Some traction, foundational work underway |
+| **Validated** | 9–13 | Core claims substantiated |
+| **Scaling** | 14–17 | Strong evidence across most items |
+| **Leader** | 18–20 | Comprehensive evidence, market-leading position |
+
+Partial items count as 0.5 toward the proven count.
+
+### Evidence Items
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
@@ -553,16 +792,38 @@ Search queries are written to match **how founders describe evidence**, not how 
 | 19 | 99.9%+ uptime demonstrated | Leader | `system has been up nine nines availability demonstrated track record` |
 | 20 | Operational playbooks for all key functions | Leader | `runbooks written step by step documented procedures playbook` |
 
-**Maturity stage interpretation for Operations:**
+### Maturity Stage Interpretation for Operations
 - **Concept** (0–4): Basic tools, ad-hoc processes
 - **Early** (5–8): Dev process defined, support exists, uptime tracked
 - **Validated** (9–13): SLAs, vendor management, QA, documentation
 - **Scaling** (14–17): BCP, compliance, dashboards, automation
 - **Leader** (18–20): Operational excellence, 99.9%+ uptime, playbooks for everything
 
+`--- END env variable content ---`
+
 ---
 
-### Category 10: Legal & Compliance (`legal_compliance`)
+### `eval_legal_compliance`
+
+`--- BEGIN env variable content ---`
+
+## Legal & Compliance — Evaluation Scorecard
+
+Each evidence item is scored as: PROVEN (1 point), PARTIAL (0.5 points), or UNPROVEN (0 points).
+
+### Maturity Stage Thresholds
+
+| Stage | Proven Items | Description |
+|-------|-------------|-------------|
+| **Concept** | 0–4 | Idea stage, minimal evidence |
+| **Early** | 5–8 | Some traction, foundational work underway |
+| **Validated** | 9–13 | Core claims substantiated |
+| **Scaling** | 14–17 | Strong evidence across most items |
+| **Leader** | 18–20 | Comprehensive evidence, market-leading position |
+
+Partial items count as 0.5 toward the proven count.
+
+### Evidence Items
 
 | # | Evidence Item | Maturity Gate | Semantic Search Query |
 |---|--------------|---------------|----------------------|
@@ -587,55 +848,96 @@ Search queries are written to match **how founders describe evidence**, not how 
 | 19 | Patent portfolio active | Leader | `patents granted pending filed portfolio growing protection IP claims` |
 | 20 | Legal readiness for exit (M&A/IPO) | Leader | `data room organized diligence ready documents clean exit preparation` |
 
-**Maturity stage interpretation for Legal & Compliance:**
+### Maturity Stage Interpretation for Legal & Compliance
 - **Concept** (0–4): Incorporated, basic agreements
 - **Early** (5–8): Employment/contractor/IP agreements, privacy policy
 - **Validated** (9–13): Data compliance, standardized contracts, insurance
 - **Scaling** (14–17): IP portfolio, SOC2, international framework, legal counsel
 - **Leader** (18–20): Full regulatory compliance, active patents, exit-ready
 
+`--- END env variable content ---`
+
 ---
 
 ### Prompt Template
 
-Customize `[CATEGORY_TITLE]`, `[CATEGORY_ID]`, and the input variable reference per node:
+Customize `[CATEGORY_TITLE]`, `[CATEGORY_ID]`, and the input variable/env var references per node. In Dify Studio, each LLM node's system prompt should contain:
 
 ```
-You are evaluating a startup's [CATEGORY_TITLE] based on available information.
+{{#env.eval_[CATEGORY_ID]#}}
 
 ## Company
 {{company_name}}
 
-## Available Information for [CATEGORY_TITLE]
-{{context_[CATEGORY_ID]}}
+## Available Information
+{{#[CONTEXT_NODE_ID].context_[CATEGORY_ID]#}}
 
-## Evaluation Task
+## Assessment Instructions
 
-Analyze the information and produce a structured assessment.
+### Step 1: Score each evidence item
+For each of the 20 evidence items in the framework above, assess:
+- **PROVEN** (1 point): Clear, specific evidence in the available data
+- **PARTIAL** (0.5 points): Some indication but incomplete or vague evidence
+- **UNPROVEN** (0 points): No evidence found or not addressed
 
-### Scoring Guidelines
-- 80-100: Specific metrics, strong evidence, multiple data points
-- 60-79: Good qualitative info, some gaps in specifics
-- 40-59: High-level overview only, significant gaps
-- 20-39: Brief mentions, needs follow-up
-- 0-19: Not addressed or insufficient
+### Step 2: Calculate completeness
+completeness = (total_points / 20) × 100, rounded to nearest integer
 
-### Status Derivation
+### Step 3: Derive status
 - completeness >= 70 → "proven"
 - completeness >= 40 → "partial"
 - completeness < 40 → "unproven"
 
-### Requirements
-- category_id must be "[CATEGORY_ID]"
-- category_title must be "[CATEGORY_TITLE]"
-- Be specific — reference actual information from the context
-- Do not fabricate data
-- highlights should reference concrete information shared
-- gaps should be actionable areas to explore in a deep-dive
-- deepDivePrompt should be a natural 2-3 sentence follow-up opener
+### Step 4: Determine maturity stage
+Count total points from Step 1 (PROVEN=1, PARTIAL=0.5). Match against the maturity stage thresholds listed in the framework above:
+- Concept: 0–4 proven items
+- Early: 5–8 proven items
+- Validated: 9–13 proven items
+- Scaling: 14–17 proven items
+- Leader: 18–20 proven items
 
-Output valid JSON only, no markdown or explanation.
+The company's maturity stage is the highest gate where their total points fall.
+
+### Step 5: Identify gaps
+Using the evidence items table above, note which maturity gate each item belongs to (Concept, Early, Validated, Scaling, Leader).
+
+Identify how this company can demonstrate exceptional progress at its current maturity stage:
+1. UNPROVEN or PARTIAL items at the company's CURRENT maturity gate — these are "table_stakes" gaps that must be closed to meet investor expectations at this stage
+2. UNPROVEN or PARTIAL items at the NEXT maturity gate up — these are "stretch" goals that signal readiness to advance and stand out to investors
+
+Do NOT include items from gates two or more levels above the current stage — those are not yet relevant.
+
+Consolidate related items into a single actionable recommendation. Frame each gap as a specific action the founder can take that would make an investor confident in the company's progress at this stage. Maximum 5 gaps.
+
+For each gap, include:
+- "action": the actionable recommendation
+- "type": "table_stakes" (current gate) or "stretch" (next gate up)
+- "evidence_items": array of evidence item numbers (1-20) this gap addresses
+
+### Step 6: Build output
+- **summary**: 2–3 sentence assessment. Reference concrete evidence from the data. State the determined maturity stage.
+- **highlights**: Up to 5 strengths. Cite specific evidence (metrics, facts, quotes) from PROVEN items. Prioritize items that are impressive for the company's maturity stage.
+- **gaps**: The consolidated gaps from Step 5 (max 5, as objects with action/type/evidence_items).
+- **keyMetrics**: Extract any quantitative metrics mentioned in the data (revenue, users, growth %, etc.). Use empty object {} if none found.
+- **deepDivePrompt**: Natural 2–3 sentence follow-up opener that references what was shared and probes the most impactful gap.
+
+### Rules
+- category_id must be "[CATEGORY_ID]"
+- Do not fabricate data — only reference information present in the context
+- If no context is available, set completeness to 0 and note the absence in summary
+
+Output valid JSON only.
 ```
+
+**Substitution guide** — replace these placeholders per node:
+
+| Placeholder | Example for Product & Technology |
+|---|---|
+| `[CATEGORY_ID]` | `product_technology` |
+| `[CATEGORY_TITLE]` | `Product & Technology` |
+| `[CONTEXT_NODE_ID]` | The Dify node ID that provides the context variable (visible in the node's output panel) |
+
+The `{{#env.eval_[CATEGORY_ID]#}}` reference pulls in the category's environment variable (set up in Step 2), which contains the 20 evidence items and maturity stage interpretation.
 
 ## API Configuration
 
