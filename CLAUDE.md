@@ -114,6 +114,10 @@ api/
     embeddings.js         # OpenAI embedding client (text-embedding-3-small)
     embed.js              # POST /api/knowledge/embed — embedding ingestion endpoint
   summary.js              # POST /api/summary — upsert onboarding summary + embed into pgvector
+  action-items/
+    embed.js              # POST /api/action-items/embed — embed action item chat exchanges into KB
+    refresh.js            # POST /api/action-items/refresh — vector search + LLM analysis per action item
+    _analyze.js           # LLM helper — GPT-4o-mini classification of action item status
   evaluation/
     generate.js           # POST /api/evaluation/generate — orchestrates retrieval + Dify + SSE
     save.js               # POST /api/evaluation/save — persist evaluation results to DB
@@ -163,6 +167,20 @@ api/
 
 **Webhook auth** (`api/_webhookAuth.js`): Separate from JWT auth — for future Dify → Vercel callbacks. Validates `DIFY_WEBHOOK_SECRET` with timing-safe comparison.
 
+### Action Item Refresh
+
+**Architecture**: User-triggered "Refresh Status" button searches the vector DB for evidence relevant to each action item, then runs a lightweight LLM classification (GPT-4o-mini, direct OpenAI call — not Dify) to assess whether each item has been addressed.
+
+**Flow**: Frontend → `POST /api/action-items/refresh` (JWT auth) → batch embed all queries (single OpenAI call) → parallel semantic search per item (topK=5, threshold=0.5) → parallel LLM analysis (max 10 concurrent) → persist to `action_items.custom_data` JSONB → return results.
+
+**Analysis results** stored in `custom_data.refresh`: `{ status, confidence, summary, evidence_count, refreshed_at }`. Status is one of: `addressed`, `partially_addressed`, `not_addressed`, `insufficient_evidence`.
+
+**Action item chat embedding**: Each chat exchange in an action item's ChatPanel is fire-and-forget embedded via `POST /api/action-items/embed` (uses `source_type: 'conversation'` with `actionItemId` in metadata). These embeddings are then discoverable by the refresh search.
+
+**Mock mode**: Same three-layer fallback as evaluation — `VITE_DIFY_MOCK=true` → client mock, 404 in dev → client mock, no `OPENAI_API_KEY` → server mock.
+
+**Client state**: Action items carry `customData` (mapped from DB `custom_data` in `mapDbActionToState`). Refresh results are merged via `setActionItems` after the API call returns. Badges display on action cards with status-specific colors (green/orange/red/gray).
+
 ### Message Structure
 
 All chat messages follow `{ role: 'user'|'assistant', content: string }` with optional flags:
@@ -182,7 +200,7 @@ Vitest + React Testing Library + jsdom. Test setup in `src/test/setup.js`.
 
 Test files live alongside their source files (`*.test.js` / `*.test.jsx`).
 
-Current test coverage (140 tests, 10 files):
+Current test coverage (198 tests, 14 files):
 - `extractSummary.test.js` — 26 tests: JSON parsing, validation, normalization, edge cases, SSE parser
 - `colors.test.js` — 23 tests: all color helper functions including maturity/performance helpers
 - `difyApi.test.js` — 7 tests: mock response structure, summary triggers, file upload
@@ -191,8 +209,12 @@ Current test coverage (140 tests, 10 files):
 - `actionItems.test.js` — 12 tests: add/remove investment actions, metadata, immutability, edge cases
 - `fileUpload.test.js` — 10 tests: upload, failure, mixed results, message building
 - `_chunking.test.js` — 13 tests: conversation/summary/file chunking, overlap, edge cases
-- `_difyWorkflow.test.js` — 17 tests: SSE parsing, node mapping, category extraction, error events
-- `dataAccess.test.js` — 18 tests: createConversation, updateDifyId, saveMessages, loadMessages, loadOnboarding, loadDeepDive
+- `_difyWorkflow.test.js` — 25 tests: SSE parsing, node mapping, category extraction, error events, case-insensitive matching
+- `dataAccess.test.js` — 25 tests: createConversation, updateDifyId, saveMessages, loadMessages, loadOnboarding, loadDeepDive, saveActionItem customData, loadActionItems
+- `_analyze.test.js` — 18 tests: LLM response parsing, confidence clamping, status validation, markdown fence stripping, no-evidence shortcut
+- `refresh.test.js` — 8 tests: auth, empty items, full pipeline, partial failures, mock mode, ID filtering
+- `actionItemRefreshApi.test.js` — 5 tests: mock mode, 404 fallback, auth headers, network errors
+- `evaluationApi.test.js` — 12 tests: evaluation client mock and real mode
 
 Run a single test file: `npx vitest run src/utils/colors.test.js`
 

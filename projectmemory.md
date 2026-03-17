@@ -637,20 +637,81 @@ matrix, and generates a personalized recommendation report streamed to the front
    - **Code Node** (`generate_matrix`) — Python: score each investment type against the matrix
    - **LLM Node** (`investment_recommendations`) — structured output matching the shape above
 
+## v3.8 — Evaluation Prompt Redesign & Gap Consolidation (Mar 2026)
+
+Redesigned the LLM evaluation prompts and gap output to produce focused, stage-aware action items
+instead of unbounded gap lists (previously 300+ action items per evaluation).
+
+### Architecture decisions
+
+- **Per-category env vars**: Replaced single `EVALUATION_FRAMEWORK` env var with 10 separate
+  `eval_<category_id>` env vars in Dify. Each contains only its category's 20-item scorecard
+  and maturity stage interpretation.
+- **Structured scoring methodology**: New 6-step prompt (score items → calculate completeness →
+  derive status → determine maturity stage → identify stage-aware gaps → build output). Explicit
+  formula: PROVEN=1, PARTIAL=0.5, UNPROVEN=0, completeness = (total / 20) × 100.
+- **Stage-aware gap scoping**: Gaps only include UNPROVEN/PARTIAL items at the company's current
+  maturity gate (table_stakes) and the next gate up (stretch). Items 2+ levels above are excluded.
+  Maximum 5 gaps per category, consolidated. This reframes gaps from "everything you're missing"
+  to "how to demonstrate exceptional progress at your current stage."
+- **Gap object format**: `gaps` changed from `string[]` to `{ action, type, evidence_items }[]`.
+  `type` is `"table_stakes"` or `"stretch"`. `evidence_items` traces back to scorecard item numbers.
+  Priority derived from type: table_stakes → high, stretch → medium.
+- **IF/ELSE context fallback deferred**: Skipped Step 4 (Dify-side context fetching). Context is
+  always provided by our API. Fallback only needed if an external KB bypasses our API.
+- **Backward compatible**: `App.jsx` gap→action conversion handles both old string gaps and new
+  object gaps via `typeof gap === 'string'` check.
+
+### Modified files
+
+| File | Change |
+|------|--------|
+| `dify-evaluation-workflow.md` | New prompt template, per-category env var content with BEGIN/END markers, updated output schema, deferred Step 4 |
+| `src/data/mockData.js` | All 10 category gaps converted to `{ action, type, evidence_items }` objects |
+| `src/App.jsx` | Gap→action item conversion handles object format; priority from `gapType`; `gapType`/`evidenceItems` fields on action items; category cards show "must-haves" vs "stretch goals"; action cards show gap type badge |
+| `src/styles/app.css` | New styles: `.gaps-table-stakes`, `.gaps-stretch`, `.gap-type-badge` |
+| `api/evaluation/_difyWorkflow.test.js` | Updated test data to new gap object format |
+
+**Test totals:** 163 tests across 11 files (up from 159)
+
+### Pending
+
+1. **Dify Studio**: Update all 10 LLM node prompts using new template from `dify-evaluation-workflow.md`
+2. **Dify Studio**: Update all 10 LLM node output variable schemas (JSON schema in workflow doc)
+3. **Dify Studio**: Create 10 `eval_<category_id>` env vars from scorecard content in workflow doc
+4. ~~**Onboarding question redesign**~~: DONE — see v3.9 below
+
+## v3.9 — Onboarding Question Redesign & Adaptive Escalation (Mar 2026)
+
+Redesigned the Dify onboarding chatflow to align question gathering directly with the 20-item evaluation scorecards per category.
+
+### Changes
+- **`dify-onboarding-prompt.md`** — Restructured as per-node configuration guide (was single system prompt). Sections for each Dify chatflow node:
+  - **NEXT QUESTION LLM**: 10-question bank (was 8) mapped to evaluation categories + adaptive escalation rules (Concept → move on, Early → dig deeper to Validated, Validated → move on)
+  - **RESPONSE PROCESSING LLM**: Evidence-aware follow-up logic — only requests follow-up when critical foundational info missing
+  - **LLM IS REVIEWING YOUR RESPONSE**: 10-category extraction (was 9 misaligned fields: problem_audience, competitive_advantage, etc. → now product_technology, market_traction, business_model, etc.)
+  - **GENERATING ONBOARDING**: Evidence-aligned completeness scoring, evidence-aware deepDivePrompt generation
+  - **APPEND KEY INFO BY CATE**: Variable mapping table (old → new names)
+  - **CODE CONCATENATE CATEG / CONSOLIDATED_CON**: Field reference updates
+  - **IF/ELSE 2**: Threshold > 8 → > 9 (10 questions)
+- **`dify-evaluation-workflow.md`** — Updated onboarding mapping section: replaced TODO with completed question mapping table showing primary questions, evidence items targeted, and context variables per category
+
+### Pending
+1. **Dify Studio**: Apply per-node prompts from `dify-onboarding-prompt.md` to chatflow (7 nodes to update)
+
 ## Next Steps (priority order)
 
 ### Immediate
 
-1. **Supabase migration** — run `ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS investment_data jsonb;`
-   in the Supabase SQL editor before deploying v3.7.
+1. **Dify Studio**: Apply per-node updates from `dify-onboarding-prompt.md` to the onboarding chatflow (see Update Order section in that doc)
 
-2. **Dify Studio Phase 2 nodes** — add Variable Aggregator + 2 Python code nodes + 1 LLM node
-   after the 10 `eval_*` nodes. Python code from `Guide_investment_matching.md` Parts 6–7.
-
-3. **Evaluation quality verification** — with a real user account, run the full pipeline and confirm:
+2. **Evaluation quality verification** — with a real user account, run the full pipeline and confirm:
+   - Onboarding adaptive escalation (LLM probes next gate when founder demonstrates maturity)
+   - Stage-aware gaps (max 5 per category, table_stakes vs stretch)
+   - Gap type badges render correctly in action items
    - Investment recommendation section renders after evaluation completes
    - `investment_data` column populated in `evaluations` table
-   - Refreshing restores investment recommendations
+   - Refreshing restores evaluation + investment data
 
 ### Medium term
 
