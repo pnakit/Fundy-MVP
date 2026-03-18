@@ -61,18 +61,18 @@ export function buildUploadMessages(succeeded, context = 'evaluation') {
   if (context === 'onboarding') {
     prompt =
       succeeded.length === 1
-        ? `I've uploaded "${succeeded[0]}". Please use it to extract onboarding information.`
-        : `I've uploaded ${succeeded.length} files (${succeeded.join(', ')}). Please use them to extract onboarding information.`;
+        ? `Here is supporting information from my document "${succeeded[0]}". Please use the extracted content to continue the onboarding.`
+        : `Here is supporting information from ${succeeded.length} documents (${succeeded.join(', ')}). Please use the extracted content to continue the onboarding.`;
   } else if (context === 'discussion') {
     prompt =
       succeeded.length === 1
-        ? `I've uploaded "${succeeded[0]}". Please incorporate this into our discussion.`
-        : `I've uploaded ${succeeded.length} files (${succeeded.join(', ')}). Please incorporate them into our discussion.`;
+        ? `Here is supporting information from my document "${succeeded[0]}". Please incorporate the extracted content into our discussion.`
+        : `Here is supporting information from ${succeeded.length} documents (${succeeded.join(', ')}). Please incorporate the extracted content into our discussion.`;
   } else {
     prompt =
       succeeded.length === 1
-        ? `I've uploaded "${succeeded[0]}". Please review it and ask me any relevant questions.`
-        : `I've uploaded ${succeeded.length} files (${succeeded.join(', ')}). Please review them and ask me any relevant questions.`;
+        ? `Here is supporting information from my document "${succeeded[0]}". Please review the extracted content and ask me any relevant questions.`
+        : `Here is supporting information from ${succeeded.length} documents (${succeeded.join(', ')}). Please review the extracted content and ask me any relevant questions.`;
   }
 
   return { message, prompt };

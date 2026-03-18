@@ -96,7 +96,7 @@ export async function loadOnboardingSummary() {
   const { data } = await supabase
     .from('onboarding_summaries')
     .select('summary_data, onboarding_phase')
-    .single();
+    .maybeSingle();
   return data ? { summaryData: data.summary_data, phase: data.onboarding_phase } : null;
 }
 
@@ -110,7 +110,7 @@ export async function loadEvaluation() {
   const { data } = await supabase
     .from('evaluations')
     .select('maturity_stage, dimensions, performance_metrics, investment_data')
-    .single();
+    .maybeSingle();
   return data || null;
 }
 

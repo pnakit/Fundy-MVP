@@ -103,53 +103,96 @@ Output JSON:
 
 ---
 
-## Node: CODE CONCATENATE CATEG + CODE CONSOLIDATED_CON
+## Node: CODE CURRENT_TOPIC_CON
 
-**Type:** Code nodes
-**Purpose:** Concatenate category variables into a single context string for downstream nodes
+**Type:** Code node
+**Purpose:** Selects the current topic's accumulated data by question index and outputs as a clean string for downstream LLM nodes
 
-### Field Reference Updates
-
-Update all references from old variable names to new ones:
-
-| Old Reference | New Reference |
-|--------------|--------------|
-| `problem_and_audience` | `product_technology` |
-| `momentum_metrics` | `market_traction` |
-| `gtm_strategy` | `go_to_market` |
-| `existing_backers` | `fundraising_capital` |
-| `fundraising_status` | (merged into `fundraising_capital`) |
-| `competitive_advantage` | `competitive_position` |
-| `team_info` | `team_organization` |
-| `key_risks` | (removed — captured in relevant categories) |
-| `context_highlights` | (removed) |
-| — | `business_model` (NEW) |
-| — | `financial_health` (NEW) |
-| — | `operations` (NEW) |
-| — | `legal_compliance` (NEW) |
-
-The concatenated output should include all 10 categories with labeled sections:
+### Code
 
 ```python
-# Example structure for the consolidated context
-sections = [
-    ("Product & Technology", product_technology),
-    ("Market Traction & Revenue", market_traction),
-    ("Business Model & Economics", business_model),
-    ("Team & Organization", team_organization),
-    ("Go-to-Market", go_to_market),
-    ("Financial Health", financial_health),
-    ("Fundraising & Capital", fundraising_capital),
-    ("Competitive Position", competitive_position),
-    ("Operations", operations),
-    ("Legal & Compliance", legal_compliance),
-]
+def main(**kwargs):
+    idx = int(kwargs.get("current_topic_index") or 0)
 
-result = f"Company: {company_name}\n\n"
-for title, content in sections:
-    if content and content != "NO_DATA":
-        result += f"## {title}\n{content}\n\n"
+    mapping = {
+        1: kwargs.get("product_technology") or [],
+        2: kwargs.get("market_traction") or [],
+        3: kwargs.get("business_model") or [],
+        4: kwargs.get("team_organization") or [],
+        5: kwargs.get("go_to_market") or [],
+        6: kwargs.get("financial_health") or [],
+        7: kwargs.get("fundraising_capital") or [],
+        8: kwargs.get("competitive_position") or [],
+        9: kwargs.get("operations") or [],
+        10: kwargs.get("legal_compliance") or [],
+    }
+
+    selected = mapping.get(idx, [])
+
+    if selected is None:
+        selected = []
+    if isinstance(selected, str):
+        selected = [selected]
+    if not isinstance(selected, list):
+        selected = [str(selected)]
+    selected = [str(x) for x in selected]
+    selected = "\n".join(selected)
+
+    return {"current_topic_context": selected}
 ```
+
+**Output variable:** `current_topic_context` (type: `string`)
+
+---
+
+## Node: CODE CONSOLIDATED_CON
+
+**Type:** Code node
+**Purpose:** Concatenates all 10 category variables into a single XML-tagged context string for the summary generation LLM
+
+### Code
+
+```python
+def main(
+    company_name: str,
+    product_technology: str,
+    market_traction: str,
+    business_model: str,
+    team_organization: str,
+    go_to_market: str,
+    financial_health: str,
+    fundraising_capital: str,
+    competitive_position: str,
+    operations: str,
+    legal_compliance: str,
+) -> dict:
+
+    def section(tag: str, title: str, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            return ""
+        return f"<{tag}>\n{title}\n{value}\n</{tag}>"
+
+    parts = [
+        section("company",              "## Company",                    company_name),
+        section("product_technology",    "## Product & Technology",       product_technology),
+        section("market_traction",       "## Market Traction & Revenue",  market_traction),
+        section("business_model",        "## Business Model & Economics", business_model),
+        section("team_organization",     "## Team & Organization",        team_organization),
+        section("go_to_market",          "## Go-to-Market",               go_to_market),
+        section("financial_health",      "## Financial Health",           financial_health),
+        section("fundraising_capital",   "## Fundraising & Capital",      fundraising_capital),
+        section("competitive_position",  "## Competitive Position",       competitive_position),
+        section("operations",            "## Operations",                 operations),
+        section("legal_compliance",      "## Legal & Compliance",         legal_compliance),
+    ]
+
+    consolidated = "\n\n".join(p for p in parts if p)
+    return {"consolidated_context": consolidated}
+```
+
+**Output variable:** `consolidated_context` (type: `string`)
+**Removed:** `context_highlights` parameter (cross-cutting info now captured in relevant categories)
 
 ---
 
@@ -206,6 +249,7 @@ Assess the depth of the founder's response for the current topic:
 - Set topicComplete to true. They've provided strong signal — move on.
 
 ## Rules
+- When the user shares a document, the text is automatically extracted and available in the topic context above. Do NOT ask them to paste or re-share it — process whatever is available.
 - Reference what they've already shared to make the next question feel personalized
 - Keep it conversational, 2-3 sentences max
 - Maximum 1 dig-deeper per topic
@@ -237,6 +281,8 @@ You are processing a founder's response to an onboarding question.
 
 Question being answered: <current_question>{{#conversation.current_question_text#}}</current_question>
 User's response: <user_response>{{#1772125942607.current_topic_context#}}</user_response>
+
+IMPORTANT: When the user shares a document (pitch deck, financials, etc.), the text content is automatically extracted and included in the response context above. You already have the document content — do NOT ask the user to paste, summarize, or re-share it. Process whatever information is available in the context.
 
 Review the user's response and extract a concise summary of what they shared, addressed directly to the user. Assess whether the response provides enough foundational information to move on, or if a follow-up would meaningfully improve the evaluation signal.
 

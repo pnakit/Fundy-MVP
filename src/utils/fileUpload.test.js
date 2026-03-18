@@ -80,7 +80,7 @@ describe('buildUploadMessages', () => {
     expect(message).toContain('it');
     expect(message).toContain('your evaluation');
     expect(prompt).toContain('report.pdf');
-    expect(prompt).toContain('review it');
+    expect(prompt).toContain('review the extracted content');
   });
 
   it('builds plural evaluation message', () => {
@@ -89,21 +89,21 @@ describe('buildUploadMessages', () => {
     expect(message).toContain('"a.pdf"');
     expect(message).toContain('"b.pdf"');
     expect(message).toContain('them');
-    expect(prompt).toContain('2 files');
+    expect(prompt).toContain('2 documents');
   });
 
   it('builds discussion context message', () => {
     const { message, prompt } = buildUploadMessages(['doc.pdf'], 'discussion');
 
     expect(message).toContain('our discussion');
-    expect(prompt).toContain('incorporate this into our discussion');
+    expect(prompt).toContain('incorporate the extracted content into our discussion');
   });
 
   it('builds onboarding context message', () => {
     const { message, prompt } = buildUploadMessages(['doc.pdf'], 'onboarding');
 
     expect(message).toContain('our conversation');
-    expect(prompt).toContain('extract onboarding information');
+    expect(prompt).toContain('extracted content to continue the onboarding');
   });
 
   it('defaults to evaluation context', () => {

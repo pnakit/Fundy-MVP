@@ -74,7 +74,7 @@ describe('loadEvaluation', () => {
       performance_metrics: { overall: 55 },
       investment_data: { investment_readiness_summary: { readiness_score: 'Moderate' } },
     };
-    const chain = makeChain({ single: vi.fn().mockResolvedValue({ data: row }) });
+    const chain = makeChain({ maybeSingle: vi.fn().mockResolvedValue({ data: row }) });
     mockFrom.mockReturnValue(chain);
 
     const result = await loadEvaluation();
@@ -85,7 +85,7 @@ describe('loadEvaluation', () => {
   });
 
   it('returns null when no evaluation exists yet', async () => {
-    const chain = makeChain({ single: vi.fn().mockResolvedValue({ data: null }) });
+    const chain = makeChain({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) });
     mockFrom.mockReturnValue(chain);
 
     const result = await loadEvaluation();
@@ -100,7 +100,7 @@ describe('loadEvaluation', () => {
       performance_metrics: {},
       investment_data: null,
     };
-    const chain = makeChain({ single: vi.fn().mockResolvedValue({ data: row }) });
+    const chain = makeChain({ maybeSingle: vi.fn().mockResolvedValue({ data: row }) });
     mockFrom.mockReturnValue(chain);
 
     const result = await loadEvaluation();
