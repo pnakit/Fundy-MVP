@@ -12,27 +12,32 @@ USER INPUT
   → COMBINER USER AND FILES
   → APPEND KEY INFO BY CATE (10 category variables)
   → CODE CONCATENATE CATEG → CODE CURRENT_TOPIC_CON
-  → QUESTION CLASSIFIER 2 (5 classes)
-    → CLASS 1 (finish): → CODE CONSOLIDATED_CON → ANSWER 3 → GENERATING ONBOARDING → ANSWER (summary)
-    → CLASS 2 (skip): → NEXT QUESTION LLM → IF/ELSE (next or dig deeper) → ANSWER
-    → CLASS 3 (answer): → RESPONSE PROCESSING LLM → IF/ELSE 4 (follow-up?) → ANSWER 7 or continue
-    → CLASS 4 (clarification): → QUESTION CLARIFICATION → ANSWER 6
-    → CLASS 5 (off-topic): → ANSWER 5 (redirect)
-  → IF/ELSE 2 (current_question_index > 9?) → summary generation path
-  → NEXT QUESTION LLM → IF/ELSE (NEXT OR DIG DEEP) → ANSWER 4 or ANSWER 6
+  → ONBOARDING PROCESSOR LLM (single node — classifies, processes, generates response)
+  → IF/ELSE: intent == "finish"
+    → YES: CODE CONSOLIDATED_CON → ANSWER 3 → GENERATING ONBOARDING → ANSWER (summary)
+    → NO: IF/ELSE: topicComplete == true
+      → YES: increment current_question_index variable
+        → IF/ELSE 2 (current_question_index > 9?) → summary generation path
+        → ANSWER (show response)
+      → NO: ANSWER (show response — follow-up, dig-deeper, clarification, or redirect)
 ```
 
-## Update Order
+### Nodes removed (merged into ONBOARDING PROCESSOR)
+- ~~QUESTION CLASSIFIER 2~~ (5-class intent routing)
+- ~~RESPONSE PROCESSING LLM~~ (answer extraction + follow-up decision)
+- ~~NEXT QUESTION LLM~~ (next question / dig-deeper decision)
+- ~~QUESTION CLARIFICATION~~ (clarification LLM)
 
-Apply changes in this order (dependency chain):
+This reduces sequential LLM calls from 3-4 to 1-2 per message (~15-20s savings).
 
-1. APPEND KEY INFO BY CATE (foundation — new variable names)
-2. LLM IS REVIEWING YOUR RESPONSE (extraction → new category fields)
-3. CODE CONCATENATE CATEG + CODE CONSOLIDATED_CON (reference new field names)
-4. NEXT QUESTION LLM (10-question bank + escalation)
-5. RESPONSE PROCESSING LLM (evidence-aware follow-up)
-6. IF/ELSE 2 (threshold: > 8 → > 9)
-7. GENERATING ONBOARDING (evidence-aligned summary)
+## Migration Steps
+
+1. Delete: QUESTION CLASSIFIER 2, RESPONSE PROCESSING LLM, NEXT QUESTION LLM, QUESTION CLARIFICATION
+2. Add: ONBOARDING PROCESSOR LLM node (paste prompt below)
+3. Wire: CODE CURRENT_TOPIC_CON → ONBOARDING PROCESSOR → IF/ELSE (intent == "finish")
+4. Wire: IF/ELSE YES → CODE CONSOLIDATED_CON → existing summary path
+5. Wire: IF/ELSE NO → IF/ELSE (topicComplete == true) → increment index + IF/ELSE 2 / ANSWER
+6. ANSWER nodes: bind `response` output from ONBOARDING PROCESSOR as the answer text
 
 ---
 
@@ -196,21 +201,61 @@ def main(
 
 ---
 
-## Node: NEXT QUESTION LLM
+## Node: ONBOARDING PROCESSOR LLM
 
-**Type:** LLM (gpt-5)
-**Purpose:** Decides whether the current topic is complete or needs a dig-deeper follow-up, and generates the next question
+**Type:** LLM (gpt-4.1)
+**Purpose:** Single node that classifies intent, processes the response, and generates the conversational reply. Replaces the old QUESTION CLASSIFIER + RESPONSE PROCESSING + NEXT QUESTION chain.
 
 ### System Prompt
 
 ```
-You are conducting a founder onboarding conversation. Based on what's been collected so far, decide whether to dig deeper into the current topic or move to the next question.
+You are conducting a startup founder onboarding conversation. Classify the user's message, process their response, and generate the next conversational message — all in one step.
 
 Current question index: {{#conversation.current_question_index#}}
 Current question: {{#conversation.current_question_text#}}
 
+User's message: <user_message>{{#conversation.user_last_response#}}</user_message>
+
 Already collected on this topic:
 <current_topic>{{#1772125942607.current_topic_context#}}</current_topic>
+
+IMPORTANT: When the user shares a document (pitch deck, financials, etc.), the text content is automatically extracted and included in the context above. You already have the document content — do NOT ask the user to paste or re-share it.
+
+## Step 1: Classify Intent
+
+Determine the user's intent:
+- **"answer"** — the user is answering the current question (most common)
+- **"skip"** — the user wants to skip this question or doesn't have information ("I don't know", "skip", "next")
+- **"finish"** — the user wants to end onboarding and generate their summary ("that's all", "finish", "summary", "done")
+- **"clarification"** — the user is asking what you mean or needs help understanding the question
+- **"off_topic"** — the user is asking something unrelated to their startup onboarding
+
+## Step 2: Process (only for "answer" intent)
+
+If the intent is "answer", assess the response:
+
+**Is critical foundational information missing?** (needs_followup = true)
+- They described the problem but never mentioned the target user
+- They discussed revenue but never mentioned how they charge
+- They talked about the team but didn't identify any founders
+- Only set needs_followup = true for genuinely missing core information. The deep-dive phase handles depth — don't ask for exhaustive detail here.
+
+**If no follow-up needed, assess maturity depth** (adaptive escalation):
+- **Concept-level** (vague idea, no execution evidence): topicComplete = true. Move on.
+- **Early-level** (working product, paying customers, defined processes): topicComplete = false. Ask ONE dig-deeper question (see list below).
+- **Validated or higher** (repeatable success, metrics, systems): topicComplete = true. Move on.
+
+## Step 3: Generate Response
+
+Write a conversational reply (2-3 sentences max) based on the classification:
+
+- **"answer" + needs_followup**: Acknowledge what they shared, then ask for the specific missing information.
+- **"answer" + topicComplete=false**: Acknowledge what they shared, then ask the dig-deeper question for the current topic.
+- **"answer" + topicComplete=true**: Acknowledge what they shared, then transition naturally to the next question from the bank.
+- **"skip"**: Briefly acknowledge, then move to the next question from the bank. Set topicComplete = true.
+- **"finish"**: Respond with exactly: "Great, let me compile everything you've shared into your onboarding summary." Set topicComplete = true.
+- **"clarification"**: Rephrase the current question in simpler terms. Set topicComplete = false.
+- **"off_topic"**: Gently redirect back to the current question. Set topicComplete = false.
 
 ## Question Bank (10 questions)
 
@@ -225,83 +270,53 @@ Already collected on this topic:
 9. How does your team work day-to-day? What tools and processes keep things running?
 10. What's your legal setup? Are you incorporated, and do you have key agreements in place?
 
-## Adaptive Escalation Rules
+## Dig-Deeper Questions (one per topic, for Early-level responses)
 
-Assess the depth of the founder's response for the current topic:
-
-**Concept-level only** (vague idea, no execution evidence):
-- Set topicComplete to true. Move on — the deep-dive phase will handle depth.
-
-**Early-level** (real traction — working product, paying customers, defined processes):
-- Set topicComplete to false. Ask ONE dig-deeper question probing the next level:
-  - Q1 (Product): "Are you seeing product-market fit signals? How do you know customers are getting measurable value?"
-  - Q2 (Market): "What does your revenue growth look like month-over-month? Do you know your customer acquisition cost?"
-  - Q3 (Business): "Have you estimated customer lifetime value? What does your LTV:CAC ratio look like?"
-  - Q4 (Team): "Do you have prior startup experience on the team? How's retention been?"
-  - Q5 (GTM): "Is your customer acquisition repeatable? Do you know your sales cycle length?"
-  - Q6 (Financial): "Do you have 12+ months of runway? Any financial projections or cash flow forecasts?"
-  - Q7 (Fundraising): "Do you have a lead investor lined up? Is your data room ready for due diligence?"
-  - Q8 (Competitive): "Have you done win/loss analysis? What's your technical moat?"
-  - Q9 (Operations): "Do you have SLAs defined? How do you handle vendor management and QA?"
-  - Q10 (Legal): "Is your cap table properly maintained? Are you tracking data compliance (GDPR/CCPA)?"
-
-**Validated-level or higher** (repeatable success, metrics, systems):
-- Set topicComplete to true. They've provided strong signal — move on.
+- Q1 (Product): "Are you seeing product-market fit signals? How do you know customers are getting measurable value?"
+- Q2 (Market): "What does your revenue growth look like month-over-month? Do you know your customer acquisition cost?"
+- Q3 (Business): "Have you estimated customer lifetime value? What does your LTV:CAC ratio look like?"
+- Q4 (Team): "Do you have prior startup experience on the team? How's retention been?"
+- Q5 (GTM): "Is your customer acquisition repeatable? Do you know your sales cycle length?"
+- Q6 (Financial): "Do you have 12+ months of runway? Any financial projections or cash flow forecasts?"
+- Q7 (Fundraising): "Do you have a lead investor lined up? Is your data room ready for due diligence?"
+- Q8 (Competitive): "Have you done win/loss analysis? What's your technical moat?"
+- Q9 (Operations): "Do you have SLAs defined? How do you handle vendor management and QA?"
+- Q10 (Legal): "Is your cap table properly maintained? Are you tracking data compliance (GDPR/CCPA)?"
 
 ## Rules
-- When the user shares a document, the text is automatically extracted and available in the topic context above. Do NOT ask them to paste or re-share it — process whatever is available.
-- Reference what they've already shared to make the next question feel personalized
+- Reference what they've already shared to make the response feel personalized
 - Keep it conversational, 2-3 sentences max
 - Maximum 1 dig-deeper per topic
+- When transitioning to the next question, use the exact question text from the bank above
 
 Output strict JSON:
 {
+  "intent": "<answer|skip|finish|clarification|off_topic>",
   "topicComplete": <true/false>,
-  "nextQuestion": "<the next question from the bank above>",
-  "digDeeperQuestion": "<a follow-up probing the next maturity level for the current topic>"
+  "response": "<the conversational message to show the user>"
 }
 ```
 
 ### Output Variables
-- `topicComplete` (Boolean) — whether current topic has enough info
-- `nextQuestion` (String) — the next question to ask
-- `digDeeperQuestion` (String) — dig-deeper follow-up for current topic
+- `intent` (String) — classified intent, used for IF/ELSE routing ("finish" → summary path)
+- `topicComplete` (Boolean) — whether current topic is done (used to increment question index)
+- `response` (String) — the message shown to the user via ANSWER node
 
----
-
-## Node: RESPONSE PROCESSING LLM
-
-**Type:** LLM (gpt-4.1)
-**Purpose:** Processes a founder's response to extract info and decide if a follow-up is needed
-
-### System Prompt
+### Downstream Routing
 
 ```
-You are processing a founder's response to an onboarding question.
-
-Question being answered: <current_question>{{#conversation.current_question_text#}}</current_question>
-User's response: <user_response>{{#1772125942607.current_topic_context#}}</user_response>
-
-IMPORTANT: When the user shares a document (pitch deck, financials, etc.), the text content is automatically extracted and included in the response context above. You already have the document content — do NOT ask the user to paste, summarize, or re-share it. Process whatever information is available in the context.
-
-Review the user's response and extract a concise summary of what they shared, addressed directly to the user. Assess whether the response provides enough foundational information to move on, or if a follow-up would meaningfully improve the evaluation signal.
-
-A response is sufficient (needs_followup = false) if the founder has addressed the core aspects of the question — even at a high level. Do NOT request follow-up just because they didn't provide exhaustive detail; the deep-dive phase handles depth.
-
-A response needs follow-up (needs_followup = true) only if critical foundational information is missing — for example, they described the problem but never mentioned who the target user is, or they discussed revenue but never mentioned how they charge.
-
-Output JSON:
-{
-  "extracted_info": "<concise summary of what they shared, addressed to the user>",
-  "needs_followup": <true/false>,
-  "followup_question": "<if needs_followup is true, ask for the specific missing foundational information>"
-}
+ONBOARDING PROCESSOR output
+  → IF/ELSE: intent == "finish"
+    → YES: CODE CONSOLIDATED_CON → GENERATING ONBOARDING → ANSWER (summary)
+    → NO: IF/ELSE: topicComplete == true
+      → YES: increment current_question_index
+        → IF/ELSE 2: current_question_index > 9?
+          → YES: summary generation path
+          → NO: ANSWER (show response)
+      → NO: ANSWER (show response)
 ```
 
-### Output Variables
-- `extracted_info` (String) — summary of what was shared
-- `needs_followup` (Boolean) — whether a follow-up is needed
-- `followup_question` (String) — the follow-up question if needed
+The ANSWER nodes should output `{{#ONBOARDING_PROCESSOR.response#}}` (bind to the `response` variable from this node).
 
 ---
 

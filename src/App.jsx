@@ -292,17 +292,18 @@ export default function StartupPlatform() {
 
   // Check existing session on mount + restore persisted data; listen for future auth changes.
   useEffect(() => {
-    getSession()
-      .then((s) => {
-        setSession(s);
-        setAuthLoading(false);
-        if (s) restoreUserData();
-      })
-      .catch(() => setAuthLoading(false));
+    // Use onAuthStateChange as the single source of truth for session state.
+    // Supabase fires INITIAL_SESSION on load, SIGNED_IN on login, and
+    // TOKEN_REFRESHED on JWT refresh. We only restore data once per sign-in.
+    let restored = false;
 
     const unsubscribe = onAuthStateChange((event, s) => {
       setSession(s);
-      if (event === 'SIGNED_IN') restoreUserData();
+      setAuthLoading(false);
+      if (s && !restored && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
+        restored = true;
+        restoreUserData();
+      }
     });
 
     return unsubscribe;

@@ -1,4 +1,8 @@
 {
+  "functions": {
+    "api/chat.js": { "maxDuration": 60 },
+    "api/evaluation/generate.js": { "maxDuration": 60 }
+  },
   "headers": [
     {
       "source": "/(.*)",
