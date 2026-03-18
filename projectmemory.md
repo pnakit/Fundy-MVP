@@ -696,14 +696,59 @@ Redesigned the Dify onboarding chatflow to align question gathering directly wit
   - **IF/ELSE 2**: Threshold > 8 → > 9 (10 questions)
 - **`dify-evaluation-workflow.md`** — Updated onboarding mapping section: replaced TODO with completed question mapping table showing primary questions, evidence items targeted, and context variables per category
 
+### Dify Studio Updates (COMPLETE — Mar 2026)
+All per-node prompts from `dify-onboarding-prompt.md` applied to chatflow:
+- APPEND KEY INFO BY CATE: 10 new category variables (was 8 + 2 removed)
+- LLM IS REVIEWING YOUR RESPONSE: 10-category extraction
+- CODE CURRENT_TOPIC_CON: 10-category mapping, outputs joined string (not array)
+- CODE CONSOLIDATED_CON: XML-tagged sections, `context_highlights` removed
+- NEXT QUESTION LLM: 10-question bank + adaptive escalation
+- RESPONSE PROCESSING LLM: evidence-aware follow-up logic
+- IF/ELSE 2: threshold > 9 (was > 8)
+- GENERATING ONBOARDING: evidence-aligned completeness + deepDivePrompt
+
+## v4.0 — Action Item Refresh & Vercel Function Limit Fix (Mar 2026)
+
+Added user-triggered "Refresh Status" that searches the knowledge base for evidence relevant to each action item, runs GPT-4o-mini classification, and displays status badges.
+
+### Changes
+
+**New files:**
+- `api/action-items/_analyze.js` — LLM helper: GPT-4o-mini classification of action item status (addressed/partially_addressed/not_addressed/insufficient_evidence)
+- `api/action-items/refresh.js` — `POST /api/action-items/refresh` endpoint: batch embed → parallel search → parallel LLM (max 10 concurrent) → persist to `custom_data.refresh` → return results
+- `src/api/actionItemRefreshApi.js` — Client wrapper with mock mode + 404 dev fallback
+- Tests: `_analyze.test.js` (18 tests), `_refresh.test.js` (8 tests), `actionItemRefreshApi.test.js` (5 tests)
+
+**Modified files:**
+- `src/api/dataAccess.js` — Fixed latent bug: `saveActionItem` was hardcoding `custom_data: {}`, now flows `item.customData || {}`. `loadActionItems` maps `custom_data` into returned objects.
+- `src/App.jsx` — "Refresh Status" button in actions-header, `handleRefreshActionItems` handler, refresh status badges on action cards (green/orange/red/gray)
+- `src/styles/app.css` — `.refresh-btn`, `.refresh-badge` with status-specific colors
+- `dataAccess.test.js` — 4 new tests for customData round-trip
+
+**Vercel Hobby plan fix (12 function limit):**
+- Renamed `api/knowledge/embeddings.js` → `_embeddings.js` (helper, not endpoint)
+- Renamed `api/knowledge/knowledgeBase.js` → `_knowledgeBase.js` (helper, not endpoint)
+- Renamed `api/knowledge/search.js` → `_search.js` (unused endpoint, saves a slot)
+- Renamed `api/action-items/refresh.test.js` → `_refresh.test.js` (test file)
+- Updated all import paths across 10 files
+- Convention established: `_`-prefixed files in `api/` are excluded from Vercel function count
+
+**Key decisions:**
+- Direct OpenAI GPT-4o-mini for lightweight analysis (not Dify — reserved for complex multi-step workflows)
+- Per-item parallel LLM via `Promise.allSettled` with concurrency limit of 10
+- `custom_data.refresh` JSONB schema (no migration needed — column already existed)
+- Three-layer mock fallback: `VITE_DIFY_MOCK=true` → client mock, 404 → client mock, no `OPENAI_API_KEY` → server mock
+
+**Test count:** 198 tests across 14 files
+
 ### Pending
-1. **Dify Studio**: Apply per-node prompts from `dify-onboarding-prompt.md` to chatflow (7 nodes to update)
+- `account/delete.js` is deployed (data reset, preserves auth) — needs UI button in settings
 
 ## Next Steps (priority order)
 
 ### Immediate
 
-1. **Dify Studio**: Apply per-node updates from `dify-onboarding-prompt.md` to the onboarding chatflow (see Update Order section in that doc)
+1. ~~**Dify Studio**: Apply per-node updates~~ — DONE (see v3.9 Dify Studio Updates above)
 
 2. **Evaluation quality verification** — with a real user account, run the full pipeline and confirm:
    - Onboarding adaptive escalation (LLM probes next gate when founder demonstrates maturity)
@@ -715,9 +760,8 @@ Redesigned the Dify onboarding chatflow to align question gathering directly wit
 
 ### Medium term
 
-3. **Account self-service reset/delete** — `POST /api/account/reset` (wipe data, keep auth) and
-   `POST /api/account/delete` (full GDPR delete). Add UI in settings panel.
-   `scripts/clear-user-data.js` is the basis for the reset endpoint logic.
+3. **Account reset UI** — `api/account/delete.js` endpoint is deployed (resets user data, preserves auth).
+   Wire up a "Delete My Data" button in the UI settings panel.
 
 4. **File text extraction pipeline** — extract text from uploaded PDFs/docs server-side, chunk +
    embed, store path in `file_metadata.extracted_text_path`. Makes uploaded files searchable

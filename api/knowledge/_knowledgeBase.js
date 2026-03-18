@@ -95,7 +95,7 @@ async function searchSupabase(embedding, options, config) {
     throw new Error(`Knowledge base search failed: ${error.message}`);
   }
 
-  return (data || []).map((row) => ({
+  const results = (data || []).map((row) => ({
     content: row.content,
     score: row.similarity,
     metadata: row.metadata,
@@ -103,6 +103,26 @@ async function searchSupabase(embedding, options, config) {
     source_id: row.source_id,
     chunk_index: row.chunk_index,
   }));
+
+  // Deduplicate: keep only the highest-scoring chunk per (source_type, source_id).
+  // This prevents duplicate/stale embeddings from the same source crowding out
+  // diverse results (e.g. after re-runs that accumulate orphaned chunks).
+  return deduplicateBySource(results);
+}
+
+/**
+ * Deduplicate search results by (source_type, source_id).
+ * Keeps only the highest-scoring chunk per source, preserving result order.
+ * Results are already sorted by score descending from the RPC function.
+ */
+function deduplicateBySource(results) {
+  const seen = new Set();
+  return results.filter((r) => {
+    const key = `${r.source_type}::${r.source_id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**

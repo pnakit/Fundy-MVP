@@ -235,6 +235,18 @@ async function embedDeepDiveConversations(userId) {
       metadata: chunk.metadata || {},
     }));
 
+    // Delete stale deep-dive embeddings before inserting fresh ones
+    // (prevents orphaned chunks if conversation length changed between runs)
+    const convIds = [...new Set(chunkConvMap.map((c) => c.id))];
+    for (const convId of convIds) {
+      await supabase
+        .from('document_embeddings')
+        .delete()
+        .eq('user_id', userId)
+        .eq('source_type', 'conversation')
+        .eq('source_id', convId);
+    }
+
     const { error } = await supabase
       .from('document_embeddings')
       .upsert(rows, { onConflict: 'source_type,source_id,chunk_index' });

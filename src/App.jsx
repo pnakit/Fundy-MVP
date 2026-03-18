@@ -1834,7 +1834,18 @@ export default function StartupPlatform() {
         <div className="investment-window">
           <div className="invest-header">
             <h2>Investment Matching</h2>
-            <p>Run an evaluation to see personalized investment recommendations</p>
+            {onboardingSummary ? (
+              <button
+                className="eval-generate-btn"
+                onClick={handleGenerateEvaluation}
+                disabled={evaluationLoading}
+                title="Recommend investments based on evaluation"
+              >
+                {evaluationLoading ? 'Evaluating...' : 'Recommend Investments'}
+              </button>
+            ) : (
+              <p>Complete onboarding to unlock investment recommendations</p>
+            )}
           </div>
           <div className="invest-content">
             {evaluationLoading ? (
@@ -1847,16 +1858,10 @@ export default function StartupPlatform() {
               <div style={{ textAlign: 'center', padding: '60px 24px' }}>
                 <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
                 <p style={{ margin: '0 0 20px', fontSize: 15, color: 'rgba(255,255,255,0.4)' }}>
-                  Run a full evaluation to generate your investment recommendations.
+                  {onboardingSummary
+                    ? 'Click "Recommend Investments" to generate your personalized recommendations.'
+                    : 'Complete the onboarding conversation first to unlock investment recommendations.'}
                 </p>
-                <button
-                  className="eval-generate-btn"
-                  onClick={handleGenerateEvaluation}
-                  disabled={!onboardingSummary}
-                  title={onboardingSummary ? 'Recommend investments based on evaluation' : 'Complete onboarding first'}
-                >
-                  Recommend Investments
-                </button>
               </div>
             )}
           </div>

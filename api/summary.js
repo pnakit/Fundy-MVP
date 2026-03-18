@@ -83,6 +83,15 @@ export default async function handler(req, res) {
         metadata: chunk.metadata || {},
       }));
 
+      // Delete stale summary embeddings before inserting fresh ones
+      // (prevents orphaned chunks if chunk count or order changes between runs)
+      await supabase
+        .from('document_embeddings')
+        .delete()
+        .eq('user_id', userId)
+        .eq('source_type', 'summary')
+        .eq('source_id', summaryId);
+
       const { error: embedErr } = await supabase
         .from('document_embeddings')
         .upsert(rows, { onConflict: 'source_type,source_id,chunk_index' });
@@ -130,6 +139,14 @@ export default async function handler(req, res) {
             embedding: JSON.stringify(embeddings[i]),
             metadata: chunk.metadata || {},
           }));
+
+          // Delete stale onboarding conversation embeddings before inserting fresh ones
+          await supabase
+            .from('document_embeddings')
+            .delete()
+            .eq('user_id', userId)
+            .eq('source_type', 'conversation')
+            .eq('source_id', conv.id);
 
           const { error: convEmbedErr } = await supabase
             .from('document_embeddings')

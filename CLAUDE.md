@@ -125,9 +125,12 @@ api/
   evaluation/
     generate.js           # POST /api/evaluation/generate — orchestrates retrieval + Dify + SSE
     save.js               # POST /api/evaluation/save — persist evaluation results to DB
+    investment-match.js   # POST /api/evaluation/investment-match — investment matching endpoint
     _categoryContext.js   # Per-category context assembly (10 parallel KB searches)
     _difyWorkflow.js      # Dify Workflow API + SSE stream transformation
 ```
+
+**Vercel function limit**: Hobby plan allows 12 serverless functions. Every non-`_`-prefixed `.js` file under `api/` becomes a function. Helpers and test files MUST be `_`-prefixed to avoid counting toward the limit. Current count: exactly 12.
 
 **Workflow routing**: request body includes a `workflow` field (`'onboarding'`, `'deepdive'`, or `'evaluation'`). `resolveApiKey()` maps this to the correct `DIFY_*_API_KEY` env var, falling back to the onboarding key if the requested workflow key is missing.
 
@@ -151,7 +154,7 @@ api/
 
 **Architecture**: Retrieval happens in our API, not Dify. The `/api/evaluation/generate` endpoint queries the knowledge base, assembles per-category context, and passes pre-retrieved content to Dify as input variables. This lets us swap between internal Supabase pgvector and external partner databases without changing the Dify workflow.
 
-**Knowledge base abstraction** (`api/knowledge/knowledgeBase.js`): Config-driven adapter pattern with a unified `semanticSearch()` interface. Default KB from `ACTIVE_KNOWLEDGE_BASE` env var.
+**Knowledge base abstraction** (`api/knowledge/_knowledgeBase.js`): Config-driven adapter pattern with a unified `semanticSearch()` interface. Default KB from `ACTIVE_KNOWLEDGE_BASE` env var.
 
 **Evaluation flow**: Frontend → `/api/evaluation/generate` (JWT auth) → 10 parallel KB searches → context assembly → Dify Workflow API (streaming) → SSE events → frontend progressive rendering. See `dify-evaluation-workflow.md` for the Dify workflow setup guide.
 

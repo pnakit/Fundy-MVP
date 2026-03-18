@@ -45,15 +45,24 @@ export default async function handler(req, res) {
     const supabase = getSupabaseAdmin();
 
     // Use actionItemId as the source_id so we can look up all chunks for a given item.
-    // chunk_index is the current timestamp (ms) to avoid collisions across multiple exchanges.
-    const chunkIndex = Date.now();
+    // Determine next chunk_index by counting existing embeddings for this source,
+    // so repeated exchanges get stable sequential indices instead of ever-growing timestamps.
+    const sourceId = conversationDbId || actionItemId;
+    const { count } = await supabase
+      .from('document_embeddings')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('source_type', 'conversation')
+      .eq('source_id', sourceId);
+
+    const chunkIndex = count ?? 0;
 
     const { error } = await supabase.from('document_embeddings').upsert(
       [
         {
           user_id: userId,
           source_type: 'conversation',
-          source_id: conversationDbId || actionItemId,
+          source_id: sourceId,
           chunk_index: chunkIndex,
           content,
           embedding: JSON.stringify(embedding),
@@ -67,7 +76,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: `Failed to store embedding: ${error.message}` });
     }
 
-    return res.status(200).json({ stored: 1, source_id: conversationDbId || actionItemId });
+    return res.status(200).json({ stored: 1, source_id: sourceId });
   } catch (err) {
     console.error('[action-items/embed] Error:', err.message);
     return res.status(500).json({ error: err.message });
