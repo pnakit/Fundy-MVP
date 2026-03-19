@@ -17,7 +17,7 @@ const ChatPanel = React.memo(function ChatPanel({
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages]);
 
   const defaultRenderMessage = (msg) => msg.content;
