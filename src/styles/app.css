@@ -1433,6 +1433,94 @@ body {
   to { opacity: 1; }
 }
 
+/* Evidence panel — shown in expanded action card body after Refresh Status */
+.evidence-panel {
+  margin-bottom: 0.875rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border-left: 3px solid;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.evidence-panel.addressed {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.evidence-panel.partially_addressed {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.evidence-panel.not_addressed {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.evidence-panel.insufficient_evidence {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.evidence-summary {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 0.625rem;
+  line-height: 1.5;
+}
+
+.evidence-chunks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.evidence-chunk {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.4;
+}
+
+.evidence-source-tag {
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+}
+
+.evidence-source-tag.summary {
+  color: #818cf8;
+  background: rgba(129, 140, 248, 0.15);
+}
+
+.evidence-source-tag.file {
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.evidence-source-tag.conversation {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.evidence-content {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-score {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.3);
+  font-variant-numeric: tabular-nums;
+}
+
 .action-input-group {
   margin-bottom: 1rem;
 }

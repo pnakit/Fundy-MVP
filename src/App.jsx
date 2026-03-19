@@ -1780,6 +1780,24 @@ export default function StartupPlatform() {
                             placeholder="Ask for guidance, add notes, or upload documentation..."
                           />
                         </div>
+                        {action.customData?.refresh && (
+                          <div className={`evidence-panel ${action.customData.refresh.status}`}>
+                            <p className="evidence-summary">{action.customData.refresh.summary}</p>
+                            {action.customData.refresh.evidence?.length > 0 && (
+                              <div className="evidence-chunks">
+                                {action.customData.refresh.evidence.map((e, i) => (
+                                  <div key={i} className="evidence-chunk">
+                                    <span className={`evidence-source-tag ${e.source_type}`}>
+                                      {e.source_type === 'summary' ? 'Onboarding' : e.source_type === 'file' ? 'File' : 'Chat'}
+                                    </span>
+                                    <span className="evidence-content">{e.content}</span>
+                                    <span className="evidence-score">{Math.round(e.score * 100)}%</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div className="action-buttons">
                           <button className="btn-complete" onClick={() => handleMarkComplete(action.id)}>
                             Mark Complete
