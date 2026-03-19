@@ -935,7 +935,7 @@ export default function StartupPlatform() {
     setActionConversations((prev) => ({
       ...prev,
       [action.id]: {
-        messages: [{ role: 'assistant', content: `Let's validate this action item: **${action.title}**\n\nTo mark this as complete, I'll need to understand what you've done and see some evidence. What steps have you taken so far?` }],
+        messages: [{ role: 'assistant', content: `What have you done to address: ${action.title}\n\nDescribe the steps you've taken, or upload supporting documentation — contracts, screenshots, metrics, or any relevant files.` }],
         conversationId: null,
         inputValue: '',
       },
