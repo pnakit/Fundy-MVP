@@ -935,7 +935,7 @@ export default function StartupPlatform() {
     setActionConversations((prev) => ({
       ...prev,
       [action.id]: {
-        messages: [{ role: 'assistant', content: `What have you done to address: ${action.title}\n\nDescribe the steps you've taken, or upload supporting documentation — contracts, screenshots, metrics, or any relevant files.` }],
+        messages: [{ role: 'assistant', content: `What have you done to address: ${action.title}\n\n*Describe the steps you've taken, or upload supporting documentation.*` }],
         conversationId: null,
         inputValue: '',
       },
@@ -1157,7 +1157,18 @@ export default function StartupPlatform() {
         </>
       );
     }
-    return msg.content;
+    // Minimal inline markdown: **bold**, *italic*, newlines → <br>
+    const parts = msg.content.split(/(\*\*[^*]+\*\*|\*[^*]+\*|\n)/g);
+    return (
+      <>
+        {parts.map((part, i) => {
+          if (part === '\n') return <br key={i} />;
+          if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>;
+          if (part.startsWith('*') && part.endsWith('*')) return <em key={i}>{part.slice(1, -1)}</em>;
+          return part;
+        })}
+      </>
+    );
   };
 
   // Window 1: Chat Onboarding — phase dispatcher
