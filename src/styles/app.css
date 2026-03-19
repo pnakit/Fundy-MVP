@@ -1211,6 +1211,58 @@ body {
   opacity: 1;
 }
 
+.addressed-items-section {
+  margin-left: 1.5rem;
+  margin-top: 0.25rem;
+}
+
+.addressed-items-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  border-radius: 6px;
+  padding: 0.375rem 0.75rem;
+  color: rgba(16, 185, 129, 0.7);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 90%;
+}
+
+.addressed-items-toggle:hover {
+  background: rgba(16, 185, 129, 0.08);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.addressed-items-icon {
+  font-size: 0.625rem;
+}
+
+.addressed-items-count {
+  background: rgba(16, 185, 129, 0.12);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  margin-left: auto;
+}
+
+.addressed-items-cards {
+  margin-top: 0.375rem;
+}
+
+.addressed-items-cards .action-card {
+  opacity: 0.7;
+  border-left: 2px solid rgba(16, 185, 129, 0.25);
+}
+
+.addressed-items-cards .action-card:hover {
+  opacity: 1;
+}
+
 .actions-section {
   margin-top: 2rem;
 }
@@ -1235,33 +1287,6 @@ body {
   font-size: 0.8125rem;
 }
 
-
-.refresh-badge {
-  display: inline-block;
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  margin-top: 0.2rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.refresh-badge.addressed {
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.12);
-}
-.refresh-badge.partially_addressed {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.12);
-}
-.refresh-badge.not_addressed {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.12);
-}
-.refresh-badge.insufficient_evidence {
-  color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.06);
-}
 
 .action-cards {
   display: flex;
@@ -1351,6 +1376,26 @@ body {
 .action-status.completed {
   background: rgba(16, 185, 129, 0.2);
   color: #10b981;
+}
+
+.action-status.addressed {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.action-status.partially_addressed {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.action-status.not_addressed {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.action-status.insufficient_evidence {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .expand-icon {
@@ -1926,6 +1971,10 @@ body {
   overflow: hidden;
   border-radius: 10px;
   margin-bottom: 12px;
+}
+
+.action-chat-container .chat-window {
+  height: 100%;
 }
 
 /* Password Screen */

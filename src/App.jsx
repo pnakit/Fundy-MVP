@@ -108,6 +108,7 @@ export default function StartupPlatform() {
   const [selectedInvestments, setSelectedInvestments] = useState([]);
   const [expandedAction, setExpandedAction] = useState(null);
   const [expandedStretch, setExpandedStretch] = useState(new Set());
+  const [expandedAddressed, setExpandedAddressed] = useState(new Set());
   const [onboardingPhase, setOnboardingPhase] = useState('chat');
   const [onboardingSummary, setOnboardingSummary] = useState(null);
   const [activeCategory, setActiveCategory] = useState(null);
@@ -1560,10 +1561,12 @@ export default function StartupPlatform() {
       .map((d) => {
         const dimActions = evaluationActions.filter((a) => a.dimensionId === d.id);
         const sortByPriority = (a, b) => (PRIORITY_ORDER[a.priority] ?? 4) - (PRIORITY_ORDER[b.priority] ?? 4);
+        const isAddressed = (a) => a.customData?.refresh?.status === 'addressed';
         return {
           dimension: d,
-          mustHaves: dimActions.filter((a) => a.gapType !== 'stretch').sort(sortByPriority),
-          stretch: dimActions.filter((a) => a.gapType === 'stretch').sort(sortByPriority),
+          mustHaves: dimActions.filter((a) => a.gapType !== 'stretch' && !isAddressed(a)).sort(sortByPriority),
+          stretch: dimActions.filter((a) => a.gapType === 'stretch' && !isAddressed(a)).sort(sortByPriority),
+          addressed: dimActions.filter(isAddressed).sort(sortByPriority),
         };
       });
 
@@ -1710,7 +1713,7 @@ export default function StartupPlatform() {
           {/* Action Items */}
           <div className="actions-section">
             <div className="actions-header">
-              <h3>Action Items <span className="action-count">{actionItems.filter((a) => a.status !== 'completed').length} pending</span></h3>
+              <h3>Action Items <span className="action-count">{actionItems.filter((a) => a.status !== 'completed' && a.customData?.refresh?.status !== 'addressed').length} pending</span></h3>
               <button
                 className="eval-generate-btn"
                 onClick={handleRefreshActionItems}
@@ -1721,39 +1724,33 @@ export default function StartupPlatform() {
             </div>
 
             <div className="action-cards">
-              {actionsByDimension.map(({ dimension, mustHaves, stretch }) => {
+              {actionsByDimension.map(({ dimension, mustHaves, stretch, addressed }) => {
                 const stretchOpen = expandedStretch.has(dimension.id);
+                const addressedOpen = expandedAddressed.has(dimension.id);
                 const renderActionCard = (action) => (
                   <div
                     key={action.id}
                     className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
                   >
                     <div className="action-card-header" onClick={() => { const opening = expandedAction !== action.id; setExpandedAction(opening ? action.id : null); if (opening) initActionConversation(action); }}>
-                      <div className="action-priority-dot" style={{ background: getPriorityColor(action.priority) }}></div>
+                      <div className="action-priority-dot" style={{ background: action.gapType === 'table_stakes' ? '#f59e0b' : '#818cf8' }}></div>
                       <div className="action-info">
                         <h4>{action.title}</h4>
-                        {action.gapType && (
-                          <span className={`gap-type-badge ${action.gapType}`}>
-                            {action.gapType === 'table_stakes' ? 'Must-have' : 'Stretch'}
-                          </span>
-                        )}
-                        {action.customData?.refresh && (
-                          <span
-                            className={`refresh-badge ${action.customData.refresh.status}`}
-                            title={action.customData.refresh.summary}
-                          >
+                        <p>{action.description}</p>
+                      </div>
+                      <div className="action-meta">
+                        {action.customData?.refresh ? (
+                          <span className={`action-status ${action.customData.refresh.status}`} title={action.customData.refresh.summary}>
                             {action.customData.refresh.status === 'addressed' ? 'Addressed'
                               : action.customData.refresh.status === 'partially_addressed' ? 'Partial'
                               : action.customData.refresh.status === 'not_addressed' ? 'Not addressed'
                               : 'No evidence'}
                           </span>
+                        ) : (
+                          <span className={`action-status ${action.status}`}>
+                            {action.status.replace('_', ' ')}
+                          </span>
                         )}
-                        <p>{action.description}</p>
-                      </div>
-                      <div className="action-meta">
-                        <span className={`action-status ${action.status}`}>
-                          {action.status.replace('_', ' ')}
-                        </span>
                       </div>
                       <span className="expand-icon">{expandedAction === action.id ? '−' : '+'}</span>
                     </div>
@@ -1809,6 +1806,28 @@ export default function StartupPlatform() {
                         {stretchOpen && (
                           <div className="stretch-goals-cards">
                             {stretch.map(renderActionCard)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {addressed.length > 0 && (
+                      <div className="addressed-items-section">
+                        <button
+                          className="addressed-items-toggle"
+                          onClick={() => setExpandedAddressed((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(dimension.id)) next.delete(dimension.id);
+                            else next.add(dimension.id);
+                            return next;
+                          })}
+                        >
+                          <span className="addressed-items-icon">{addressedOpen ? '▾' : '▸'}</span>
+                          <span>Addressed</span>
+                          <span className="addressed-items-count">{addressed.length}</span>
+                        </button>
+                        {addressedOpen && (
+                          <div className="addressed-items-cards">
+                            {addressed.map(renderActionCard)}
                           </div>
                         )}
                       </div>
