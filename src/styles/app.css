@@ -1279,6 +1279,16 @@ body {
   font-weight: 600;
 }
 
+.actions-warning {
+  font-size: 0.75rem;
+  color: #f59e0b;
+  margin-bottom: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
 .action-count {
   background: rgba(99, 102, 241, 0.2);
   color: #a5b4fc;

@@ -9,12 +9,14 @@
  *
  * Request body:
  * {
- *   actionItemIds?: string[]  // optional — if omitted, refreshes all non-completed items
+ *   actionItemIds?: string[]   // optional — if omitted, refreshes all non-completed items
+ *   skipRecentMinutes?: number  // skip items refreshed within this many minutes (default 15)
  * }
  *
  * Response:
  * {
- *   results: { [actionItemId]: { status, confidence, summary, evidence_count, refreshed_at } },
+ *   results: { [actionItemId]: { status, confidence, summary, evidence_count, evidence, refreshed_at } },
+ *   skipped?: string[],
  *   mock?: boolean
  * }
  */
@@ -28,6 +30,8 @@ import { analyzeActionItem } from './_analyze.js';
 const SEARCH_TOP_K = 5;
 const SEARCH_THRESHOLD = 0.5;
 const MAX_CONCURRENT_LLM = 10;
+const DEFAULT_SKIP_RECENT_MINUTES = 15;
+const MAX_EVIDENCE_SNIPPET_LENGTH = 200;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -40,7 +44,8 @@ export default async function handler(req, res) {
   }
 
   const userId = auth.user.sub;
-  const { actionItemIds } = req.body || {};
+  const { actionItemIds, skipRecentMinutes } = req.body || {};
+  const skipMinutes = typeof skipRecentMinutes === 'number' ? skipRecentMinutes : DEFAULT_SKIP_RECENT_MINUTES;
 
   const supabase = getSupabaseAdmin();
 
@@ -56,15 +61,31 @@ export default async function handler(req, res) {
     query = query.neq('status', 'completed');
   }
 
-  const { data: items, error: loadError } = await query;
+  const { data: allItems, error: loadError } = await query;
 
   if (loadError) {
     console.error('[action-items/refresh] Failed to load action items:', loadError.message);
     return res.status(500).json({ error: `Failed to load action items: ${loadError.message}` });
   }
 
-  if (!items || items.length === 0) {
+  if (!allItems || allItems.length === 0) {
     return res.status(200).json({ results: {} });
+  }
+
+  // P2: Skip items refreshed recently (staleness check)
+  const cutoff = new Date(Date.now() - skipMinutes * 60 * 1000).toISOString();
+  const skipped = [];
+  const items = allItems.filter((item) => {
+    const refreshedAt = item.custom_data?.refresh?.refreshed_at;
+    if (refreshedAt && refreshedAt > cutoff) {
+      skipped.push(item.id);
+      return false;
+    }
+    return true;
+  });
+
+  if (items.length === 0) {
+    return res.status(200).json({ results: {}, skipped });
   }
 
   // Check for mock mode (no OpenAI key)
@@ -84,6 +105,11 @@ export default async function handler(req, res) {
     const searchResults = await Promise.all(
       items.map((item, i) =>
         semanticSearch(embeddings[i], { userId, topK: SEARCH_TOP_K, threshold: SEARCH_THRESHOLD })
+          .then((results) =>
+            // A2: Filter out self-referencing evidence — action item chat exchanges about
+            // this item are not proof the gap has been closed
+            results.filter((r) => r.metadata?.actionItemId !== item.id),
+          )
           .catch((err) => {
             console.error(`[action-items/refresh] Search failed for ${item.id}:`, err.message);
             return [];
@@ -108,6 +134,11 @@ export default async function handler(req, res) {
             result: {
               ...analysis,
               evidence_count: evidence.length,
+              evidence: evidence.map((e) => ({
+                content: e.content?.slice(0, MAX_EVIDENCE_SNIPPET_LENGTH) || '',
+                source_type: e.source_type,
+                score: e.score,
+              })),
               refreshed_at: new Date().toISOString(),
             },
           };
@@ -137,7 +168,7 @@ export default async function handler(req, res) {
     // Step 4: Persist results to DB
     await persistResults(supabase, userId, results);
 
-    return res.status(200).json({ results });
+    return res.status(200).json({ results, ...(skipped.length > 0 && { skipped }) });
   } catch (err) {
     console.error('[action-items/refresh] Error:', err.message);
     return res.status(500).json({ error: err.message });
@@ -146,19 +177,36 @@ export default async function handler(req, res) {
 
 /**
  * Persist refresh results into the custom_data column of each action item.
- * Merges with existing custom_data to avoid overwriting other fields.
+ * Reads existing custom_data first and merges to avoid overwriting other fields.
  */
 async function persistResults(supabase, userId, results) {
-  const updates = Object.entries(results).map(([id, refreshResult]) =>
-    supabase
+  const ids = Object.keys(results);
+  if (ids.length === 0) return;
+
+  // Read current custom_data for all items in one query
+  const { data: rows, error: readError } = await supabase
+    .from('action_items')
+    .select('id, custom_data')
+    .eq('user_id', userId)
+    .in('id', ids);
+
+  if (readError) {
+    console.error('[action-items/refresh] Failed to read custom_data for merge:', readError.message);
+  }
+
+  const existingData = new Map((rows || []).map((r) => [r.id, r.custom_data || {}]));
+
+  const updates = Object.entries(results).map(([id, refreshResult]) => {
+    const merged = { ...existingData.get(id), refresh: refreshResult };
+    return supabase
       .from('action_items')
-      .update({ custom_data: { refresh: refreshResult }, updated_at: new Date().toISOString() })
+      .update({ custom_data: merged, updated_at: new Date().toISOString() })
       .eq('id', id)
       .eq('user_id', userId)
       .then(({ error }) => {
         if (error) console.error(`[action-items/refresh] Failed to persist result for ${id}:`, error.message);
-      }),
-  );
+      });
+  });
   await Promise.all(updates);
 }
 

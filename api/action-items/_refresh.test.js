@@ -209,4 +209,110 @@ describe('POST /api/action-items/refresh', () => {
     // Verify .in() was called instead of .neq()
     expect(supabase.from().in).toHaveBeenCalledWith('id', ['item-1']);
   });
+
+  it('includes evidence snippets in results (A4)', async () => {
+    mockVerifyAuth.mockResolvedValue({ user: { sub: 'user-1' } });
+    mockSupabaseQuery([ITEMS[0]]);
+
+    mockGenerateEmbeddings.mockResolvedValue([[0.1, 0.2]]);
+    mockSemanticSearch.mockResolvedValue([
+      { content: 'Revenue data from onboarding chat', score: 0.85, source_type: 'summary' },
+    ]);
+    mockAnalyzeActionItem.mockResolvedValue({ status: 'addressed', confidence: 0.9, summary: 'Found revenue data.' });
+
+    const res = makeRes();
+    await handler(makeReq({ actionItemIds: ['item-1'] }), res);
+
+    expect(res._status).toBe(200);
+    const result = res._json.results['item-1'];
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0].content).toBe('Revenue data from onboarding chat');
+    expect(result.evidence[0].source_type).toBe('summary');
+    expect(result.evidence[0].score).toBe(0.85);
+  });
+
+  it('truncates long evidence snippets to MAX_EVIDENCE_SNIPPET_LENGTH (A4)', async () => {
+    mockVerifyAuth.mockResolvedValue({ user: { sub: 'user-1' } });
+    mockSupabaseQuery([ITEMS[0]]);
+
+    const longContent = 'x'.repeat(500);
+    mockGenerateEmbeddings.mockResolvedValue([[0.1, 0.2]]);
+    mockSemanticSearch.mockResolvedValue([{ content: longContent, score: 0.7, source_type: 'file' }]);
+    mockAnalyzeActionItem.mockResolvedValue({ status: 'not_addressed', confidence: 0.3, summary: 'No match.' });
+
+    const res = makeRes();
+    await handler(makeReq({ actionItemIds: ['item-1'] }), res);
+
+    expect(res._json.results['item-1'].evidence[0].content).toHaveLength(200);
+  });
+
+  it('filters out self-referencing evidence before LLM analysis (A2)', async () => {
+    mockVerifyAuth.mockResolvedValue({ user: { sub: 'user-1' } });
+    mockSupabaseQuery([ITEMS[0]]);
+
+    mockGenerateEmbeddings.mockResolvedValue([[0.1, 0.2]]);
+    // Return two chunks: one self-referencing (actionItemId matches item), one external
+    mockSemanticSearch.mockResolvedValue([
+      { content: 'User asked: how do I build this? AI: here is how.', score: 0.9, source_type: 'conversation', metadata: { actionItemId: 'item-1' } },
+      { content: 'Financial model attached in deck', score: 0.75, source_type: 'file', metadata: {} },
+    ]);
+    mockAnalyzeActionItem.mockResolvedValue({ status: 'partially_addressed', confidence: 0.6, summary: 'Partial.' });
+
+    const res = makeRes();
+    await handler(makeReq({ actionItemIds: ['item-1'] }), res);
+
+    expect(res._status).toBe(200);
+    // The self-referencing chunk must be excluded — analyzeActionItem should only see the file chunk
+    expect(mockAnalyzeActionItem).toHaveBeenCalledWith(
+      ITEMS[0],
+      [{ content: 'Financial model attached in deck', score: 0.75, source_type: 'file', metadata: {} }],
+    );
+    expect(res._json.results['item-1'].evidence_count).toBe(1);
+  });
+
+  it('skips items refreshed within the staleness window (P2)', async () => {
+    mockVerifyAuth.mockResolvedValue({ user: { sub: 'user-1' } });
+
+    const recentTimestamp = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 min ago
+    const staleTimestamp = new Date(Date.now() - 30 * 60 * 1000).toISOString(); // 30 min ago
+
+    const recentItem = { ...ITEMS[0], custom_data: { refresh: { refreshed_at: recentTimestamp } } };
+    const staleItem = { ...ITEMS[1], custom_data: { refresh: { refreshed_at: staleTimestamp } } };
+    mockSupabaseQuery([recentItem, staleItem]);
+
+    mockGenerateEmbeddings.mockResolvedValue([[0.1, 0.2]]);
+    mockSemanticSearch.mockResolvedValue([]);
+    mockAnalyzeActionItem.mockResolvedValue({ status: 'not_addressed', confidence: 0, summary: 'None.' });
+
+    const res = makeRes();
+    // Default skip window is 15 min — item-1 (5 min) is skipped, item-2 (30 min) is refreshed
+    await handler(makeReq(), res);
+
+    expect(res._status).toBe(200);
+    expect(res._json.skipped).toContain('item-1');
+    expect(res._json.results['item-2']).toBeDefined();
+    expect(res._json.results['item-1']).toBeUndefined();
+  });
+
+  it('merges refresh result into existing custom_data without overwriting other fields (A1)', async () => {
+    mockVerifyAuth.mockResolvedValue({ user: { sub: 'user-1' } });
+
+    const itemWithData = { ...ITEMS[0], custom_data: { someUserNote: 'keep this', refresh: { status: 'not_addressed' } } };
+    const supabase = mockSupabaseQuery([itemWithData]);
+
+    mockGenerateEmbeddings.mockResolvedValue([[0.1, 0.2]]);
+    mockSemanticSearch.mockResolvedValue([{ content: 'Revenue evidence', score: 0.8, source_type: 'summary', metadata: {} }]);
+    mockAnalyzeActionItem.mockResolvedValue({ status: 'addressed', confidence: 0.95, summary: 'Addressed.' });
+
+    const res = makeRes();
+    await handler(makeReq({ actionItemIds: ['item-1'] }), res);
+
+    expect(res._status).toBe(200);
+    // Find the update call and verify it preserved someUserNote
+    const updateCalls = supabase._chain.update.mock.calls;
+    expect(updateCalls.length).toBeGreaterThan(0);
+    const updatedData = updateCalls[updateCalls.length - 1][0];
+    expect(updatedData.custom_data.someUserNote).toBe('keep this');
+    expect(updatedData.custom_data.refresh.status).toBe('addressed');
+  });
 });

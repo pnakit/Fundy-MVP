@@ -119,6 +119,8 @@ export default function StartupPlatform() {
   const [actionConversations, setActionConversations] = useState({});
   const [actionTyping, setActionTyping] = useState(null);
   const [refreshLoading, setRefreshLoading] = useState(false);
+  const [refreshError, setRefreshError] = useState(null);
+  const [embedFailureCount, setEmbedFailureCount] = useState(0);
 
   const addDebugLog = useCallback((label, detail) => {
     if (!debugEnabled) return;
@@ -586,6 +588,7 @@ export default function StartupPlatform() {
     const nonCompleted = actionItems.filter((a) => a.status !== 'completed');
     if (nonCompleted.length === 0) return;
     setRefreshLoading(true);
+    setRefreshError(null);
     try {
       const { results } = await refreshActionItems(nonCompleted.map((a) => a.id));
       setActionItems((prev) =>
@@ -597,6 +600,7 @@ export default function StartupPlatform() {
       );
     } catch (err) {
       console.error('[handleRefreshActionItems]', err.message);
+      setRefreshError(err.message);
     } finally {
       setRefreshLoading(false);
     }
@@ -886,13 +890,15 @@ export default function StartupPlatform() {
       const s = await getSession();
       if (!s) return;
       const conversationDbId = actionConvDbIdsRef.current[actionId] || null;
-      await fetch('/api/action-items/embed', {
+      const response = await fetch('/api/action-items/embed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.access_token}` },
         body: JSON.stringify({ conversationDbId, actionItemId: actionId, userMessage: userMsg, assistantMessage: assistantMsg }),
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (err) {
       console.error('[embedActionItemExchange] Failed:', err.message);
+      setEmbedFailureCount((n) => n + 1);
     }
   };
 
@@ -1385,6 +1391,8 @@ export default function StartupPlatform() {
             const withoutOldCategory = prev.filter(
               (a) => !(a.sourceType === 'evaluation' && a.dimensionId === categoryData.category_id),
             );
+            const dimDef = EVALUATION_DIMENSIONS.find((d) => d.id === categoryData.category_id);
+            const dimTitle = dimDef?.title || categoryData.category_id;
             const newItems = gatedGaps.map((gap) => {
               const gapText = typeof gap === 'string' ? gap : gap.action;
               const gapType = typeof gap === 'string' ? 'table_stakes' : gap.type;
@@ -1396,7 +1404,7 @@ export default function StartupPlatform() {
               return {
                 id: crypto.randomUUID(),
                 title: gapText,
-                description: '',
+                description: `${dimTitle} — ${gapType === 'table_stakes' ? 'must-have' : 'stretch goal'}`,
                 priority: gapType === 'table_stakes' ? 'high' : 'medium',
                 status: 'pending',
                 sourceType: 'evaluation',
@@ -1722,11 +1730,15 @@ export default function StartupPlatform() {
                 {refreshLoading ? 'Analyzing...' : 'Refresh Status'}
               </button>
             </div>
+            {refreshError && (
+              <p className="actions-warning">Refresh failed: {refreshError}</p>
+            )}
+            {embedFailureCount > 0 && (
+              <p className="actions-warning">Some chat data may not be indexed — refresh results may be incomplete.</p>
+            )}
 
             <div className="action-cards">
-              {actionsByDimension.map(({ dimension, mustHaves, stretch, addressed }) => {
-                const stretchOpen = expandedStretch.has(dimension.id);
-                const addressedOpen = expandedAddressed.has(dimension.id);
+              {(() => {
                 const renderActionCard = (action) => (
                   <div
                     key={action.id}
@@ -1778,6 +1790,9 @@ export default function StartupPlatform() {
                   </div>
                 );
 
+                return actionsByDimension.map(({ dimension, mustHaves, stretch, addressed }) => {
+                const stretchOpen = expandedStretch.has(dimension.id);
+                const addressedOpen = expandedAddressed.has(dimension.id);
                 return (
                   <div key={dimension.id} className="action-dimension-group">
                     <div className="action-dimension-header">
@@ -1834,7 +1849,8 @@ export default function StartupPlatform() {
                     )}
                   </div>
                 );
-              })}
+              });
+              })()}
 
             </div>
           </div>
