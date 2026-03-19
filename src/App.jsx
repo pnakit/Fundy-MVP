@@ -32,6 +32,7 @@ import {
   saveActionItem,
   updateActionItemStatus,
   deleteActionItemsBySourceId,
+  deleteActionItemsByDimensionId,
   createConversation,
   updateConversationDifyId,
   saveMessages,
@@ -73,6 +74,7 @@ function mapDbActionToState(dbRow) {
     sourceId: dbRow.source_id || null,
     dimensionId: dbRow.dimension_id || null,
     actionKey: dbRow.action_key || null,
+    gapType: dbRow.custom_data?.gapType || null,
     customData: dbRow.custom_data || {},
     files: [],
     inputs: {},
@@ -1386,39 +1388,48 @@ export default function StartupPlatform() {
             .slice(0, MAX_STRETCH_PER_CATEGORY);
           const gatedGaps = [...tableStakesGaps, ...stretchGaps];
 
+          const dimDef = EVALUATION_DIMENSIONS.find((d) => d.id === categoryData.category_id);
+          const dimTitle = dimDef?.title || categoryData.category_id;
+          const newItems = gatedGaps.map((gap) => {
+            const gapText = typeof gap === 'string' ? gap : gap.action;
+            const gapType = typeof gap === 'string' ? 'table_stakes' : gap.type;
+            const slug = gapText
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '')
+              .slice(0, 50);
+            return {
+              id: crypto.randomUUID(),
+              title: gapText,
+              description: `${dimTitle} — ${gapType === 'table_stakes' ? 'must-have' : 'stretch goal'}`,
+              priority: gapType === 'table_stakes' ? 'high' : 'medium',
+              status: 'pending',
+              sourceType: 'evaluation',
+              sourceId: null,
+              dimensionId: categoryData.category_id,
+              actionKey: `${categoryData.category_id}-${slug}`,
+              gapType,
+              evidenceItems: typeof gap === 'string' ? [] : (gap.evidence_items || []),
+              customData: { gapType },
+              files: [],
+              inputs: {},
+            };
+          });
+
           setActionItems((prev) => {
             // Remove old evaluation items for this category before adding new ones
             const withoutOldCategory = prev.filter(
               (a) => !(a.sourceType === 'evaluation' && a.dimensionId === categoryData.category_id),
             );
-            const dimDef = EVALUATION_DIMENSIONS.find((d) => d.id === categoryData.category_id);
-            const dimTitle = dimDef?.title || categoryData.category_id;
-            const newItems = gatedGaps.map((gap) => {
-              const gapText = typeof gap === 'string' ? gap : gap.action;
-              const gapType = typeof gap === 'string' ? 'table_stakes' : gap.type;
-              const slug = gapText
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, '-')
-                .replace(/^-+|-+$/g, '')
-                .slice(0, 50);
-              return {
-                id: crypto.randomUUID(),
-                title: gapText,
-                description: `${dimTitle} — ${gapType === 'table_stakes' ? 'must-have' : 'stretch goal'}`,
-                priority: gapType === 'table_stakes' ? 'high' : 'medium',
-                status: 'pending',
-                sourceType: 'evaluation',
-                sourceId: null,
-                dimensionId: categoryData.category_id,
-                actionKey: `${categoryData.category_id}-${slug}`,
-                gapType,
-                evidenceItems: typeof gap === 'string' ? [] : (gap.evidence_items || []),
-                files: [],
-                inputs: {},
-              };
-            });
             return [...withoutOldCategory, ...newItems];
           });
+
+          // Persist to DB — delete old items for this category, then save new ones
+          const evalUserId = session?.user?.id;
+          if (evalUserId) {
+            deleteActionItemsByDimensionId(categoryData.category_id);
+            newItems.forEach((item) => saveActionItem(item, evalUserId));
+          }
         }
       },
       onInvestmentMatchingStarted: () => {

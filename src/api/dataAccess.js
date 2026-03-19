@@ -199,6 +199,20 @@ export async function deleteActionItemsBySourceId(sourceId) {
   if (error) console.error('[dataAccess] deleteActionItemsBySourceId failed:', error.message);
 }
 
+/**
+ * Delete all evaluation action items for a specific dimension.
+ * Called before re-saving when a category is re-evaluated.
+ * @param {string} dimensionId - The evaluation category ID
+ */
+export async function deleteActionItemsByDimensionId(dimensionId) {
+  const { error } = await supabase
+    .from('action_items')
+    .delete()
+    .eq('dimension_id', dimensionId)
+    .eq('source_type', 'evaluation');
+  if (error) console.error('[dataAccess] deleteActionItemsByDimensionId failed:', error.message);
+}
+
 // ─── Conversations & Messages ──────────────────────────────────────────────
 
 /**
