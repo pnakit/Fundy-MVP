@@ -1710,8 +1710,8 @@ export default function StartupPlatform() {
                 {enrichedDimensions.map((dim) => (
                   <div
                     key={dim.id}
-                    className={`dimension-card ${expandedDimension === dim.id ? 'expanded' : ''}`}
-                    onClick={() => setExpandedDimension(expandedDimension === dim.id ? null : dim.id)}
+                    className="dimension-card"
+                    onClick={() => setExpandedDimension(dim.id)}
                   >
                     <div className="dimension-card-top">
                       <span className="dimension-icon">{dim.icon}</span>
@@ -1731,17 +1731,39 @@ export default function StartupPlatform() {
                         ))}
                       </div>
                     </div>
-                    <span className="dimension-expand-hint">
-                      {expandedDimension === dim.id ? 'Details ▴' : 'Details ▾'}
-                    </span>
-                    {expandedDimension === dim.id && (
-                      <div className="dimension-description">{dim.description}</div>
-                    )}
+                    <span className="dimension-expand-hint">Details ↗</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
+
+          {/* Dimension detail overlay */}
+          {expandedDimension && (() => {
+            const dim = enrichedDimensions.find((d) => d.id === expandedDimension);
+            if (!dim) return null;
+            return (
+              <div className="dim-overlay-backdrop" onClick={() => setExpandedDimension(null)}>
+                <div className="dim-overlay-panel" onClick={(e) => e.stopPropagation()}>
+                  <button className="dim-overlay-close" onClick={() => setExpandedDimension(null)}>✕</button>
+                  <div className="dim-overlay-header">
+                    <span className="dim-overlay-icon">{dim.icon}</span>
+                    <span className="dim-overlay-title">{dim.title}</span>
+                    <span className="dim-overlay-score" style={{ color: getPerformanceColor(dim.performanceScore) }}>
+                      {dim.performanceScore}/5 {getPerformanceLabel(dim.performanceScore)}
+                    </span>
+                  </div>
+                  <div className="dim-overlay-perf-bar">
+                    {[1, 2, 3, 4, 5].map((seg) => (
+                      <div key={seg} className={`perf-bar-segment ${seg <= dim.performanceScore ? 'filled' : ''}`}
+                        style={seg <= dim.performanceScore ? { background: getPerformanceColor(dim.performanceScore) } : undefined} />
+                    ))}
+                  </div>
+                  <p className="dim-overlay-description">{dim.description}</p>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Action Items */}
           <div className="actions-section">
