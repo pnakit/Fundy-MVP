@@ -457,6 +457,17 @@ export default function StartupPlatform() {
         setUploadedFiles([]);
         const result = extractOnboardingSummary(response.message);
 
+        // Timeout detection: if response is empty, the Vercel function likely timed out
+        // before the ANSWER node fired (summary generation takes ~44s + overhead).
+        if (!result && !response.message?.trim()) {
+          setMessages(prev => replaceLastMessage(prev, {
+            role: 'assistant',
+            content: "Your summary is taking longer than expected to generate. Please type 'done' to try again.",
+            isError: true,
+          }));
+          return;
+        }
+
         if (result && result.error) {
           const conversationalPart = response.message
             .substring(0, response.message.indexOf(SUMMARY_START_MARKER))
@@ -598,7 +609,7 @@ export default function StartupPlatform() {
       setSelectedInvestments((prev) => prev.filter((id) => id !== investmentId));
       upsertInvestmentSelection(investmentId, false);
       // Remove due diligence items for this investment — content already embedded in KB
-      setActionItems((prev) => prev.filter((a) => !(a.sourceType === 'due_diligence' && a.sourceId === investmentId)));
+      setActionItems((prev) => prev.filter((a) => !(a.sourceType === 'investment' && a.sourceId === investmentId)));
       if (userId) deleteActionItemsBySourceId(investmentId);
     } else {
       setSelectedInvestments((prev) => [...prev, investmentId]);
@@ -615,7 +626,7 @@ export default function StartupPlatform() {
             description: item.description,
             priority: item.priority,
             status: 'pending',
-            sourceType: 'due_diligence',
+            sourceType: 'investment',
             sourceId: investmentId,
             dimensionId: null,
             actionKey: `dd-${investmentId}-${item.key}`,
@@ -1092,7 +1103,7 @@ export default function StartupPlatform() {
       onInputChange={setInputValue}
       onSend={handleSendMessage}
       onFileUpload={handleFileUpload}
-      placeholder="Type your message..."
+      placeholder="Type your response, or 'done' to generate your summary..."
       renderMessageContent={renderMessageContent}
       headerContent={
         <div className="chat-header">
@@ -1871,8 +1882,8 @@ export default function StartupPlatform() {
     }
 
     const { investment_readiness_summary, recommended_funding = [], conditional_options = [], improvement_roadmap = [], not_recommended = [] } = investmentData;
-    const investmentActions = actionItems.filter((a) => a.sourceType === 'investment');
-    const dueDiligenceItems = actionItems.filter((a) => a.sourceType === 'due_diligence');
+    const investmentActions = actionItems.filter((a) => a.sourceType === 'investment' && a.sourceId === 'investment_matching');
+    const dueDiligenceItems = actionItems.filter((a) => a.sourceType === 'investment' && a.sourceId !== 'investment_matching');
     const investmentActionCount = [...investmentActions, ...dueDiligenceItems].filter((a) => a.status !== 'completed').length;
 
     return (

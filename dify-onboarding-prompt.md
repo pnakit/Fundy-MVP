@@ -1,70 +1,62 @@
-# Dify Onboarding Chatflow — Per-Node Configuration Guide
+# Dify Onboarding Chatflow — Node Reference
 
-> **How to use:** Each section below maps to a specific node in the Dify onboarding chatflow. Copy the prompt text (between the `` ``` `` blocks) and paste it into the corresponding node's system prompt in Dify Studio.
+> **Reference doc:** Each section maps to a node in the Dify onboarding chatflow. Prompt text (between `` ``` `` blocks) is what's deployed in each node's system prompt in Dify Studio.
 
 ## Chatflow Architecture
 
 ```
 USER INPUT
+  → IF/ELSE - FINISH SHORTCUT (sys.query contains "finish"/"done"/"summary"/etc.)
+    → YES: CODE CONSOLIDATED_CON → GENERATING ONBOARDING → ANSWER 3 - FINAL JSON (summary)
+    → NO: (normal path below)
   → IF/ELSE (files uploaded?)
     → FILE EXTRACTOR → LLM IS REVIEWING YOUR RESPONSE → variable assigners
   → ASSIGNER (user_provided_responses, user_last_response)
   → COMBINER USER AND FILES
-  → APPEND KEY INFO BY CATE (10 category variables)
+  → APPEND KEY INFO BY CATE (APPEND mode, array[string] variables)
   → CODE CONCATENATE CATEG → CODE CURRENT_TOPIC_CON
   → ONBOARDING PROCESSOR LLM (single node — classifies, processes, generates response)
   → IF/ELSE: intent == "finish"
-    → YES: CODE CONSOLIDATED_CON → ANSWER 3 → GENERATING ONBOARDING → ANSWER (summary)
+    → YES: CODE CONSOLIDATED_CON → GENERATING ONBOARDING → ANSWER 3 - FINAL JSON (summary)
     → NO: IF/ELSE: topicComplete == true
-      → YES: increment current_question_index variable
-        → IF/ELSE 2 (current_question_index > 9?) → summary generation path
+      → YES: increment current_topic_index variable
+        → IF/ELSE 2 (current_topic_index > 9?) → summary generation path
         → ANSWER (show response)
       → NO: ANSWER (show response — follow-up, dig-deeper, clarification, or redirect)
 ```
 
-### Nodes removed (merged into ONBOARDING PROCESSOR)
-- ~~QUESTION CLASSIFIER 2~~ (5-class intent routing)
-- ~~RESPONSE PROCESSING LLM~~ (answer extraction + follow-up decision)
-- ~~NEXT QUESTION LLM~~ (next question / dig-deeper decision)
-- ~~QUESTION CLARIFICATION~~ (clarification LLM)
+### Finish shortcut bypass (timeout fix)
 
-This reduces sequential LLM calls from 3-4 to 1-2 per message (~15-20s savings).
+The normal "finish" path runs extraction LLM (~15s) + ONBOARDING PROCESSOR (~1s) + summary LLM (~44s) = ~60s, hitting the Vercel 60s limit. The FINISH SHORTCUT bypasses all of that and goes directly to summary generation, dropping the turn to ~44s.
 
-## Migration Steps
+**Condition:** `sys.query starts with "done" OR "finish" OR "summary" OR "end"`
 
-1. Delete: QUESTION CLASSIFIER 2, RESPONSE PROCESSING LLM, NEXT QUESTION LLM, QUESTION CLARIFICATION
-2. Add: ONBOARDING PROCESSOR LLM node (paste prompt below)
-3. Wire: CODE CURRENT_TOPIC_CON → ONBOARDING PROCESSOR → IF/ELSE (intent == "finish")
-4. Wire: IF/ELSE YES → CODE CONSOLIDATED_CON → existing summary path
-5. Wire: IF/ELSE NO → IF/ELSE (topicComplete == true) → increment index + IF/ELSE 2 / ANSWER
-6. ANSWER nodes: bind `response` output from ONBOARDING PROCESSOR as the answer text
+**YES branch wiring:** Goes directly to CODE CONSOLIDATED_CON → GENERATING ONBOARDING → ANSWER 3 - FINAL JSON. Skips the entire normal path (extraction, appending, ONBOARDING PROCESSOR) since the intent is already known and there's no data to extract from "done".
 
 ---
 
 ## Node: APPEND KEY INFO BY CATE
 
-**Type:** Variable Assigner (code node)
-**Purpose:** Aggregates extracted information into per-category conversation variables
+**Type:** Variable Assigner
+**Purpose:** Accumulates extracted information into per-category conversation variables across the conversation
 
-### Variable Mapping
+### Conversation Variables
 
-Replace the current variables with these 11 variables (10 categories + company_name):
+| Variable | Type | Mode | Source |
+|----------|------|------|--------|
+| `company_name` | `string` | OVERWRITE | Extraction LLM → `extracted_data.company_name` |
+| `product_technology` | `array[string]` | APPEND | Extraction LLM → `extracted_data.product_technology` |
+| `market_traction` | `array[string]` | APPEND | Extraction LLM → `extracted_data.market_traction` |
+| `business_model` | `array[string]` | APPEND | Extraction LLM → `extracted_data.business_model` |
+| `team_organization` | `array[string]` | APPEND | Extraction LLM → `extracted_data.team_organization` |
+| `go_to_market` | `array[string]` | APPEND | Extraction LLM → `extracted_data.go_to_market` |
+| `financial_health` | `array[string]` | APPEND | Extraction LLM → `extracted_data.financial_health` |
+| `fundraising_capital` | `array[string]` | APPEND | Extraction LLM → `extracted_data.fundraising_capital` |
+| `competitive_position` | `array[string]` | APPEND | Extraction LLM → `extracted_data.competitive_position` |
+| `operations` | `array[string]` | APPEND | Extraction LLM → `extracted_data.operations` |
+| `legal_compliance` | `array[string]` | APPEND | Extraction LLM → `extracted_data.legal_compliance` |
 
-| Variable | Mode | Source Field | Was (old name) |
-|----------|------|-------------|----------------|
-| `company_name` | OVERWRITE | `extracted_data.company_name` | `company_name` (unchanged) |
-| `product_technology` | OVERWRITE | `extracted_data.product_technology` | `problem_and_audience` |
-| `market_traction` | OVERWRITE | `extracted_data.market_traction` | `momentum_metrics` |
-| `business_model` | OVERWRITE | `extracted_data.business_model` | NEW |
-| `team_organization` | OVERWRITE | `extracted_data.team_organization` | `team_info` |
-| `go_to_market` | OVERWRITE | `extracted_data.go_to_market` | `gtm_strategy` |
-| `financial_health` | OVERWRITE | `extracted_data.financial_health` | NEW |
-| `fundraising_capital` | OVERWRITE | `extracted_data.fundraising_capital` | `existing_backers` + `fundraising_status` (merged) |
-| `competitive_position` | OVERWRITE | `extracted_data.competitive_position` | `competitive_advantage` |
-| `operations` | OVERWRITE | `extracted_data.operations` | NEW (was partially in `key_risks`) |
-| `legal_compliance` | OVERWRITE | `extracted_data.legal_compliance` | NEW |
-
-**Remove:** `key_risks`, `context_highlights` (cross-cutting info now captured in relevant categories)
+**Note:** Downstream code nodes (CODE CURRENT_TOPIC_CON, CODE CONSOLIDATED_CON) handle `array[string]` → join with `\n`, filtering out `NO_DATA` entries.
 
 ---
 
@@ -83,23 +75,25 @@ User response:
 File response:
 <file_content>{{#conversation.extracted_file_content#}}</file_content>
 
-Analyze this and extract information relevant to the 10 evaluation categories below. Do not include information that does not appear in the provided user_response or file_content. If there is no relevant information for a category, use "NO_DATA".
+Analyze this and extract information relevant to the 10 evaluation categories below. Do not include information that does not appear in the provided user_response or file_content.
+
+CRITICAL: Every field in extracted_data MUST be a non-empty string. Use the literal string "NO_DATA" when there is no relevant information for a category. NEVER return null, empty string "", or omit any field.
 
 Output JSON:
 {
   "response_file_type": "<written/pitch deck/financials/cap table/other>",
   "extracted_data": {
-    "company_name": "<if present, NO_DATA if not>",
-    "product_technology": "<product, problem, tech stack, users, features — NO_DATA if not>",
-    "market_traction": "<revenue, customers, growth, channels, retention — NO_DATA if not>",
-    "business_model": "<pricing, margins, unit economics, cost structure — NO_DATA if not>",
-    "team_organization": "<founders, team, hires, backgrounds, roles — NO_DATA if not>",
-    "go_to_market": "<sales motion, distribution, leads, conversion — NO_DATA if not>",
-    "financial_health": "<burn rate, runway, reporting, projections — NO_DATA if not>",
-    "fundraising_capital": "<funding raised, investors, pipeline, cap table — NO_DATA if not>",
-    "competitive_position": "<competitors, differentiation, moat, win/loss — NO_DATA if not>",
-    "operations": "<tools, processes, support, uptime, dev process — NO_DATA if not>",
-    "legal_compliance": "<incorporation, agreements, IP, compliance — NO_DATA if not>"
+    "company_name": "<company name if mentioned, otherwise NO_DATA>",
+    "product_technology": "<product, problem, tech stack, users, features — otherwise NO_DATA>",
+    "market_traction": "<revenue, customers, growth, channels, retention — otherwise NO_DATA>",
+    "business_model": "<pricing, margins, unit economics, cost structure — otherwise NO_DATA>",
+    "team_organization": "<founders, team, hires, backgrounds, roles — otherwise NO_DATA>",
+    "go_to_market": "<sales motion, distribution, leads, conversion — otherwise NO_DATA>",
+    "financial_health": "<burn rate, runway, reporting, projections — otherwise NO_DATA>",
+    "fundraising_capital": "<funding raised, investors, pipeline, cap table — otherwise NO_DATA>",
+    "competitive_position": "<competitors, differentiation, moat, win/loss — otherwise NO_DATA>",
+    "operations": "<tools, processes, support, uptime, dev process — otherwise NO_DATA>",
+    "legal_compliance": "<incorporation, agreements, IP, compliance — otherwise NO_DATA>"
   },
   "key_highlights": ["<highlight 1>", "<highlight 2>"],
   "summary": "<2-3 sentence summary of the response>"
@@ -111,7 +105,7 @@ Output JSON:
 ## Node: CODE CURRENT_TOPIC_CON
 
 **Type:** Code node
-**Purpose:** Selects the current topic's accumulated data by question index and outputs as a clean string for downstream LLM nodes
+**Purpose:** Selects the current topic's accumulated data by question index and joins the `array[string]` into a single string for the downstream LLM
 
 ### Code
 
@@ -134,13 +128,16 @@ def main(**kwargs):
 
     selected = mapping.get(idx, [])
 
+    # Normalize: conversation variables arrive as array[string] from APPEND mode
     if selected is None:
         selected = []
     if isinstance(selected, str):
         selected = [selected]
     if not isinstance(selected, list):
         selected = [str(selected)]
-    selected = [str(x) for x in selected]
+
+    # Filter out NO_DATA entries and join into a single string
+    selected = [str(x).strip() for x in selected if str(x).strip() and str(x).strip() != "NO_DATA"]
     selected = "\n".join(selected)
 
     return {"current_topic_context": selected}
@@ -153,24 +150,35 @@ def main(**kwargs):
 ## Node: CODE CONSOLIDATED_CON
 
 **Type:** Code node
-**Purpose:** Concatenates all 10 category variables into a single XML-tagged context string for the summary generation LLM
+**Purpose:** Joins all 10 `array[string]` category variables into a single XML-tagged context string for the summary generation LLM
 
 ### Code
 
 ```python
 def main(
     company_name: str,
-    product_technology: str,
-    market_traction: str,
-    business_model: str,
-    team_organization: str,
-    go_to_market: str,
-    financial_health: str,
-    fundraising_capital: str,
-    competitive_position: str,
-    operations: str,
-    legal_compliance: str,
+    product_technology: list,
+    market_traction: list,
+    business_model: list,
+    team_organization: list,
+    go_to_market: list,
+    financial_health: list,
+    fundraising_capital: list,
+    competitive_position: list,
+    operations: list,
+    legal_compliance: list,
 ) -> dict:
+
+    def join_array(arr) -> str:
+        """Join array[string] into a single string, filtering out NO_DATA entries."""
+        if arr is None:
+            return ""
+        if isinstance(arr, str):
+            arr = [arr]
+        return "\n".join(
+            s.strip() for s in arr
+            if isinstance(s, str) and s.strip() and s.strip() != "NO_DATA"
+        )
 
     def section(tag: str, title: str, value: str) -> str:
         value = (value or "").strip()
@@ -179,17 +187,17 @@ def main(
         return f"<{tag}>\n{title}\n{value}\n</{tag}>"
 
     parts = [
-        section("company",              "## Company",                    company_name),
-        section("product_technology",    "## Product & Technology",       product_technology),
-        section("market_traction",       "## Market Traction & Revenue",  market_traction),
-        section("business_model",        "## Business Model & Economics", business_model),
-        section("team_organization",     "## Team & Organization",        team_organization),
-        section("go_to_market",          "## Go-to-Market",               go_to_market),
-        section("financial_health",      "## Financial Health",           financial_health),
-        section("fundraising_capital",   "## Fundraising & Capital",      fundraising_capital),
-        section("competitive_position",  "## Competitive Position",       competitive_position),
-        section("operations",            "## Operations",                 operations),
-        section("legal_compliance",      "## Legal & Compliance",         legal_compliance),
+        section("company",              "## Company",                    (company_name or "").strip()),
+        section("product_technology",    "## Product & Technology",       join_array(product_technology)),
+        section("market_traction",       "## Market Traction & Revenue",  join_array(market_traction)),
+        section("business_model",        "## Business Model & Economics", join_array(business_model)),
+        section("team_organization",     "## Team & Organization",        join_array(team_organization)),
+        section("go_to_market",          "## Go-to-Market",               join_array(go_to_market)),
+        section("financial_health",      "## Financial Health",           join_array(financial_health)),
+        section("fundraising_capital",   "## Fundraising & Capital",      join_array(fundraising_capital)),
+        section("competitive_position",  "## Competitive Position",       join_array(competitive_position)),
+        section("operations",            "## Operations",                 join_array(operations)),
+        section("legal_compliance",      "## Legal & Compliance",         join_array(legal_compliance)),
     ]
 
     consolidated = "\n\n".join(p for p in parts if p)
@@ -197,7 +205,6 @@ def main(
 ```
 
 **Output variable:** `consolidated_context` (type: `string`)
-**Removed:** `context_highlights` parameter (cross-cutting info now captured in relevant categories)
 
 ---
 
@@ -211,7 +218,7 @@ def main(
 ```
 You are conducting a startup founder onboarding conversation. Classify the user's message, process their response, and generate the next conversational message — all in one step.
 
-Current question index: {{#conversation.current_question_index#}}
+Current question index: {{#conversation.current_topic_index#}}
 Current question: {{#conversation.current_question_text#}}
 
 User's message: <user_message>{{#conversation.user_last_response#}}</user_message>
@@ -288,6 +295,9 @@ Write a conversational reply (2-3 sentences max) based on the classification:
 - Keep it conversational, 2-3 sentences max
 - Maximum 1 dig-deeper per topic
 - When transitioning to the next question, use the exact question text from the bank above
+- When transitioning to question 10 (the last question), append: "This is our last topic — after this, just type 'done' and I'll generate your summary."
+- When all 10 questions have been covered (topicComplete=true on the last question), respond: "We've covered all 10 areas! Type 'done' whenever you're ready and I'll compile your onboarding summary."
+- At any point, if the user can type "done", "finish", or "summary" to skip remaining questions and generate their summary immediately
 
 Output strict JSON:
 {
@@ -306,31 +316,17 @@ Output strict JSON:
 
 ```
 ONBOARDING PROCESSOR output
-  → IF/ELSE: intent == "finish"
-    → YES: CODE CONSOLIDATED_CON → GENERATING ONBOARDING → ANSWER (summary)
-    → NO: IF/ELSE: topicComplete == true
-      → YES: increment current_question_index
-        → IF/ELSE 2: current_question_index > 9?
-          → YES: summary generation path
-          → NO: ANSWER (show response)
-      → NO: ANSWER (show response)
+  → IF/ELSE - INTENT FINISH: intent == "finish"
+    → YES: CODE CONSOLIDATED_CON → GENERATING ONBOARDING → ANSWER 3 - FINAL JSON (summary)
+    → NO: IF/ELSE - TOPICCOMPLETE: topicComplete == true
+      → YES: INCREMENT CURRENT_QUES (current_topic_index ++)
+        → IF/ELSE COVERED ALL QUES: current_topic_index > 9?
+          → YES: CODE CONSOLIDATED_CON → GENERATING ONBOARDING → ANSWER 3 - FINAL JSON
+          → ELSE: ANSWER - RESPONSE
+      → ELSE: ANSWER - RESPONSE
 ```
 
-The ANSWER nodes should output `{{#ONBOARDING_PROCESSOR.response#}}` (bind to the `response` variable from this node).
-
----
-
-## Node: IF/ELSE 2
-
-**Type:** IF/ELSE condition
-**Purpose:** Triggers summary generation when all questions have been asked
-
-### Condition Update
-
-**Old:** `current_question_index > 8`
-**New:** `current_question_index > 9`
-
-This ensures all 10 questions are asked before the summary is generated (up from 8).
+ANSWER - RESPONSE outputs `{{#ONBOARDING_PROCESSOR.response#}}`.
 
 ---
 

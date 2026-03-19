@@ -158,6 +158,8 @@ api/
 
 **Evaluation flow**: Frontend → `/api/evaluation/generate` (JWT auth) → 10 parallel KB searches → context assembly → Dify Workflow API (streaming) → SSE events → frontend progressive rendering. See `dify-evaluation-workflow.md` for the Dify workflow setup guide.
 
+**Maturity inference** (Step 1b in the prompt): After initial scoring, UNPROVEN items at lower maturity gates are auto-promoted when higher-gate items are PROVEN. Tiered: 2+ gates apart → PROVEN, 1 gate apart → PARTIAL. Inferred items are excluded from gap recommendations. This prevents penalizing companies for not explicitly mentioning foundational capabilities they've clearly surpassed.
+
 **Evaluation state**: `evaluationData` and `actionItems` start as `null`/`[]`. The evaluation page shows a placeholder until the user runs "Generate Evaluation". A "Use Sample Data" button loads `MOCK_ONBOARDING_SUMMARY` for testing without completing onboarding.
 
 **Evaluation mock mode**: Three fallback layers:

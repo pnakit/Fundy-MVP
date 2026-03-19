@@ -1,6 +1,8 @@
 import React from 'react';
 
 const RadarChart = React.memo(function RadarChart({ data, size = 300 }) {
+  if (!data || data.length < 3) return null;
+
   const center = size / 2;
   const radius = size * 0.38;
   const angleStep = (2 * Math.PI) / data.length;

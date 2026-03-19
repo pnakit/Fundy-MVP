@@ -674,12 +674,12 @@ instead of unbounded gap lists (previously 300+ action items per evaluation).
 
 **Test totals:** 163 tests across 11 files (up from 159)
 
-### Pending
+### Pending (all completed)
 
-1. **Dify Studio**: Update all 10 LLM node prompts using new template from `dify-evaluation-workflow.md`
-2. **Dify Studio**: Update all 10 LLM node output variable schemas (JSON schema in workflow doc)
-3. **Dify Studio**: Create 10 `eval_<category_id>` env vars from scorecard content in workflow doc
-4. ~~**Onboarding question redesign**~~: DONE — see v3.9 below
+1. ~~**Dify Studio**: Update all 10 LLM node prompts~~ — DONE (includes v4.1 maturity inference)
+2. ~~**Dify Studio**: Update all 10 LLM node output variable schemas~~ — DONE
+3. ~~**Dify Studio**: Create 10 `eval_<category_id>` env vars~~ — DONE
+4. ~~**Onboarding question redesign**~~ — DONE (see v3.9)
 
 ## v3.9 — Onboarding Question Redesign & Adaptive Escalation (Mar 2026)
 
@@ -744,15 +744,30 @@ Added user-triggered "Refresh Status" that searches the knowledge base for evide
 ### Pending
 - `account/delete.js` is deployed (data reset, preserves auth) — needs UI button in settings
 
+## v4.1 — Maturity Inference in Evaluation Prompts (Mar 2026)
+
+Fixed a scoring philosophy issue where companies demonstrating higher-maturity evidence were penalized for not explicitly mentioning lower-maturity basics (e.g., a company with documented revenue growth scored UNPROVEN on "target market identified").
+
+### Changes
+
+- **`dify-evaluation-workflow.md`** — Added Step 1b (maturity inference) to the evaluation prompt template with tiered promotion:
+  - PROVEN item 2+ gates above an UNPROVEN item → upgrade UNPROVEN to **PROVEN**
+  - PROVEN item exactly 1 gate above an UNPROVEN item → upgrade UNPROVEN to **PARTIAL**
+  - Only PROVEN (not PARTIAL) higher-gate items trigger inference; only UNPROVEN lower-gate items affected
+  - Step 4 updated to reference Step 1b scores
+  - Step 5 updated to exclude inferred items from gap recommendations
+
+**No code changes** — prompt-only fix. Output JSON schema unchanged, no impact on frontend/serverless/SSE parsing.
+
+**Dify Studio**: Same prompt template deployed to all 10 `eval_*` LLM nodes.
+
 ## Next Steps (priority order)
 
 ### Immediate
 
-1. ~~**Dify Studio**: Apply per-node updates~~ — DONE (see v3.9 Dify Studio Updates above)
-
-2. **Evaluation quality verification** — with a real user account, run the full pipeline and confirm:
-   - Onboarding adaptive escalation (LLM probes next gate when founder demonstrates maturity)
-   - Stage-aware gaps (max 5 per category, table_stakes vs stretch)
+1. **Evaluation quality verification** — with a real user account, run the full pipeline and confirm:
+   - Maturity inference produces sensible scores for companies with sparse lower-gate evidence
+   - Stage-aware gaps (max 5 per category, table_stakes vs stretch) exclude inferred items
    - Gap type badges render correctly in action items
    - Investment recommendation section renders after evaluation completes
    - `investment_data` column populated in `evaluations` table

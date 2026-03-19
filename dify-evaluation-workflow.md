@@ -880,6 +880,25 @@ For each of the 20 evidence items in the framework above, assess:
 - **PARTIAL** (0.5 points): Some indication but incomplete or vague evidence
 - **UNPROVEN** (0 points): No evidence found or not addressed
 
+### Step 1b: Apply maturity inference
+Review your scores from Step 1. Maturity gates are cumulative — a company that has genuinely proven a higher-stage capability necessarily possesses foundational capabilities at earlier stages.
+
+Apply tiered inference to UNPROVEN items at lower gates:
+- If ANY item at a higher gate is PROVEN and that gate is **2 or more levels above** the UNPROVEN item's gate → upgrade the UNPROVEN item to **PROVEN**
+- If ANY item at a higher gate is PROVEN and that gate is **exactly 1 level above** the UNPROVEN item's gate → upgrade the UNPROVEN item to **PARTIAL**
+
+Gate levels: Concept=1, Early=2, Validated=3, Scaling=4, Leader=5
+
+Rules:
+- Only PROVEN items (not PARTIAL) at higher gates trigger inference
+- Only UNPROVEN items at lower gates are affected — items already PARTIAL or PROVEN stay as-is
+- Inference only flows downward (higher gate → lower gates), never upward
+- Examples:
+  - Item #15 (Scaling, level 4) is PROVEN → UNPROVEN Concept items (level 1, gap=3) become PROVEN; UNPROVEN Early items (level 2, gap=2) become PROVEN; UNPROVEN Validated items (level 3, gap=1) become PARTIAL
+  - Item #8 (Validated, level 3) is PROVEN → UNPROVEN Concept items (level 1, gap=2) become PROVEN; UNPROVEN Early items (level 2, gap=1) become PARTIAL
+
+After applying this adjustment, use the updated scores for all subsequent steps.
+
 ### Step 2: Calculate completeness
 completeness = (total_points / 20) × 100, rounded to nearest integer
 
@@ -889,7 +908,7 @@ completeness = (total_points / 20) × 100, rounded to nearest integer
 - completeness < 40 → "unproven"
 
 ### Step 4: Determine maturity stage
-Count total points from Step 1 (PROVEN=1, PARTIAL=0.5). Match against the maturity stage thresholds listed in the framework above:
+Count total points from Step 1b (PROVEN=1, PARTIAL=0.5). Match against the maturity stage thresholds listed in the framework above:
 - Concept: 0–4 proven items
 - Early: 5–8 proven items
 - Validated: 9–13 proven items
@@ -906,6 +925,8 @@ Identify how this company can demonstrate exceptional progress at its current ma
 2. UNPROVEN or PARTIAL items at the NEXT maturity gate up — these are "stretch" goals that signal readiness to advance and stand out to investors
 
 Do NOT include items from gates two or more levels above the current stage — those are not yet relevant.
+
+Exclude any items that were upgraded via maturity inference in Step 1b — those represent capabilities the company logically possesses, and recommending them as gaps would not be actionable.
 
 Consolidate related items into a single actionable recommendation. Frame each gap as a specific action the founder can take that would make an investor confident in the company's progress at this stage. Maximum 5 gaps.
 
