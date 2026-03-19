@@ -51,6 +51,46 @@ const CHAT_ERROR_MESSAGE = 'I apologize, but I encountered an error. Please try 
 // Opt-in debug panel — add ?debug to the URL to enable
 const debugEnabled = new URLSearchParams(window.location.search).has('debug');
 
+const MAX_STRETCH_PER_CATEGORY = 2;
+
+/**
+ * Convert evaluation dimension gaps into action item state objects.
+ * Shared by the streaming evaluation callback and the restore-on-load path.
+ */
+function gapsToActionItems(dimensions) {
+  const items = [];
+  for (const dim of dimensions) {
+    const gaps = dim.gaps || [];
+    if (gaps.length === 0) continue;
+    const dimDef = EVALUATION_DIMENSIONS.find((d) => d.id === dim.id);
+    const dimTitle = dimDef?.title || dim.id;
+    const tableStakesGaps = gaps.filter((g) => (typeof g === 'string' ? true : g.type !== 'stretch'));
+    const stretchGaps = gaps.filter((g) => typeof g !== 'string' && g.type === 'stretch').slice(0, MAX_STRETCH_PER_CATEGORY);
+    for (const gap of [...tableStakesGaps, ...stretchGaps]) {
+      const gapText = typeof gap === 'string' ? gap : gap.action;
+      const gapType = typeof gap === 'string' ? 'table_stakes' : gap.type;
+      const slug = gapText.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50);
+      items.push({
+        id: crypto.randomUUID(),
+        title: gapText,
+        description: `${dimTitle} — ${gapType === 'table_stakes' ? 'must-have' : 'stretch goal'}`,
+        priority: gapType === 'table_stakes' ? 'high' : 'medium',
+        status: 'pending',
+        sourceType: 'evaluation',
+        sourceId: null,
+        dimensionId: dim.id,
+        actionKey: `${dim.id}-${slug}`,
+        gapType,
+        evidenceItems: typeof gap === 'string' ? [] : (gap.evidence_items || []),
+        customData: { gapType },
+        files: [],
+        inputs: {},
+      });
+    }
+  }
+  return items;
+}
+
 /** Reconstruct evaluationData state shape from a DB evaluations row. */
 function mapDbEvalToState(dbRow) {
   return {
@@ -256,6 +296,20 @@ export default function StartupPlatform() {
       }
       if (savedActions.length > 0) {
         setActionItems(savedActions.map(mapDbActionToState));
+      }
+
+      // If evaluation data exists but has no persisted action items, reconstruct them from gaps.
+      // This handles the migration case where evaluations ran before client-side persistence was added.
+      const hasEvalItems = savedActions.some((a) => a.source_type === 'evaluation');
+      if (savedEval && !hasEvalItems) {
+        const evalData = mapDbEvalToState(savedEval);
+        const reconstructed = gapsToActionItems(evalData.dimensions || []);
+        if (reconstructed.length > 0) {
+          setActionItems((prev) => [...prev, ...reconstructed]);
+          const authSession = await getSession();
+          const userId = authSession?.user?.id;
+          if (userId) reconstructed.forEach((item) => saveActionItem(item, userId));
+        }
       }
 
       // Restore conversation DB IDs into refs (prevents duplicate rows on re-send)
@@ -1373,51 +1427,11 @@ export default function StartupPlatform() {
           };
         });
 
-        // Convert gaps to action items — gated by type:
-        //   • All table_stakes gaps (must-haves for current maturity stage)
-        //   • Top MAX_STRETCH_PER_CATEGORY stretch gaps (future readiness)
-        // Gaps are objects: { action: string, type: 'table_stakes'|'stretch', evidence_items: number[] }
-        // Falls back to plain string gaps for backward compatibility
-        const MAX_STRETCH_PER_CATEGORY = 2;
+        // Convert gaps to action items via shared helper (gapsToActionItems)
         if (categoryData.gaps?.length > 0) {
-          const tableStakesGaps = categoryData.gaps.filter((g) =>
-            typeof g === 'string' ? true : g.type !== 'stretch',
-          );
-          const stretchGaps = categoryData.gaps
-            .filter((g) => typeof g !== 'string' && g.type === 'stretch')
-            .slice(0, MAX_STRETCH_PER_CATEGORY);
-          const gatedGaps = [...tableStakesGaps, ...stretchGaps];
-
-          const dimDef = EVALUATION_DIMENSIONS.find((d) => d.id === categoryData.category_id);
-          const dimTitle = dimDef?.title || categoryData.category_id;
-          const newItems = gatedGaps.map((gap) => {
-            const gapText = typeof gap === 'string' ? gap : gap.action;
-            const gapType = typeof gap === 'string' ? 'table_stakes' : gap.type;
-            const slug = gapText
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, '-')
-              .replace(/^-+|-+$/g, '')
-              .slice(0, 50);
-            return {
-              id: crypto.randomUUID(),
-              title: gapText,
-              description: `${dimTitle} — ${gapType === 'table_stakes' ? 'must-have' : 'stretch goal'}`,
-              priority: gapType === 'table_stakes' ? 'high' : 'medium',
-              status: 'pending',
-              sourceType: 'evaluation',
-              sourceId: null,
-              dimensionId: categoryData.category_id,
-              actionKey: `${categoryData.category_id}-${slug}`,
-              gapType,
-              evidenceItems: typeof gap === 'string' ? [] : (gap.evidence_items || []),
-              customData: { gapType },
-              files: [],
-              inputs: {},
-            };
-          });
+          const newItems = gapsToActionItems([{ id: categoryData.category_id, gaps: categoryData.gaps }]);
 
           setActionItems((prev) => {
-            // Remove old evaluation items for this category before adding new ones
             const withoutOldCategory = prev.filter(
               (a) => !(a.sourceType === 'evaluation' && a.dimensionId === categoryData.category_id),
             );
