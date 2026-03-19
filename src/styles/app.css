@@ -1144,6 +1144,11 @@ body {
   color: rgba(255,255,255,0.7);
   border-bottom: 1px solid rgba(255,255,255,0.06);
   margin-bottom: 0.5rem;
+  position: sticky;
+  top: 120px;
+  z-index: 9;
+  background: rgba(10, 10, 15, 0.95);
+  backdrop-filter: blur(12px);
 }
 
 .action-dimension-name {
@@ -1272,6 +1277,13 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+  position: sticky;
+  top: 64px;
+  z-index: 10;
+  background: rgba(10, 10, 15, 0.95);
+  backdrop-filter: blur(12px);
+  padding: 0.75rem 0;
+  margin-top: 0;
 }
 
 .actions-header h3 {

@@ -1748,7 +1748,6 @@ export default function StartupPlatform() {
                       <div className="action-priority-dot" style={{ background: action.gapType === 'table_stakes' ? '#f59e0b' : '#818cf8' }}></div>
                       <div className="action-info">
                         <h4>{action.title}</h4>
-                        <p>{action.description}</p>
                       </div>
                       <div className="action-meta">
                         {action.customData?.refresh ? (
