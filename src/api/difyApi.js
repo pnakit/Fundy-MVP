@@ -15,7 +15,7 @@ const DifyAPI = {
   get isMock() { return import.meta.env.VITE_DIFY_MOCK === 'true'; },
 
   // Blocking mode: waits for full response
-  async sendMessage(message, conversationId = null, files = [], user = 'default-user', workflow = 'onboarding') {
+  async sendMessage(message, conversationId = null, files = [], user = 'default-user', workflow = 'onboarding', inputs = {}) {
     if (this.isMock) return this.sendMessageMock(message, conversationId);
 
     const authHeaders = await getAuthHeaders();
@@ -24,7 +24,7 @@ const DifyAPI = {
       headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify({
         workflow,
-        inputs: {},
+        inputs,
         query: message,
         response_mode: 'blocking',
         conversation_id: conversationId || '',
@@ -52,7 +52,7 @@ const DifyAPI = {
   },
 
   // Streaming mode: calls onChunk with accumulated text as tokens arrive
-  async sendMessageStreaming(message, conversationId = null, files = [], user = 'default-user', onChunk, workflow = 'onboarding', onProgress) {
+  async sendMessageStreaming(message, conversationId = null, files = [], user = 'default-user', onChunk, workflow = 'onboarding', onProgress, inputs = {}) {
     if (this.isMock) return this.sendMessageMock(message, conversationId);
 
     const authHeaders = await getAuthHeaders();
@@ -61,7 +61,7 @@ const DifyAPI = {
       headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify({
         workflow,
-        inputs: {},
+        inputs,
         query: message,
         response_mode: 'streaming',
         conversation_id: conversationId || '',

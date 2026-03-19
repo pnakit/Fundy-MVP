@@ -8,6 +8,120 @@ import { generateEmbeddings } from './knowledge/_embeddings.js';
 // The node emits a node_finished event with outputs.file_text = extracted file content.
 const FILE_TEXT_RELAY_NODE = 'File Text Relay';
 
+const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
+
+const ACTION_ITEM_SYSTEM_PROMPT = `You are a startup advisor helping validate whether a specific action item has been completed.
+
+Your role:
+1. Ask targeted questions to understand what concrete steps have been taken
+2. Request specific evidence or documentation (metrics, links, contracts, screenshots, dates)
+3. Identify gaps if the item is only partially addressed
+4. End conversations with a clear verdict: fully complete, partially complete, or not yet addressed
+
+Keep responses short and direct. Ask one or two focused questions at a time. No fluff.`;
+
+/**
+ * Handle action item validation chat via OpenAI GPT-4o-mini.
+ * Accepts conversation history in inputs.history so context persists across turns.
+ * Emits Dify-compatible SSE events so the client parser needs no changes.
+ */
+async function handleActionItemChat(req, res, { query, inputs, response_mode, userId }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
+  }
+
+  const { action_title = '', action_description = '', gap_type = 'table_stakes', history = [] } = inputs || {};
+  const typeLabel = gap_type === 'stretch' ? 'stretch goal' : 'must-have milestone';
+
+  const systemContent = `${ACTION_ITEM_SYSTEM_PROMPT}
+
+Action item: ${action_title}
+Details: ${action_description}
+Type: ${typeLabel}`;
+
+  // Build messages: system + prior history (skip the static welcome message) + current query
+  const priorMessages = Array.isArray(history) ? history.slice(1) : []; // skip welcome
+  const messages = [
+    { role: 'system', content: systemContent },
+    ...priorMessages,
+    { role: 'user', content: query },
+  ];
+
+  const fakeConvId = `action-oai-${userId}`;
+  const fakeMessageId = `msg-${Date.now()}`;
+
+  if (response_mode === 'streaming') {
+    let openaiRes;
+    try {
+      openaiRes = await fetch(OPENAI_CHAT_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o-mini', messages, temperature: 0.4, stream: true }),
+      });
+    } catch (err) {
+      return res.status(502).json({ error: `OpenAI fetch failed: ${err.message}` });
+    }
+    if (!openaiRes.ok) {
+      const errText = await openaiRes.text();
+      return res.status(openaiRes.status).json({ error: `OpenAI error: ${errText}` });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const reader = openaiRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const emitDify = (event) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          const raw = line.slice(5).trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(raw);
+            const delta = chunk.choices?.[0]?.delta?.content;
+            if (delta) {
+              emitDify({ event: 'message', answer: delta, conversation_id: fakeConvId, message_id: fakeMessageId });
+            }
+          } catch (_) { /* ignore malformed chunks */ }
+        }
+      }
+      emitDify({ event: 'message_end', conversation_id: fakeConvId, message_id: fakeMessageId });
+    } finally {
+      res.end();
+    }
+  } else {
+    let openaiRes;
+    try {
+      openaiRes = await fetch(OPENAI_CHAT_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o-mini', messages, temperature: 0.4 }),
+      });
+    } catch (err) {
+      return res.status(502).json({ error: `OpenAI fetch failed: ${err.message}` });
+    }
+    if (!openaiRes.ok) {
+      const errText = await openaiRes.text();
+      return res.status(openaiRes.status).json({ error: `OpenAI error: ${errText}` });
+    }
+    const data = await openaiRes.json();
+    const answer = data.choices?.[0]?.message?.content || '';
+    return res.status(200).json({ answer, conversation_id: fakeConvId, message_id: fakeMessageId });
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -21,6 +135,11 @@ export default async function handler(req, res) {
   const userId = auth.user.sub;
   const { workflow, query, conversation_id, user, files, response_mode, inputs } = req.body;
   console.log(`[chat] REQUEST workflow=${workflow} mode=${response_mode} files=${files?.length ?? 0}`);
+
+  if (workflow === 'action_item') {
+    return handleActionItemChat(req, res, { query, inputs, response_mode, userId });
+  }
+
   const { apiKey, usingFallback } = resolveApiKey(workflow || 'onboarding');
 
   if (!apiKey) {

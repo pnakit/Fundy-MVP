@@ -935,7 +935,7 @@ export default function StartupPlatform() {
     setActionConversations((prev) => ({
       ...prev,
       [action.id]: {
-        messages: [{ role: 'assistant', content: `I can help you work through this: **${action.title}**\n\n${action.description}\n\nWhat do you need help with, or are you ready to upload documentation?` }],
+        messages: [{ role: 'assistant', content: `Let's validate this action item: **${action.title}**\n\nTo mark this as complete, I'll need to understand what you've done and see some evidence. What steps have you taken so far?` }],
         conversationId: null,
         inputValue: '',
       },
@@ -971,6 +971,13 @@ export default function StartupPlatform() {
     const conv = actionConversations[actionId];
     if (!conv?.inputValue?.trim()) return;
     const currentMessage = conv.inputValue;
+    const action = actionItems.find((a) => a.id === actionId);
+    const actionInputs = {
+      action_title: action?.title || '',
+      action_description: action?.description || '',
+      gap_type: action?.gapType || 'table_stakes',
+      history: (conv.messages || []).map(({ role, content }) => ({ role, content })),
+    };
 
     setActionConversations((prev) => ({
       ...prev,
@@ -1007,6 +1014,8 @@ export default function StartupPlatform() {
           currentMessage, conv.conversationId, [], 'default-user',
           (accumulated) => updateLastMessage(accumulated, { isStreaming: true }),
           'action_item',
+          undefined,
+          actionInputs,
         );
         updateLastMessage(response.message);
         setActionConversations((prev) => ({
@@ -1022,7 +1031,7 @@ export default function StartupPlatform() {
     } else {
       setActionTyping(actionId);
       try {
-        const response = await DifyAPI.sendMessage(currentMessage, conv.conversationId, [], 'default-user', 'action_item');
+        const response = await DifyAPI.sendMessage(currentMessage, conv.conversationId, [], 'default-user', 'action_item', actionInputs);
         setActionConversations((prev) => ({
           ...prev,
           [actionId]: {
