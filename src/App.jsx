@@ -368,6 +368,15 @@ export default function StartupPlatform() {
     return unsubscribe;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!expandedAction) return;
+    const timer = setTimeout(() => {
+      document.getElementById(`action-card-${expandedAction}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [expandedAction]);
+
   const handleSignOut = async () => {
     await signOut();
     setSession(null);
@@ -1788,6 +1797,7 @@ export default function StartupPlatform() {
               {(() => {
                 const renderActionCard = (action) => (
                   <div
+                    id={`action-card-${action.id}`}
                     key={action.id}
                     className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
                   >
@@ -2172,6 +2182,7 @@ export default function StartupPlatform() {
               <div className="action-cards">
                 {investmentActions.map((action) => (
                   <div
+                    id={`action-card-${action.id}`}
                     key={action.id}
                     className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
                   >
@@ -2230,6 +2241,7 @@ export default function StartupPlatform() {
                     <div className="action-cards">
                       {ddItems.map((action) => (
                         <div
+                          id={`action-card-${action.id}`}
                           key={action.id}
                           className={`action-card ${expandedAction === action.id ? 'expanded' : ''}`}
                         >
