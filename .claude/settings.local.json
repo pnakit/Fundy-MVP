@@ -48,7 +48,16 @@
       "Bash(npx vitest run api/action-items/_analyze.test.js)",
       "Bash(npx vitest run src/api/dataAccess.test.js)",
       "Bash(npx vitest run api/action-items/refresh.test.js)",
-      "Bash(npx vitest run src/api/actionItemRefreshApi.test.js)"
+      "Bash(npx vitest run src/api/actionItemRefreshApi.test.js)",
+      "Bash(npm ls -g vercel)",
+      "Bash(node -e \"import\\(''./api/action-items/_analyze.js''\\)\")",
+      "Bash(node -e \"import\\(''./api/action-items/refresh.js''\\)\")",
+      "Bash(python3:*)",
+      "Bash(grep -E \"\\\\.\\(md|txt|json\\)$\")",
+      "Bash(npm run test:run -- src/components/LoginScreen.test.jsx)",
+      "Bash(npx vitest run src/utils/fileUpload.test.js)",
+      "Bash(xargs grep -l \"maturity\\\\|gating\\\\|stage\")",
+      "Bash(npx vitest run api/action-items/_refresh.test.js)"
     ],
     "additionalDirectories": [
       "c:\\Users\\jamot\\.claude\\projects\\c--Users-jamot-OneDrive-Nusu-Git-LOCAL-Fundy-MVP\\memory"
