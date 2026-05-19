@@ -8,14 +8,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Development Commands
 
-- `npm run dev` — Start Vite dev server (http://localhost:5173)
-- `npm run build` — Production build
-- `npm run preview` — Preview production build locally
-- `npm run test` — Run tests in watch mode (Vitest)
-- `npm run test:run` — Run tests once (CI mode)
-- `npm run lint` — Run ESLint
-- `npm run lint:fix` — Run ESLint with auto-fix
-- `npm run format` — Run Prettier on all source files
+The project supports both `npm` and `bun` — `bun.lock` and `package-lock.json` are both present during the migration. Prefer `bun` for installs and script runs (much faster); npm still works as a fallback.
+
+- `bun run dev` (or `npm run dev`) — Start Vite dev server (http://localhost:5173)
+- `bun run build` — Production build
+- `bun run preview` — Preview production build locally
+- `bun run test` — Run tests in watch mode (Vitest)
+- `bun run test:run` — Run tests once (CI mode)
+- `bun run lint` — Run ESLint
+- `bun run lint:fix` — Run ESLint with auto-fix
+- `bun run format` — Run Prettier on all source files
+
+## Cross-OS Dev Environment
+
+This project follows the shared-drive Bun convention. The full playbook lives in `S:\CLAUDE.md` (loaded automatically by Claude Code as a parent CLAUDE.md). After every OS boot, run the relink helper from this directory:
+
+- Windows: `S:\scripts\bun-relink.ps1`
+- Linux:   `bash <linux-mount>/scripts/bun-relink.sh`
+
+Project-specific state (Windows, set up 2026-05-19):
+- Junction: `S:\Nusu Git LOCAL\Fundy-MVP\node_modules` → `C:\bun-modules\Fundy-MVP\node_modules`
+- Old npm tree archived at `S:\backups\Fundy-MVP-npm-node_modules\` (safe to delete)
+- `bun run test:run` → 203/203 in ~3s
 
 ## Project Structure
 
