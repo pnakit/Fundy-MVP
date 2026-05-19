@@ -9,10 +9,10 @@ async function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-// Dify API — supports blocking, streaming, and mock fallback modes
+// Chat API — supports blocking, streaming, and mock fallback modes
 const DifyAPI = {
   get useStreaming() { return import.meta.env.VITE_DIFY_STREAMING === 'true'; },
-  get isMock() { return import.meta.env.VITE_DIFY_MOCK === 'true'; },
+  get isMock() { return import.meta.env.VITE_LLM_MOCK === 'true' || import.meta.env.VITE_DIFY_MOCK === 'true'; },
 
   // Blocking mode: waits for full response
   async sendMessage(message, conversationId = null, files = [], user = 'default-user', workflow = 'onboarding', inputs = {}) {

@@ -39,10 +39,10 @@ const CATEGORY_TITLES = {
 
 /**
  * Check if we should use client-side mock mode.
- * Uses VITE_DIFY_MOCK flag (same as the chat flow).
+ * Supports both new VITE_LLM_MOCK and legacy VITE_DIFY_MOCK.
  */
 function shouldUseMock() {
-  return import.meta.env.VITE_DIFY_MOCK === 'true';
+  return import.meta.env.VITE_LLM_MOCK === 'true' || import.meta.env.VITE_DIFY_MOCK === 'true';
 }
 
 /**
