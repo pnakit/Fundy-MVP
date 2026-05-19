@@ -144,7 +144,6 @@ export default async function handler(req) {
           sendEvent({ type: 'status', message: 'Matching investment profiles...' });
 
           try {
-            const investmentModel = getModel('LLM_EVAL_MODEL');
             const { system: invSystem, user: invUser } = buildInvestmentPrompt(
               categoryResults,
               maturityData,
@@ -152,7 +151,7 @@ export default async function handler(req) {
             );
 
             const { object: investmentData } = await generateObject({
-              model: investmentModel,
+              model: evalModel,
               schema: InvestmentOutputSchema,
               messages: [
                 { role: 'system', content: invSystem },

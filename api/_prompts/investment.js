@@ -64,12 +64,15 @@ const INVESTMENT_SYSTEM_PROMPT = `You are a startup investment advisor. Based on
 - grants: Government/research grants (non-dilutive, innovation-focused)
 - crowdfunding: Equity crowdfunding (community-driven, consumer products)
 
-## Rating Scale
+## Rating Scale (for classification only)
 - ideal: Perfect match for current stage
 - strong_fit: Well-suited with minor gaps
 - acceptable: Viable but not optimal
-- conditional: Possible if specific milestones are met
-- not_suitable: Not appropriate for current stage
+- conditional: Possible if specific milestones are met (use in conditional_options only)
+- not_suitable: Not appropriate for current stage (use in not_recommended only)
+
+Note: recommended_funding.rating must be one of: ideal, strong_fit, acceptable.
+Place conditional fits in conditional_options and unsuitable types in not_recommended.
 
 ## Rules
 - recommended_funding: Only investment types rated ideal, strong_fit, or acceptable
