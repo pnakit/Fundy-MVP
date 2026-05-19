@@ -1,0 +1,288 @@
+{
+  "id": "demo-lumio-ai",
+  "archetype": {
+    "name": "Lumio AI",
+    "stage": "early",
+    "industry": "SaaS",
+    "teamSize": 10,
+    "answerStyle": "detailed",
+    "revenue": "$10-100K MRR"
+  },
+  "onboarding": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "We're Lumio AI — we build AI-powered project management software for software engineering teams. Think Jira, but actually intelligent: it auto-prioritizes backlogs, surfaces blockers early, and writes release notes from commits."
+      },
+      {
+        "role": "assistant",
+        "content": "That's a compelling angle — the 'Jira but smarter' space is crowded but the pain is real. What's the core technical differentiation? Is it fine-tuned models, a novel architecture, or something in the integration layer?"
+      },
+      {
+        "role": "user",
+        "content": "We have a fine-tuned transformer model trained on 40M+ anonymized engineering tickets. It understands sprint context better than general LLMs. We also have 12 native integrations (GitHub, Linear, Slack, Jira import, etc.) which gives us richer signal than competitors building on top of generic APIs."
+      },
+      {
+        "role": "assistant",
+        "content": "Solid moat — proprietary training data and deep integrations are hard to replicate quickly. What does traction look like? MRR, growth rate, retention?"
+      },
+      {
+        "role": "user",
+        "content": "$28K MRR, growing 12% month-over-month for the past 5 months. Net revenue retention is 115% — we're actually expanding revenue within existing accounts. Our ICP is VP of Engineering at companies with 20–100 engineers. Average contract is around $3.5K/year."
+      },
+      {
+        "role": "assistant",
+        "content": "115% NRR is a strong signal of product-market fit — customers are expanding rather than churning. Tell me about the team and your current financial position."
+      },
+      {
+        "role": "user",
+        "content": "Team of 10. I'm the CEO, ex-Atlassian PM for 6 years. CTO is ex-Google Brain, built ML infra at scale. We raised $750K pre-seed from angels 8 months ago. Burn is $55K/month, so 14 months runway. Revenue covers about 50% of burn. We're actively looking to raise a $2.5M seed."
+      },
+      {
+        "role": "assistant",
+        "content": "Strong founding pedigree and the runway gives you room to execute. The combination of your Atlassian product DNA and Google Brain ML expertise is a credible story for investors. Let me compile this into a structured profile — I'll flag where you have strong signals and where investors will push for more detail."
+      }
+    ],
+    "summary": {
+      "version": "1.0",
+      "companyName": "Lumio AI",
+      "generatedAt": "2026-03-10T10:00:00.000Z",
+      "overallCompleteness": 60,
+      "categories": [
+        {
+          "id": "product_technology",
+          "title": "Product & Technology",
+          "summary": "AI-powered project management platform with a fine-tuned transformer model trained on 40M+ engineering tickets. 12 native integrations provide strong data moat.",
+          "completeness": 82,
+          "status": "complete",
+          "highlights": [
+            "Proprietary model trained on 40M+ anonymized tickets",
+            "12 native integrations (GitHub, Linear, Slack, Jira)",
+            "Auto-prioritization, blocker detection, and AI release notes"
+          ],
+          "gaps": [
+            "No patents filed",
+            "Scalability benchmarks not documented"
+          ],
+          "keyMetrics": {
+            "modelTrainingData": "40M+ tickets",
+            "integrations": "12",
+            "stage": "Production"
+          },
+          "deepDivePrompt": "Let's dive deeper into your product and technology."
+        },
+        {
+          "id": "market_traction",
+          "title": "Market Traction & Revenue",
+          "summary": "$28K MRR growing 12% MoM with 115% NRR. Strong PLG motion converting free-tier users.",
+          "completeness": 75,
+          "status": "complete",
+          "highlights": [
+            "$28K MRR, 12% MoM growth for 5 consecutive months",
+            "115% net revenue retention",
+            "60% of paid conversions from free tier"
+          ],
+          "gaps": [
+            "TAM/SAM sizing not provided",
+            "Churn rate by cohort not discussed"
+          ],
+          "keyMetrics": {
+            "mrr": "$28K",
+            "mrrGrowth": "12% MoM",
+            "netRetention": "115%",
+            "avgContract": "$3.5K/year"
+          },
+          "deepDivePrompt": "Let's explore your market traction in more detail."
+        },
+        {
+          "id": "business_model",
+          "title": "Business Model & Economics",
+          "summary": "Freemium SaaS with seat-based pricing. Free tier (≤10 engineers) drives top of funnel.",
+          "completeness": 65,
+          "status": "needs_attention",
+          "highlights": [
+            "Freemium → paid conversion at 60% from free tier",
+            "Seat-based pricing with natural expansion motion",
+            "Revenue covers ~50% of burn"
+          ],
+          "gaps": [
+            "Gross margin not explicitly stated",
+            "Pricing tiers above seed round not modeled"
+          ],
+          "keyMetrics": {
+            "model": "Freemium SaaS",
+            "avgContract": "$3.5K/year",
+            "revenueToBurnRatio": "50%"
+          },
+          "deepDivePrompt": "Let's examine your business model more closely."
+        },
+        {
+          "id": "team_organization",
+          "title": "Team & Organization",
+          "summary": "Experienced founding team with domain-specific pedigree. CEO ex-Atlassian, CTO ex-Google Brain.",
+          "completeness": 70,
+          "status": "complete",
+          "highlights": [
+            "CEO: 6 years Atlassian PM experience",
+            "CTO: ML infra at Google Brain scale",
+            "Team of 10, likely lean across eng/product"
+          ],
+          "gaps": [
+            "No VP Sales or Head of Growth",
+            "Engineering team composition not detailed"
+          ],
+          "keyMetrics": {
+            "teamSize": "10",
+            "ceoBackground": "Atlassian",
+            "ctoBackground": "Google Brain"
+          },
+          "deepDivePrompt": "Let's discuss your team and organizational structure."
+        },
+        {
+          "id": "go_to_market",
+          "title": "Go-to-Market",
+          "summary": "PLG motion via free tier and developer community. No outbound playbook. Organic expansion from 3 accounts in last 2 months.",
+          "completeness": 58,
+          "status": "needs_attention",
+          "highlights": [
+            "Free tier drives 60% of paid conversions",
+            "Discord community with 800+ members",
+            "3 organic seat expansions (10→50+) in 2 months"
+          ],
+          "gaps": [
+            "No outbound sales playbook",
+            "No dedicated sales headcount",
+            "Enterprise motion not defined"
+          ],
+          "keyMetrics": {
+            "primaryMotion": "PLG",
+            "community": "800+ Discord",
+            "conversionSource": "60% free tier"
+          },
+          "deepDivePrompt": "Let's explore your go-to-market strategy."
+        },
+        {
+          "id": "financial_health",
+          "title": "Financial Health",
+          "summary": "14 months runway at $55K/month burn. Revenue covers 50% of expenses. Actively fundraising.",
+          "completeness": 62,
+          "status": "needs_attention",
+          "highlights": [
+            "14 months runway",
+            "$55K/month burn rate",
+            "Revenue covers 50% of operating costs"
+          ],
+          "gaps": [
+            "12-month financial model not provided",
+            "Unit economics (CAC, LTV) not detailed"
+          ],
+          "keyMetrics": {
+            "runway": "14 months",
+            "burnRate": "$55K/mo",
+            "revenueCoverage": "50%"
+          },
+          "deepDivePrompt": "Let's look at your financial health in more detail."
+        },
+        {
+          "id": "fundraising_capital",
+          "title": "Fundraising & Capital",
+          "summary": "$750K pre-seed raised 8 months ago. Targeting $2.5M seed round. No lead investor confirmed.",
+          "completeness": 55,
+          "status": "needs_attention",
+          "highlights": [
+            "$750K pre-seed from angels (8 months ago)",
+            "Targeting $2.5M seed round",
+            "Seed metrics are approaching investable range"
+          ],
+          "gaps": [
+            "No lead investor or term sheet",
+            "Seed round use of funds not articulated",
+            "Target valuation not discussed"
+          ],
+          "keyMetrics": {
+            "preSeedRaised": "$750K",
+            "targetRound": "$2.5M seed",
+            "timeToRaise": "Actively fundraising"
+          },
+          "deepDivePrompt": "Let's discuss your fundraising strategy."
+        },
+        {
+          "id": "competitive_position",
+          "title": "Competitive Position",
+          "summary": "Competing against Jira, Linear, and Asana in a large but crowded market. Differentiation via AI-native design.",
+          "completeness": 48,
+          "status": "incomplete",
+          "highlights": [
+            "AI-native vs bolt-on approach vs incumbents",
+            "Proprietary training data as moat",
+            "12 integrations enable data richness"
+          ],
+          "gaps": [
+            "Competitive matrix not provided",
+            "Win/loss analysis not available",
+            "Pricing comparison not detailed"
+          ],
+          "keyMetrics": {
+            "primaryCompetitors": "Jira, Linear, Asana",
+            "moat": "Proprietary data + integrations"
+          },
+          "deepDivePrompt": "Let's analyze your competitive position."
+        },
+        {
+          "id": "operations",
+          "title": "Operations",
+          "summary": "Lean team of 10. Engineering-heavy early stage. Operational processes not fully documented.",
+          "completeness": 42,
+          "status": "incomplete",
+          "highlights": [
+            "Lean org structure appropriate for stage",
+            "PLG model reduces support overhead",
+            "Free tier limits support surface area"
+          ],
+          "gaps": [
+            "Customer support SLAs not defined",
+            "Incident response process unknown",
+            "Scaling plan beyond 10-person team not discussed"
+          ],
+          "keyMetrics": {
+            "teamSize": "10",
+            "supportModel": "Self-serve + community"
+          },
+          "deepDivePrompt": "Let's look at your operations."
+        },
+        {
+          "id": "legal_compliance",
+          "title": "Legal & Compliance",
+          "summary": "Corporate structure established. GDPR and data privacy posture unclear — a risk for EU enterprise customers.",
+          "completeness": 38,
+          "status": "incomplete",
+          "highlights": [
+            "Company entity established",
+            "Customer data anonymized for model training"
+          ],
+          "gaps": [
+            "GDPR compliance status unknown",
+            "Data processing agreements (DPAs) not mentioned",
+            "IP assignment agreements not confirmed",
+            "SOC 2 status unknown"
+          ],
+          "keyMetrics": {
+            "gdprStatus": "Unknown",
+            "soc2": "Not mentioned"
+          },
+          "deepDivePrompt": "Let's explore your legal and compliance readiness."
+        }
+      ]
+    }
+  },
+  "evaluation": {
+    "categoryContexts": {},
+    "categoryOutputs": {},
+    "maturity": null,
+    "performance": null
+  },
+  "investment": {
+    "recommendations": null
+  },
+  "difyBaseline": null
+}
