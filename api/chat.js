@@ -6,6 +6,7 @@ import { generateEmbeddings } from './knowledge/_embeddings.js';
 import { streamText } from 'ai';
 import { getModel } from './_llm.js';
 import { buildOnboardingMessages } from './_prompts/onboarding.js';
+import { buildDeepDiveSystemPrompt, buildDeepDiveMessages } from './_prompts/deepdive.js';
 
 // Title of the Code node in both Dify chatflows that passes through File Extractor text.
 // The node emits a node_finished event with outputs.file_text = extracted file content.
@@ -196,6 +197,79 @@ async function handleOnboardingDirect(req, res, { query, userId }) {
   }
 }
 
+/**
+ * Handle deep-dive chat via direct LLM (AI SDK streamText).
+ * Feature-flagged: only called when LLM_CHAT_MODEL env var is set.
+ * Loads onboarding summary + category-specific conversation history from Supabase.
+ * Emits Dify-compatible SSE events.
+ */
+async function handleDeepDiveDirect(req, res, { query, categoryId, userId }) {
+  const model = getModel('LLM_CHAT_MODEL');
+  const supabase = getSupabaseAdmin();
+
+  // Load onboarding summary
+  const { data: summaryRow } = await supabase
+    .from('onboarding_summaries')
+    .select('summary_data')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!summaryRow?.summary_data) {
+    return res.status(400).json({ error: 'No onboarding summary found. Complete onboarding first.' });
+  }
+
+  const systemPrompt = buildDeepDiveSystemPrompt(categoryId, summaryRow.summary_data);
+
+  // Load existing deep-dive conversation history for this category
+  const { data: convRow } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('workflow', 'deepdive')
+    .eq('category_id', categoryId)
+    .maybeSingle();
+
+  let conversationHistory = [];
+  if (convRow) {
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('role, content')
+      .eq('conversation_id', convRow.id)
+      .order('created_at', { ascending: true });
+    if (msgs) conversationHistory = msgs;
+  }
+
+  const messages = buildDeepDiveMessages(systemPrompt, [
+    ...conversationHistory,
+    { role: 'user', content: query },
+  ]);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const conversationId = `local-${Date.now()}`;
+  const messageId = `msg-${Date.now()}`;
+
+  try {
+    const result = streamText({ model, messages, temperature: 0.7 });
+
+    for await (const chunk of result.textStream) {
+      const event = { event: 'message', answer: chunk, conversation_id: conversationId };
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    }
+
+    const endEvent = { event: 'message_end', conversation_id: conversationId, message_id: messageId };
+    res.write(`data: ${JSON.stringify(endEvent)}\n\n`);
+  } catch (err) {
+    console.error('[chat] Deep-dive direct LLM error:', err.message);
+    const errorEvent = { event: 'error', message: err.message };
+    res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
+  } finally {
+    res.end();
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -219,6 +293,12 @@ export default async function handler(req, res) {
 
   if (useLLMDirect && workflow === 'onboarding') {
     return handleOnboardingDirect(req, res, { query, userId });
+  }
+
+  if (useLLMDirect && workflow === 'deepdive') {
+    const categoryId = inputs?.category_id;
+    if (!categoryId) return res.status(400).json({ error: 'category_id required for deep-dive' });
+    return handleDeepDiveDirect(req, res, { query, categoryId, userId });
   }
 
   const { apiKey, usingFallback } = resolveApiKey(workflow || 'onboarding');
