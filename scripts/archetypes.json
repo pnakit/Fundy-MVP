@@ -7,7 +7,7 @@
     "teamSize": 1,
     "answerStyle": "sparse",
     "revenue": "pre-revenue",
-    "description": "Solo founder building a mobile payments app for unbanked populations in Southeast Asia. No product yet, just a pitch deck and some initial user interviews in the Philippines."
+    "description": "Solo founder with a pitch deck for a mobile payments app targeting unbanked populations in Southeast Asia. No product yet, just initial user interviews in the Philippines."
   },
   {
     "id": "synthetic-002",
@@ -17,7 +17,7 @@
     "teamSize": 4,
     "answerStyle": "detailed",
     "revenue": "pre-revenue",
-    "description": "Medical imaging startup using computer vision to detect early-stage cancers from radiology scans. Has an FDA pre-submission meeting scheduled for Q3. Team of 4: 2 ML engineers, 1 radiologist advisor, 1 CEO with prior healthtech exit."
+    "description": "Medical imaging startup (2 ML engineers, 1 radiologist, 1 CEO with prior exit) using computer vision to detect early-stage cancers, with an FDA pre-submission meeting scheduled for Q3. Pre-revenue, $1.5M seed raised."
   },
   {
     "id": "synthetic-003",
@@ -27,7 +27,7 @@
     "teamSize": 12,
     "answerStyle": "mixed",
     "revenue": "$10-100K MRR",
-    "description": "Energy management SaaS for commercial buildings. $45K MRR with 8 enterprise customers across the US Midwest. IoT sensor network plus ML optimization engine. Targeting Series A in 6 months."
+    "description": "Energy management SaaS for commercial buildings combining IoT sensors and ML optimization, at $45K MRR with 8 enterprise customers in the US Midwest. 12-person team targeting Series A in 6 months."
   },
   {
     "id": "synthetic-004",
@@ -37,7 +37,7 @@
     "teamSize": 35,
     "answerStyle": "detailed",
     "revenue": "$100K+ MRR",
-    "description": "Corporate upskilling platform using adaptive learning paths and AI-generated assessments. $280K MRR, 45 enterprise clients including 3 Fortune 500 companies. 35-person team across engineering, sales, and content. Series B preparation underway."
+    "description": "Corporate upskilling platform with adaptive learning paths and AI-generated assessments, at $280K MRR with 45 enterprise clients including 3 Fortune 500 companies. 35-person team preparing for Series B."
   },
   {
     "id": "synthetic-005",
@@ -47,7 +47,7 @@
     "teamSize": 6,
     "answerStyle": "detailed",
     "revenue": "pre-revenue",
-    "description": "Synthetic biology startup engineering novel enzymes for industrial chemical production. Founded by two PhD biochemists from MIT. $1.2M seed funding, 6-person lab team, 3 pending patents. Working on first commercial partnership with a specialty chemicals manufacturer."
+    "description": "Synthetic biology startup engineering novel enzymes for industrial chemical production, founded by two MIT PhD biochemists with $1.2M seed and 3 pending patents. 6-person lab team working on first commercial partnership with a specialty chemicals manufacturer."
   },
   {
     "id": "synthetic-006",
@@ -57,7 +57,7 @@
     "teamSize": 9,
     "answerStyle": "mixed",
     "revenue": "$10-100K MRR",
-    "description": "Peer-to-peer marketplace for refurbished electronics with built-in quality verification and warranty. $32K MRR, 12K active users in Berlin and Amsterdam. 9-person team. Take rate of 12% with plans to add logistics fulfillment."
+    "description": "Peer-to-peer marketplace for refurbished electronics with quality verification and warranty, at $32K MRR with 12K active users in Berlin and Amsterdam. 9-person team with a 12% take rate, planning to add logistics fulfillment."
   },
   {
     "id": "synthetic-007",
@@ -67,7 +67,7 @@
     "teamSize": 2,
     "answerStyle": "mixed",
     "revenue": "pre-revenue",
-    "description": "Two co-founders prototyping a wearable ECG monitor for atrial fibrillation detection aimed at consumers over 50. Have a working breadboard prototype and initial conversations with a contract manufacturer in Shenzhen. No revenue, bootstrapped with personal savings."
+    "description": "Two co-founders prototyping a wearable ECG monitor for atrial fibrillation detection in consumers over 50, with a working breadboard prototype and early manufacturer conversations in Shenzhen. Bootstrapped, no revenue."
   },
   {
     "id": "synthetic-008",
@@ -77,7 +77,7 @@
     "teamSize": 5,
     "answerStyle": "mixed",
     "revenue": "<$10K MRR",
-    "description": "Precision agriculture startup using drone imagery and ML models to detect crop disease and predict yields. $6K MRR from 3 pilot farms in California's Central Valley. 5-person team: 2 ML engineers, 1 agronomist, 1 drone operator, 1 business lead."
+    "description": "Precision agriculture startup using drone imagery and ML to detect crop disease and predict yields, at $6K MRR from 3 pilot farms in California's Central Valley. 5-person team (2 ML engineers, 1 agronomist, 1 drone operator, 1 business lead)."
   },
   {
     "id": "synthetic-009",
@@ -87,7 +87,7 @@
     "teamSize": 42,
     "answerStyle": "detailed",
     "revenue": "$100K+ MRR",
-    "description": "Workflow automation platform for mid-market HR departments. $420K MRR, 200+ paying customers, 15% month-over-month growth. 42-person team with offices in Austin and Toronto. Series B closed at $18M. Expanding into payroll integration."
+    "description": "Workflow automation platform for mid-market HR departments at $420K MRR with 200+ customers and 15% month-over-month growth, Series B closed at $18M. 42-person team in Austin and Toronto, expanding into payroll integration."
   },
   {
     "id": "synthetic-010",
@@ -97,7 +97,7 @@
     "teamSize": 8,
     "answerStyle": "sparse",
     "revenue": "$10-100K MRR",
-    "description": "Meal prep subscription service for busy professionals using local restaurant partnerships. Operating in 3 US cities with $55K MRR. Mobile app with 4.2-star rating. Exploring ghost kitchen model for better unit economics."
+    "description": "Meal prep subscription using local restaurant partnerships, operating in 3 US cities at $55K MRR. 8-person team exploring ghost kitchens for better unit economics."
   },
   {
     "id": "synthetic-011",
@@ -107,7 +107,7 @@
     "teamSize": 3,
     "answerStyle": "mixed",
     "revenue": "pre-revenue",
-    "description": "Building an open-source identity verification SDK for neobanks and crypto exchanges. Three engineers, one previously at Stripe. Pre-revenue but have LOIs from two fintech startups. Participated in Y Combinator W25 batch."
+    "description": "Open-source identity verification SDK for neobanks and crypto exchanges, built by three engineers (one ex-Stripe) from Y Combinator W25. Pre-revenue with LOIs from two fintech startups."
   },
   {
     "id": "synthetic-012",
@@ -117,7 +117,7 @@
     "teamSize": 1,
     "answerStyle": "sparse",
     "revenue": "pre-revenue",
-    "description": "Solo founder exploring AI-powered language tutoring via voice conversations. Has a rough GPT-based prototype and conducted 20 user interviews. No funding, working evenings and weekends while employed full-time."
+    "description": "Solo founder exploring AI-powered language tutoring via voice conversations, with a rough GPT-based prototype and 20 user interviews. Unfunded, building nights and weekends."
   },
   {
     "id": "synthetic-013",
@@ -127,7 +127,7 @@
     "teamSize": 18,
     "answerStyle": "detailed",
     "revenue": "$10-100K MRR",
-    "description": "Industrial drone inspection platform for power lines and cell towers. Custom drone hardware with onboard ML for defect detection. $78K MRR, contracts with 2 major US utilities. 18-person team including 6 hardware engineers and 4 field technicians. $3.5M Series A closed."
+    "description": "Industrial drone inspection platform for power lines and cell towers with custom hardware and onboard ML defect detection, at $78K MRR with contracts from 2 major US utilities. 18-person team (6 HW engineers, 4 field techs), $3.5M Series A closed."
   },
   {
     "id": "synthetic-014",
@@ -137,7 +137,7 @@
     "teamSize": 5,
     "answerStyle": "mixed",
     "revenue": "<$10K MRR",
-    "description": "Digital therapeutics app for anxiety management using CBT techniques and biofeedback from Apple Watch. $4K MRR from 800 subscribers. 5-person team: 2 developers, 1 clinical psychologist, 1 designer, 1 CEO. Pursuing FDA De Novo pathway for prescription digital therapeutic claim."
+    "description": "Digital therapeutics app for anxiety management using CBT and Apple Watch biofeedback, at $4K MRR from 800 subscribers with a 5-person team. Pursuing FDA De Novo pathway for prescription digital therapeutic claim."
   },
   {
     "id": "synthetic-015",
@@ -147,7 +147,7 @@
     "teamSize": 28,
     "answerStyle": "mixed",
     "revenue": "$100K+ MRR",
-    "description": "Network security AI that detects zero-day threats using unsupervised anomaly detection on packet-level data. $180K MRR, 35 enterprise customers. 28-person team in Tel Aviv. Series A at $12M, expanding into US market with new sales office in New York."
+    "description": "Network security AI using unsupervised anomaly detection on packet-level data to detect zero-day threats, at $180K MRR with 35 enterprise customers. 28-person team in Tel Aviv, Series A at $12M, expanding into the US market."
   },
   {
     "id": "synthetic-016",
@@ -157,7 +157,7 @@
     "teamSize": 7,
     "answerStyle": "detailed",
     "revenue": "<$10K MRR",
-    "description": "Carbon credit verification platform using satellite imagery and ML to validate reforestation projects. $8K MRR from 5 project developers. Team of 7 including 2 remote sensing scientists and 1 former carbon market trader. Based in Nairobi with global project coverage."
+    "description": "Carbon credit verification platform using satellite imagery and ML to validate reforestation projects, at $8K MRR from 5 project developers. Nairobi-based team of 7 including 2 remote sensing scientists and 1 former carbon market trader."
   },
   {
     "id": "synthetic-017",
@@ -167,7 +167,7 @@
     "teamSize": 2,
     "answerStyle": "mixed",
     "revenue": "pre-revenue",
-    "description": "Two co-founders building a micro-savings app that rounds up purchases and invests spare change into fractional shares. Have wireframes and a clickable Figma prototype. Conducting user testing with 50 college students. No funding yet."
+    "description": "Two co-founders building a micro-savings app that rounds up purchases into fractional share investments, with a clickable Figma prototype being user-tested with 50 college students. No funding yet."
   },
   {
     "id": "synthetic-018",
@@ -177,7 +177,7 @@
     "teamSize": 14,
     "answerStyle": "mixed",
     "revenue": "$10-100K MRR",
-    "description": "Customer feedback analytics platform that aggregates reviews, support tickets, and NPS data into actionable product insights. $62K MRR, 120 customers mostly in B2B SaaS. 14-person team. NRR of 115%. Exploring AI-powered auto-categorization features."
+    "description": "Customer feedback analytics platform aggregating reviews, support tickets, and NPS into product insights, at $62K MRR with 120 B2B SaaS customers and 115% NRR. 14-person team exploring AI-powered auto-categorization."
   },
   {
     "id": "synthetic-019",
@@ -187,7 +187,7 @@
     "teamSize": 8,
     "answerStyle": "mixed",
     "revenue": "$10-100K MRR",
-    "description": "Biobank-as-a-service for pharmaceutical companies needing curated tissue and DNA samples for drug development. 8-person team with wet lab in Boston. Partnerships with 3 hospital systems for sample sourcing. $2M seed round, $18K MRR from sample processing fees with $400K in additional signed contracts."
+    "description": "Biobank-as-a-service providing curated tissue and DNA samples to pharma companies, at $18K MRR from sample processing fees with $400K in signed contracts. 8-person team with a wet lab in Boston and partnerships with 3 hospital systems."
   },
   {
     "id": "synthetic-020",
@@ -197,7 +197,7 @@
     "teamSize": 55,
     "answerStyle": "detailed",
     "revenue": "$100K+ MRR",
-    "description": "Digital freight marketplace connecting shippers with regional carriers across Latin America. $340K MRR, processing 8,000 shipments per month. 55-person team in Mexico City and Bogota. Series B at $25M. Expanding into Brazil and building proprietary route optimization engine."
+    "description": "Digital freight marketplace connecting shippers with regional carriers across Latin America, at $340K MRR processing 8,000 shipments/month with a 55-person team in Mexico City and Bogota. Series B at $25M, expanding into Brazil with proprietary route optimization."
   },
   {
     "id": "synthetic-021",
@@ -207,7 +207,7 @@
     "teamSize": 1,
     "answerStyle": "sparse",
     "revenue": "pre-revenue",
-    "description": "Solo developer building an AI pair programming tool for junior developers. Has a VS Code extension prototype with 200 beta installs. No revenue model defined yet, exploring freemium vs seat-based pricing."
+    "description": "Solo developer with a VS Code extension prototype for AI pair programming targeting junior developers, with 200 beta installs. No revenue model defined yet."
   },
   {
     "id": "synthetic-022",
@@ -217,7 +217,7 @@
     "teamSize": 4,
     "answerStyle": "sparse",
     "revenue": "pre-revenue",
-    "description": "Portable water purification device using UV-C LED technology for disaster relief and off-grid communities. Team of 4 engineers. First production run of 500 units in progress. Conversations with two NGOs but no signed deals."
+    "description": "Portable UV-C LED water purification device for disaster relief and off-grid communities, built by a team of 4 engineers with first production run of 500 units in progress. Conversations with two NGOs but no signed deals."
   },
   {
     "id": "synthetic-023",
@@ -227,7 +227,7 @@
     "teamSize": 11,
     "answerStyle": "mixed",
     "revenue": "$10-100K MRR",
-    "description": "AI-powered interior design app that generates room redesigns from phone photos. $28K MRR, 15K monthly active users with 8% conversion to premium. 11-person team in London. Featured in Apple's App Store curated collection. Exploring B2B partnerships with furniture retailers."
+    "description": "AI-powered interior design app generating room redesigns from phone photos, at $28K MRR with 15K MAU and 8% premium conversion. 11-person London team, featured in Apple's App Store, exploring B2B furniture retailer partnerships."
   },
   {
     "id": "synthetic-024",
@@ -237,7 +237,7 @@
     "teamSize": 15,
     "answerStyle": "detailed",
     "revenue": "$10-100K MRR",
-    "description": "Computational drug discovery for neurological disorders using graph neural networks to predict protein-ligand binding. $95K MRR from 4 pharma partnership deals. 15-person team with 8 PhDs. Two drug candidates in pre-clinical stage. $6M Series A from biotech-focused VCs."
+    "description": "Computational drug discovery for neurological disorders using graph neural networks, at $95K MRR from 4 pharma partnerships with 2 drug candidates in pre-clinical stage. 15-person team (8 PhDs), $6M Series A from biotech-focused VCs."
   },
   {
     "id": "synthetic-025",
@@ -247,7 +247,7 @@
     "teamSize": 3,
     "answerStyle": "sparse",
     "revenue": "<$10K MRR",
-    "description": "Classroom management tool for K-12 teachers combining attendance, behavior tracking, and parent communication. $2K MRR from 15 teachers paying individually. 3-person team. Trying to get school district-level contracts."
+    "description": "K-12 classroom management tool combining attendance, behavior tracking, and parent communication, at $2K MRR from 15 individual teachers. 3-person team trying to land school district-level contracts."
   },
   {
     "id": "synthetic-026",
@@ -257,7 +257,7 @@
     "teamSize": 30,
     "answerStyle": "mixed",
     "revenue": "$100K+ MRR",
-    "description": "Solar panel installation marketplace and project management software for residential installers. $210K MRR, operating in 12 US states. 30-person team. Series A at $10M. 400+ installer partners on the platform. Building financing integration with green energy lenders."
+    "description": "Solar panel installation marketplace and project management software for residential installers, at $210K MRR with 400+ partners across 12 US states. 30-person team, Series A at $10M, building green energy financing integration."
   },
   {
     "id": "synthetic-027",
@@ -267,7 +267,7 @@
     "teamSize": 10,
     "answerStyle": "mixed",
     "revenue": "$10-100K MRR",
-    "description": "AI resume screening and candidate ranking engine for staffing agencies. $40K MRR, 25 agency clients. Proprietary NLP models trained on 2M+ job-candidate matches. 10-person team in Chicago. Recently added video interview analysis feature."
+    "description": "AI resume screening and candidate ranking engine for staffing agencies, at $40K MRR with 25 clients and proprietary NLP models trained on 2M+ job-candidate matches. 10-person Chicago team adding video interview analysis."
   },
   {
     "id": "synthetic-028",
@@ -277,7 +277,7 @@
     "teamSize": 3,
     "answerStyle": "detailed",
     "revenue": "pre-revenue",
-    "description": "Three ex-Goldman analysts building a real-time trade surveillance platform for compliance teams at regional banks. Detailed product spec and architecture docs complete. Working prototype with synthetic data. Pre-revenue, targeting $500K pre-seed raise. Have warm intros to 5 potential pilot banks."
+    "description": "Three ex-Goldman analysts building a real-time trade surveillance platform for compliance teams at regional banks, with a working prototype on synthetic data and warm intros to 5 pilot banks. Pre-revenue, targeting $500K pre-seed."
   },
   {
     "id": "synthetic-029",
@@ -287,7 +287,7 @@
     "teamSize": 4,
     "answerStyle": "mixed",
     "revenue": "<$10K MRR",
-    "description": "Local pet services marketplace connecting pet owners with vetted walkers, sitters, and groomers. $7K MRR in two neighborhoods of Sydney. 4-person team. 300 service providers onboarded. Competing with established players but differentiating on trust verification and insurance coverage."
+    "description": "Local pet services marketplace in Sydney connecting owners with vetted walkers, sitters, and groomers, at $7K MRR with 300 providers onboarded. 4-person team differentiating on trust verification and insurance coverage."
   },
   {
     "id": "synthetic-030",
@@ -297,7 +297,7 @@
     "teamSize": 2,
     "answerStyle": "mixed",
     "revenue": "pre-revenue",
-    "description": "Two biochemistry postdocs developing a rapid point-of-care blood test for sepsis detection using novel biomarker panel. Lab validation ongoing at university. Have provisional patent filed. Exploring NIH SBIR grant for initial funding. No company entity formed yet."
+    "description": "Two biochemistry postdocs developing a rapid point-of-care blood test for sepsis detection using a novel biomarker panel, with lab validation ongoing and a provisional patent filed. No company entity yet, exploring NIH SBIR grant funding."
   },
   {
     "id": "synthetic-031",
@@ -307,7 +307,7 @@
     "teamSize": 45,
     "answerStyle": "detailed",
     "revenue": "$100K+ MRR",
-    "description": "Fleet management and telematics platform for mid-size trucking companies. $350K MRR, 180 fleet customers managing 12,000+ vehicles. 45-person team in Atlanta. Series B at $22M. Real-time GPS, fuel optimization, ELD compliance, and predictive maintenance. 130% net revenue retention."
+    "description": "Fleet management and telematics platform (GPS, fuel optimization, ELD compliance, predictive maintenance) for mid-size trucking companies, at $350K MRR with 180 fleet customers managing 12,000+ vehicles and 130% NRR. 45-person Atlanta team, Series B at $22M."
   },
   {
     "id": "synthetic-032",
@@ -317,7 +317,7 @@
     "teamSize": 10,
     "answerStyle": "sparse",
     "revenue": "<$10K MRR",
-    "description": "Corporate wellness platform with mental health assessments, guided meditation, and therapist matching. $9K MRR from 6 small company contracts. 10-person team. Struggling with enterprise sales cycle length but seeing strong user engagement metrics."
+    "description": "Corporate wellness platform with mental health assessments, meditation, and therapist matching, at $9K MRR from 6 small company contracts. 10-person team with strong engagement metrics but long enterprise sales cycles."
   },
   {
     "id": "synthetic-033",
@@ -327,7 +327,7 @@
     "teamSize": 3,
     "answerStyle": "sparse",
     "revenue": "pre-revenue",
-    "description": "Data labeling automation using active learning to reduce human annotation costs by 80%. Three ML engineers, spun out of a university research lab. Have a working tool but no paying customers yet. Applying to accelerator programs."
+    "description": "Data labeling automation using active learning to cut human annotation costs by 80%, built by three ML engineers spun out of a university research lab. Working tool but no paying customers yet, applying to accelerators."
   },
   {
     "id": "synthetic-034",
@@ -337,7 +337,7 @@
     "teamSize": 16,
     "answerStyle": "mixed",
     "revenue": "$10-100K MRR",
-    "description": "Equipment rental marketplace for construction companies. $52K MRR with 200+ listed items across the greater Toronto area. 16-person team. Take rate of 15%. Recently added delivery logistics and insurance add-on. Planning geographic expansion to Vancouver and Montreal."
+    "description": "Construction equipment rental marketplace at $52K MRR with 200+ listings and a 15% take rate across greater Toronto, run by a 16-person team. Recently added delivery logistics and insurance, planning expansion to Vancouver and Montreal."
   },
   {
     "id": "synthetic-035",
@@ -347,7 +347,7 @@
     "teamSize": 1,
     "answerStyle": "sparse",
     "revenue": "pre-revenue",
-    "description": "Solo creator building an AI video editing tool that automatically generates short-form content from long videos. Has a working demo using open-source models. Posted on ProductHunt, got 200 upvotes. No business plan or monetization strategy yet."
+    "description": "Solo creator with an AI video editing demo that auto-generates short-form content from long videos, posted on ProductHunt with 200 upvotes. No business plan or monetization strategy yet."
   },
   {
     "id": "synthetic-036",
@@ -357,7 +357,7 @@
     "teamSize": 6,
     "answerStyle": "mixed",
     "revenue": "<$10K MRR",
-    "description": "AI-assisted PCB design tool that auto-routes complex circuit boards. Desktop application with $5K MRR from 40 individual licenses. 6-person team: 3 EE/software engineers, 1 ML researcher, 1 designer, 1 founder/CEO. Based in Taipei with target customers in consumer electronics manufacturing."
+    "description": "AI-assisted PCB design tool that auto-routes complex circuit boards, at $5K MRR from 40 individual licenses sold from Taipei. 6-person team (3 EE/software engineers, 1 ML researcher, 1 designer, 1 CEO) targeting consumer electronics manufacturers."
   },
   {
     "id": "synthetic-037",
@@ -367,7 +367,7 @@
     "teamSize": 5,
     "answerStyle": "detailed",
     "revenue": "<$10K MRR",
-    "description": "Supply chain carbon footprint tracking SaaS for CPG brands. Integrates with ERP systems to calculate Scope 3 emissions per product SKU. $3K MRR from 2 pilot customers. 5-person team in Amsterdam. Detailed methodology documentation aligned with GHG Protocol. Seed round of $800K closed."
+    "description": "Supply chain Scope 3 carbon footprint tracking SaaS for CPG brands with ERP integration, at $3K MRR from 2 pilots, GHG Protocol-aligned methodology, and an $800K seed round. 5-person Amsterdam team."
   },
   {
     "id": "synthetic-038",
@@ -377,7 +377,7 @@
     "teamSize": 22,
     "answerStyle": "mixed",
     "revenue": "$100K+ MRR",
-    "description": "Crowdsourced last-mile delivery marketplace matching e-commerce parcels with commuters and gig workers for same-day delivery. $150K MRR in Lagos and Accra. 22-person team. Processing 50K deliveries per month. Series A at $8M. Expanding to Nairobi and Dar es Salaam."
+    "description": "Crowdsourced last-mile delivery marketplace matching e-commerce parcels with commuters and gig workers, at $150K MRR processing 50K deliveries/month in Lagos and Accra. 22-person team, Series A at $8M, expanding to Nairobi and Dar es Salaam."
   },
   {
     "id": "synthetic-039",
@@ -387,7 +387,7 @@
     "teamSize": 8,
     "answerStyle": "detailed",
     "revenue": "$10-100K MRR",
-    "description": "Contract analysis and management platform for legal teams at mid-market companies. Uses NLP to extract key terms, flag risks, and track obligations. $70K MRR, 40 customers, 95% annual retention. 8-person team in Denver. AI clause library with 10K+ analyzed contracts."
+    "description": "NLP-powered contract analysis platform for mid-market legal teams that extracts key terms, flags risks, and tracks obligations, at $70K MRR with 40 customers and 95% annual retention. 8-person Denver team with an AI clause library of 10K+ contracts."
   },
   {
     "id": "synthetic-040",
@@ -397,7 +397,7 @@
     "teamSize": 13,
     "answerStyle": "mixed",
     "revenue": "$10-100K MRR",
-    "description": "Adaptive math tutoring platform for middle schoolers using spaced repetition and gamification. $36K MRR, 8,000 student accounts across 25 schools. 13-person team in Sao Paulo. Content available in Portuguese and Spanish. Piloting with state education department for potential district-wide rollout."
+    "description": "Adaptive math tutoring platform for middle schoolers using spaced repetition and gamification, at $36K MRR with 8,000 students across 25 schools in Brazil. 13-person Sao Paulo team piloting a district-wide rollout with the state education department."
   },
   {
     "id": "synthetic-041",
@@ -407,7 +407,7 @@
     "teamSize": 1,
     "answerStyle": "mixed",
     "revenue": "pre-revenue",
-    "description": "Solo hardware engineer designing a multi-modal environmental sensor array for smart city deployments measuring air quality, noise, traffic, and weather. First PCB revision in fabrication at a local makerspace. In early talks with one municipal innovation lab. Bootstrapped, applying for EU Horizon grant."
+    "description": "Solo hardware engineer designing a multi-modal environmental sensor array (air quality, noise, traffic, weather) for smart city deployments, with a first PCB revision in fabrication. Bootstrapped, in early talks with one municipal innovation lab and applying for an EU Horizon grant."
   },
   {
     "id": "synthetic-042",
@@ -417,7 +417,7 @@
     "teamSize": 25,
     "answerStyle": "mixed",
     "revenue": "$100K+ MRR",
-    "description": "AI-powered insurance claims processing for auto insurers. Computer vision damage assessment from photos plus NLP for document extraction. $195K MRR, integrated with 6 insurance carriers. 25-person team in Singapore. Series A at $14M. Processing 20K claims per month with 40% faster resolution times."
+    "description": "AI-powered auto insurance claims processing (computer vision damage assessment + NLP document extraction) at $195K MRR, integrated with 6 carriers and processing 20K claims/month with 40% faster resolution. 25-person Singapore team, Series A at $14M."
   },
   {
     "id": "synthetic-043",
@@ -427,7 +427,7 @@
     "teamSize": 4,
     "answerStyle": "mixed",
     "revenue": "<$10K MRR",
-    "description": "Social fitness app pairing users with workout buddies based on location, fitness level, and schedule compatibility. $8K MRR from 2,500 premium subscribers. 4-person fully remote team. Integrations with Apple Health and Strava. Differentiated by AI-generated training plans and real-time audio coaching during partner workouts."
+    "description": "Social fitness app pairing users with workout buddies by location and fitness level, at $8K MRR from 2,500 premium subscribers with Apple Health and Strava integrations. 4-person remote team with AI-generated training plans and real-time audio coaching."
   },
   {
     "id": "synthetic-044",
@@ -437,7 +437,7 @@
     "teamSize": 38,
     "answerStyle": "detailed",
     "revenue": "$100K+ MRR",
-    "description": "Pharmacy fulfillment optimization platform for hospital systems. Reduces medication errors and waste through ML-based demand forecasting and automated dispensing workflows. $260K MRR, deployed in 15 hospital systems. 38-person team in Nashville. Series B at $20M. FDA Class I registered."
+    "description": "FDA Class I registered pharmacy fulfillment optimization platform using ML demand forecasting and automated dispensing for hospital systems, at $260K MRR deployed in 15 hospitals. 38-person Nashville team, Series B at $20M."
   },
   {
     "id": "synthetic-045",
@@ -447,7 +447,7 @@
     "teamSize": 2,
     "answerStyle": "sparse",
     "revenue": "pre-revenue",
-    "description": "Two environmental scientists exploring a platform to connect landowners with corporations for biodiversity offset credits. Concept stage with initial market research. Have domain expertise but limited technical capability. Looking for a technical co-founder."
+    "description": "Two environmental scientists exploring a platform connecting landowners with corporations for biodiversity offset credits. Concept stage with market research done but limited technical capability, seeking a technical co-founder."
   },
   {
     "id": "synthetic-046",
@@ -457,7 +457,7 @@
     "teamSize": 11,
     "answerStyle": "mixed",
     "revenue": "$10-100K MRR",
-    "description": "Regulatory compliance automation for fintech startups handling KYC/AML workflows. $48K MRR, 30 customers mostly in the UK and EU. 11-person team in London. API-first approach with pre-built integrations for common banking partners. SOC 2 Type II certified."
+    "description": "KYC/AML compliance automation for fintech startups with an API-first approach and pre-built banking integrations, at $48K MRR with 30 UK/EU customers and SOC 2 Type II certification. 11-person London team."
   },
   {
     "id": "synthetic-047",
@@ -467,7 +467,7 @@
     "teamSize": 7,
     "answerStyle": "detailed",
     "revenue": "<$10K MRR",
-    "description": "AI model monitoring and observability platform for production ML systems. Detects data drift, model degradation, and bias in real-time. $9K MRR from 8 early adopter teams. 7-person team: 4 engineers, 1 ML researcher, 1 designer, 1 founder. Open-source core with enterprise SaaS tier. Based in Berlin."
+    "description": "Open-source ML model monitoring platform detecting data drift, degradation, and bias in production systems, at $9K MRR from 8 early adopters on the enterprise SaaS tier. 7-person Berlin team (4 engineers, 1 ML researcher, 1 designer, 1 founder)."
   },
   {
     "id": "synthetic-048",
@@ -477,7 +477,7 @@
     "teamSize": 15,
     "answerStyle": "mixed",
     "revenue": "$10-100K MRR",
-    "description": "Remote patient monitoring platform for chronic disease management connecting patients with care teams via a HIPAA-compliant dashboard. $42K MRR from 12 clinic partnerships across the Pacific Northwest. 15-person team including 3 nurses and 2 clinical data analysts. Pursuing integration with major EHR systems."
+    "description": "HIPAA-compliant remote patient monitoring platform for chronic disease management, at $42K MRR from 12 clinic partnerships across the Pacific Northwest. 15-person team (including 3 nurses, 2 clinical data analysts) pursuing major EHR integrations."
   },
   {
     "id": "synthetic-049",
@@ -487,7 +487,7 @@
     "teamSize": 19,
     "answerStyle": "detailed",
     "revenue": "$10-100K MRR",
-    "description": "CRISPR gene therapy delivery platform licensing novel lipid nanoparticle formulations to pharma partners. $85K MRR from 3 licensing deals. 19-person team with BSL-2 lab in Cambridge, MA. 5 patents granted, 3 pending. Phase I clinical trial partnership initiated with a top-10 pharma company."
+    "description": "CRISPR gene therapy delivery platform licensing novel lipid nanoparticle formulations, at $85K MRR from 3 pharma deals with 5 granted patents and a Phase I trial partnership with a top-10 pharma company. 19-person team with BSL-2 lab in Cambridge, MA."
   },
   {
     "id": "synthetic-050",
@@ -497,6 +497,6 @@
     "teamSize": 24,
     "answerStyle": "mixed",
     "revenue": "$100K+ MRR",
-    "description": "Professional certification and continuing education platform for healthcare workers. $175K MRR, 50K registered learners, partnerships with 12 nursing associations. 24-person team in Portland. Accredited by ANCC. Series A at $9M. Expanding into allied health professions and international markets."
+    "description": "ANCC-accredited continuing education platform for healthcare workers at $175K MRR with 50K learners and 12 nursing association partnerships. 24-person Portland team, Series A at $9M, expanding into allied health and international markets."
   }
 ]
