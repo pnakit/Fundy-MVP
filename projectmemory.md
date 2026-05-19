@@ -792,3 +792,41 @@ Fixed a scoring philosophy issue where companies demonstrating higher-maturity e
 7. **External KB adapter** — `knowledgeBase.js` has adapter pattern but only internal implemented.
 8. **CAPTCHA / bot protection** — before public launch.
 
+## v5.0 — Dify Migration (May 2026)
+
+Replaced all 4 Dify workflows with direct LLM calls via Vercel AI SDK. Feature-flagged: both paths coexist.
+
+### What changed
+
+**Provider abstraction (`api/_llm.js`):**
+- `createProviderRegistry` with `provider:model` env var format (e.g., `openai:gpt-4o-mini`)
+- Per-workflow model selection: `LLM_CHAT_MODEL`, `LLM_EVAL_MODEL`, `LLM_ANALYSIS_MODEL`
+
+**Onboarding + deep-dive chat (`api/chat.js`):**
+- Direct `streamText()` call per turn when `LLM_CHAT_MODEL` is set
+- System prompts in `api/_prompts/onboarding.js` and `api/_prompts/deepdive.js`
+- Conversation history loaded from Supabase (replaces Dify's conversation management)
+
+**Evaluation pipeline (`api/evaluation/generate.js`):**
+- 10 parallel `generateObject()` calls with Zod schemas when `LLM_EVAL_MODEL` is set
+- Maturity calculation + investment matrix ported to `api/evaluation/_maturity.js`
+- Investment matching via `generateObject()` with `InvestmentOutputSchema`
+
+**Action item refresh (`api/action-items/_analyze.js`):**
+- `generateObject()` with Zod schema replaces raw OpenAI fetch + manual JSON parsing
+
+**File handling (`api/upload.js`):**
+- `officeparser` replaces Dify File Extractor for PDF/DOCX/PPTX text extraction
+
+**Testing:**
+- 50 golden fixture archetypes + comparison script for pipeline fidelity validation
+- Mock LLM test helper for integration tests
+
+### Env vars added
+- `LLM_CHAT_MODEL`, `LLM_EVAL_MODEL`, `LLM_ANALYSIS_MODEL`, `VITE_LLM_MOCK`
+
+### Pending cleanup (after production validation)
+- Delete `api/_shared.js`, `api/evaluation/_difyWorkflow.js`
+- Remove `DIFY_*` env vars from `.env.example` and Vercel
+- Remove Dify proxy from `vite.config.js`
+

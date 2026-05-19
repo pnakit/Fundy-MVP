@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **IMPORTANT: Before starting any large project action, read `projectmemory.md` for context on past decisions and the app's evolution.**
 
-**IMPORTANT: Before building, modifying, or wiring up any Dify workflow — including node design, variable bindings, output type declarations, or SSE event handling — read `DifyTactics.md` first.**
+**IMPORTANT: Before building, modifying, or wiring up any Dify workflow — including node design, variable bindings, output type declarations, or SSE event handling — read `DifyTactics.md` first.** (Note: Dify workflows are being phased out in favor of direct LLM calls via Vercel AI SDK — see v5.0 migration notes below.)
 
 ## Build & Development Commands
 
@@ -83,6 +83,12 @@ See `.env.example` for the full list. Key variables:
 | `DIFY_WEBHOOK_SECRET` | Server + Dify | Shared secret for Dify → Vercel webhook auth |
 | `OPENAI_API_KEY` | Server | Embedding generation (text-embedding-3-small) |
 | `ACTIVE_KNOWLEDGE_BASE` | Server | KB selection — `internal` (Supabase pgvector) or partner ID |
+| `LLM_CHAT_MODEL` | Server | AI SDK model for onboarding/deep-dive chat (e.g., `openai:gpt-4o-mini`) |
+| `LLM_EVAL_MODEL` | Server | AI SDK model for evaluation + investment matching |
+| `LLM_ANALYSIS_MODEL` | Server | AI SDK model for action item analysis |
+| `VITE_LLM_MOCK` | Client | Set `true` for client-side mock mode (replaces `VITE_DIFY_MOCK`) |
+
+`DIFY_*` env vars are being phased out — they still work as fallback when `LLM_*` vars are not set.
 
 Server-side vars are used by Vercel serverless functions and the Vite dev proxy. `VITE_`-prefixed vars are bundled into the client build.
 
@@ -107,6 +113,8 @@ React 18 single-page app built with Vite. No routing library, no state managemen
 - `VITE_DIFY_STREAMING=true` → SSE streaming mode with `parseSSELine()` buffer management
 - Default → blocking mode via `/api/chat` proxy
 
+**AI SDK Migration (v5.0):** Onboarding, deep-dive, evaluation, and investment matching workflows have direct LLM paths via Vercel AI SDK (`streamText`, `generateObject`). Feature-flagged: set `LLM_CHAT_MODEL` and `LLM_EVAL_MODEL` env vars to activate. Legacy Dify paths remain as fallback when these vars are unset. Prompts live in `api/_prompts/`, LLM abstraction in `api/_llm.js`.
+
 **Authentication** uses Supabase Auth with email + OTP (8-digit codes). `LoginScreen` handles the two-step flow (email entry → OTP verification). `App.jsx` listens for auth state changes via `onAuthStateChange` and stores the session. All API calls include the JWT in the `Authorization` header. Serverless functions validate JWTs via `api/_auth.js` using Supabase JWKS.
 
 ### Serverless Functions (Vercel)
@@ -115,13 +123,19 @@ Production API routing lives in `/api`. These are Vercel serverless functions, n
 
 ```
 api/
-  _shared.js              # resolveApiKey(workflow) + getDifyBaseUrl() — shared by all endpoints
+  _shared.js              # resolveApiKey(workflow) + getDifyBaseUrl() — shared by Dify endpoints (legacy)
+  _llm.js                 # Provider-agnostic LLM abstraction (Vercel AI SDK)
+  _prompts/
+    onboarding.js          # Onboarding chat system prompt + message builder
+    deepdive.js            # Deep-dive category-scoped system prompt
+    evaluation.js          # 10-category evaluation scorecards + Zod schema
+    investment.js          # Investment recommendation prompt + Zod schema
   _auth.js                # JWT validation middleware (Supabase JWKS via jose)
   _supabase.js            # Supabase admin client (service_role key, cached)
   _webhookAuth.js         # Webhook secret validation (Dify → Vercel auth)
   _chunking.js            # Text chunking utilities (conversations, summaries, files)
-  chat.js                 # POST /api/chat → Dify /chat-messages (blocking + streaming)
-  upload.js               # POST /api/upload → Dify /files/upload (bodyParser disabled for multipart)
+  chat.js                 # POST /api/chat — direct LLM (when LLM_CHAT_MODEL set) or Dify fallback
+  upload.js               # POST /api/upload — file text extraction (officeparser) + Dify fallback
   chat/stop.js            # POST /api/chat/stop → Dify /chat-messages/{task_id}/stop
   knowledge/
     _knowledgeBase.js     # KB abstraction layer (swappable internal/external pgvector)
@@ -141,12 +155,15 @@ api/
     save.js               # POST /api/evaluation/save — persist evaluation results to DB
     investment-match.js   # POST /api/evaluation/investment-match — investment matching endpoint
     _categoryContext.js   # Per-category context assembly (10 parallel KB searches)
-    _difyWorkflow.js      # Dify Workflow API + SSE stream transformation
+    _difyWorkflow.js      # Dify Workflow API + SSE stream transformation (legacy)
+    _maturity.js            # Maturity calculation + investment matrix (ported from Dify Python)
 ```
 
 **Vercel function limit**: Hobby plan allows 12 serverless functions. Every non-`_`-prefixed `.js` file under `api/` becomes a function. Helpers and test files MUST be `_`-prefixed to avoid counting toward the limit. Current count: exactly 12.
 
-**Workflow routing**: request body includes a `workflow` field (`'onboarding'`, `'deepdive'`, or `'evaluation'`). `resolveApiKey()` maps this to the correct `DIFY_*_API_KEY` env var, falling back to the onboarding key if the requested workflow key is missing.
+**Dual code paths (v5.0):** Serverless functions check for `LLM_*` env vars first and use Vercel AI SDK (`streamText`, `generateObject`) when available. If unset, they fall back to the legacy Dify API path. Both paths coexist — set `LLM_CHAT_MODEL` / `LLM_EVAL_MODEL` to activate the direct LLM path, or leave them unset to keep using Dify.
+
+**Workflow routing (legacy Dify path)**: request body includes a `workflow` field (`'onboarding'`, `'deepdive'`, or `'evaluation'`). `resolveApiKey()` maps this to the correct `DIFY_*_API_KEY` env var, falling back to the onboarding key if the requested workflow key is missing.
 
 ### Dev vs Production API Routing
 
