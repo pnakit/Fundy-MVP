@@ -26,6 +26,7 @@ import { streamEvaluation } from './_difyWorkflow.js';
 import { generateObject } from 'ai';
 import { getModel } from '../_llm.js';
 import { buildEvalPrompt, EvalCategorySchema, CATEGORY_TITLES } from '../_prompts/evaluation.js';
+import { buildInvestmentPrompt, InvestmentOutputSchema } from '../_prompts/investment.js';
 import { calculateMaturity, generateInvestmentMatrix } from './_maturity.js';
 
 export default async function handler(req) {
@@ -135,9 +136,35 @@ export default async function handler(req) {
           const maturityData = calculateMaturity(categoryResults);
           sendEvent({ type: 'maturity_calculated', data: maturityData });
 
-          // Investment matrix (deterministic, no LLM)
+          // Phase 2: Investment recommendations
           const investmentMatrix = generateInvestmentMatrix(categoryResults, maturityData);
           sendEvent({ type: 'investment_matrix', data: investmentMatrix });
+
+          sendEvent({ type: 'investment_matching_started' });
+          sendEvent({ type: 'status', message: 'Matching investment profiles...' });
+
+          try {
+            const investmentModel = getModel('LLM_EVAL_MODEL');
+            const { system: invSystem, user: invUser } = buildInvestmentPrompt(
+              categoryResults,
+              maturityData,
+              investmentMatrix,
+            );
+
+            const { object: investmentData } = await generateObject({
+              model: investmentModel,
+              schema: InvestmentOutputSchema,
+              messages: [
+                { role: 'system', content: invSystem },
+                { role: 'user', content: invUser },
+              ],
+              temperature: 0.3,
+            });
+
+            sendEvent({ type: 'investment_recommendations_complete', data: investmentData });
+          } catch (err) {
+            sendEvent({ type: 'error', message: `Investment matching failed: ${err.message}` });
+          }
 
           sendEvent({
             type: 'workflow_complete',
