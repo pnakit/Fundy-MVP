@@ -3,6 +3,9 @@ import { verifyAuth } from './_auth.js';
 import { getSupabaseAdmin } from './_supabase.js';
 import { chunkFileText } from './_chunking.js';
 import { generateEmbeddings } from './knowledge/_embeddings.js';
+import { streamText } from 'ai';
+import { getModel } from './_llm.js';
+import { buildOnboardingMessages } from './_prompts/onboarding.js';
 
 // Title of the Code node in both Dify chatflows that passes through File Extractor text.
 // The node emits a node_finished event with outputs.file_text = extracted file content.
@@ -122,6 +125,77 @@ Type: ${typeLabel}`;
   }
 }
 
+/**
+ * Handle onboarding chat via direct LLM (AI SDK streamText).
+ * Feature-flagged: only called when LLM_CHAT_MODEL env var is set.
+ * Loads conversation history from Supabase and emits Dify-compatible SSE events.
+ */
+async function handleOnboardingDirect(req, res, { query, userId }) {
+  const model = getModel('LLM_CHAT_MODEL');
+  const supabase = getSupabaseAdmin();
+
+  // Load existing conversation history from Supabase
+  const { data: convRow } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('workflow', 'onboarding')
+    .maybeSingle();
+
+  let conversationHistory = [];
+  if (convRow) {
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('role, content')
+      .eq('conversation_id', convRow.id)
+      .order('created_at', { ascending: true });
+    if (msgs) conversationHistory = msgs;
+  }
+
+  const messages = buildOnboardingMessages([
+    ...conversationHistory,
+    { role: 'user', content: query },
+  ]);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const conversationId = `local-${Date.now()}`;
+  const messageId = `msg-${Date.now()}`;
+
+  try {
+    const result = streamText({
+      model,
+      messages,
+      temperature: 0.7,
+    });
+
+    for await (const chunk of result.textStream) {
+      const event = {
+        event: 'message',
+        answer: chunk,
+        conversation_id: conversationId,
+      };
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    }
+
+    // Send message_end event
+    const endEvent = {
+      event: 'message_end',
+      conversation_id: conversationId,
+      message_id: messageId,
+    };
+    res.write(`data: ${JSON.stringify(endEvent)}\n\n`);
+  } catch (err) {
+    console.error('[chat] Direct LLM error:', err.message);
+    const errorEvent = { event: 'error', message: err.message };
+    res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
+  } finally {
+    res.end();
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -138,6 +212,13 @@ export default async function handler(req, res) {
 
   if (workflow === 'action_item') {
     return handleActionItemChat(req, res, { query, inputs, response_mode, userId });
+  }
+
+  // Feature flag: use direct LLM for onboarding when LLM_CHAT_MODEL is set
+  const useLLMDirect = !!process.env.LLM_CHAT_MODEL;
+
+  if (useLLMDirect && workflow === 'onboarding') {
+    return handleOnboardingDirect(req, res, { query, userId });
   }
 
   const { apiKey, usingFallback } = resolveApiKey(workflow || 'onboarding');
