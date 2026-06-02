@@ -1,5 +1,6 @@
 import { verifyAuth } from './_auth.js';
-import { parseOfficeAsync } from 'officeparser';
+import { parseOffice } from 'officeparser';
+import pdfParse from 'pdf-parse';
 
 export const config = {
   api: {
@@ -33,8 +34,21 @@ export default async function handler(req, res) {
 
     const { fileName, fileBuffer } = parseMultipart(body, boundary);
 
-    // Extract text using officeparser
-    const extractedText = await parseOfficeAsync(fileBuffer);
+    // Extract text: use pdf-parse for PDFs, officeparser for Office formats
+    let extractedText = '';
+    const isPdf = fileName.toLowerCase().endsWith('.pdf') ||
+      (fileBuffer.length >= 4 && fileBuffer.slice(0, 4).toString() === '%PDF');
+    if (isPdf) {
+      const pdfData = await pdfParse(fileBuffer);
+      extractedText = pdfData.text || '';
+    } else {
+      extractedText = await new Promise((resolve, reject) => {
+        parseOffice(fileBuffer, (err, data) => {
+          if (err) reject(err);
+          else resolve(data || '');
+        });
+      });
+    }
 
     return res.status(200).json({
       id: `file-${Date.now()}`,
