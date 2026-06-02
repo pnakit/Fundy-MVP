@@ -23,19 +23,11 @@ import { resolveApiKey } from '../_shared.js';
 import { chunkConversation } from '../_chunking.js';
 import { generateEmbeddings } from '../knowledge/_embeddings.js';
 import { streamEvaluation } from './_difyWorkflow.js';
-
-const CATEGORY_TITLES = {
-  product_technology: 'Product & Technology',
-  market_traction: 'Market Traction & Revenue',
-  business_model: 'Business Model & Economics',
-  team_organization: 'Team & Organization',
-  go_to_market: 'Go-to-Market',
-  financial_health: 'Financial Health',
-  fundraising_capital: 'Fundraising & Capital',
-  competitive_position: 'Competitive Position',
-  operations: 'Operations',
-  legal_compliance: 'Legal & Compliance',
-};
+import { generateObject } from 'ai';
+import { getModel } from '../_llm.js';
+import { buildEvalPrompt, EvalCategorySchema, CATEGORY_TITLES } from '../_prompts/evaluation.js';
+import { buildInvestmentPrompt, InvestmentOutputSchema } from '../_prompts/investment.js';
+import { calculateMaturity, generateInvestmentMatrix } from './_maturity.js';
 
 export default async function handler(req) {
   if (req.method !== 'POST') {
@@ -64,9 +56,15 @@ export default async function handler(req) {
     });
   }
 
-  // Step 2: Resolve Dify API key for evaluation workflow
-  const { apiKey } = resolveApiKey('evaluation');
-  const useMock = !apiKey || apiKey === resolveApiKey('onboarding').apiKey;
+  // Step 2: Determine evaluation mode
+  const useLLMDirect = !!process.env.LLM_EVAL_MODEL;
+
+  // Only resolve Dify API key when not using direct LLM path
+  let useMock = false;
+  if (!useLLMDirect) {
+    const { apiKey } = resolveApiKey('evaluation');
+    useMock = !apiKey || apiKey === resolveApiKey('onboarding').apiKey;
+  }
 
   // Set up SSE stream using Web Streams API (required for Edge Runtime)
   const encoder = new TextEncoder();
@@ -78,7 +76,100 @@ export default async function handler(req) {
       };
 
       try {
-        if (useMock) {
+        if (useLLMDirect) {
+          // ── Direct LLM evaluation path ──
+          sendEvent({ type: 'status', message: 'Preparing knowledge base...' });
+          await embedDeepDiveConversations(userId);
+
+          sendEvent({ type: 'status', message: 'Evaluating across 10 dimensions...' });
+
+          const CATEGORY_IDS = Object.keys(CATEGORY_TITLES);
+          const evalModel = getModel('LLM_EVAL_MODEL');
+
+          // 10 parallel evaluation calls
+          const evalPromises = CATEGORY_IDS.map(async (categoryId) => {
+            sendEvent({ type: 'category_started', category_id: categoryId });
+
+            const { system, user } = buildEvalPrompt(
+              categoryId,
+              onboardingSummary ? JSON.stringify(onboardingSummary) : '',
+            );
+
+            try {
+              const { object } = await generateObject({
+                model: evalModel,
+                schema: EvalCategorySchema,
+                messages: [
+                  { role: 'system', content: system },
+                  { role: 'user', content: user },
+                ],
+                temperature: 0.3,
+              });
+
+              object.category_id = categoryId;
+              object.category_title = CATEGORY_TITLES[categoryId];
+
+              sendEvent({ type: 'category_complete', category_id: categoryId, data: object });
+              return { categoryId, data: object, error: null };
+            } catch (err) {
+              sendEvent({
+                type: 'error',
+                category_id: categoryId,
+                message: `Failed to evaluate ${categoryId}: ${err.message}`,
+              });
+              return { categoryId, data: null, error: err.message };
+            }
+          });
+
+          const evalResults = await Promise.allSettled(evalPromises);
+          const categoryResults = {};
+          for (const result of evalResults) {
+            const val =
+              result.status === 'fulfilled'
+                ? result.value
+                : { categoryId: 'unknown', data: null, error: result.reason };
+            if (val.data) categoryResults[val.categoryId] = val.data;
+          }
+
+          // Maturity calculation (deterministic, no LLM)
+          sendEvent({ type: 'status', message: 'Calculating maturity stage...' });
+          const maturityData = calculateMaturity(categoryResults);
+          sendEvent({ type: 'maturity_calculated', data: maturityData });
+
+          // Phase 2: Investment recommendations
+          const investmentMatrix = generateInvestmentMatrix(categoryResults, maturityData);
+          sendEvent({ type: 'investment_matrix', data: investmentMatrix });
+
+          sendEvent({ type: 'investment_matching_started' });
+          sendEvent({ type: 'status', message: 'Matching investment profiles...' });
+
+          try {
+            const { system: invSystem, user: invUser } = buildInvestmentPrompt(
+              categoryResults,
+              maturityData,
+              investmentMatrix,
+            );
+
+            const { object: investmentData } = await generateObject({
+              model: evalModel,
+              schema: InvestmentOutputSchema,
+              messages: [
+                { role: 'system', content: invSystem },
+                { role: 'user', content: invUser },
+              ],
+              temperature: 0.3,
+            });
+
+            sendEvent({ type: 'investment_recommendations_complete', data: investmentData });
+          } catch (err) {
+            sendEvent({ type: 'error', message: `Investment matching failed: ${err.message}` });
+          }
+
+          sendEvent({
+            type: 'workflow_complete',
+            metadata: { total_categories: Object.keys(categoryResults).length },
+          });
+        } else if (useMock) {
           // ── Mock mode: simulate evaluation from onboarding summary ──
           sendEvent({ type: 'status', message: 'Mock mode — generating evaluation from onboarding data...' });
 
@@ -89,6 +180,8 @@ export default async function handler(req) {
           // conversations are embedded so they're available for vector search.
           sendEvent({ type: 'status', message: 'Preparing knowledge base...' });
           await embedDeepDiveConversations(userId);
+
+          const { apiKey } = resolveApiKey('evaluation');
 
           const inputs = {
             company_name: companyName,

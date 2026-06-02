@@ -1,0 +1,502 @@
+[
+  {
+    "id": "synthetic-001",
+    "name": "NovaPay",
+    "stage": "concept",
+    "industry": "fintech",
+    "teamSize": 1,
+    "answerStyle": "sparse",
+    "revenue": "pre-revenue",
+    "description": "Solo founder with a pitch deck for a mobile payments app targeting unbanked populations in Southeast Asia. No product yet, just initial user interviews in the Philippines."
+  },
+  {
+    "id": "synthetic-002",
+    "name": "MedScan AI",
+    "stage": "early",
+    "industry": "healthtech",
+    "teamSize": 4,
+    "answerStyle": "detailed",
+    "revenue": "pre-revenue",
+    "description": "Medical imaging startup (2 ML engineers, 1 radiologist, 1 CEO with prior exit) using computer vision to detect early-stage cancers, with an FDA pre-submission meeting scheduled for Q3. Pre-revenue, $1.5M seed raised."
+  },
+  {
+    "id": "synthetic-003",
+    "name": "GreenGrid",
+    "stage": "validated",
+    "industry": "climate",
+    "teamSize": 12,
+    "answerStyle": "mixed",
+    "revenue": "$10-100K MRR",
+    "description": "Energy management SaaS for commercial buildings combining IoT sensors and ML optimization, at $45K MRR with 8 enterprise customers in the US Midwest. 12-person team targeting Series A in 6 months."
+  },
+  {
+    "id": "synthetic-004",
+    "name": "SkillForge",
+    "stage": "scaling",
+    "industry": "edtech",
+    "teamSize": 35,
+    "answerStyle": "detailed",
+    "revenue": "$100K+ MRR",
+    "description": "Corporate upskilling platform with adaptive learning paths and AI-generated assessments, at $280K MRR with 45 enterprise clients including 3 Fortune 500 companies. 35-person team preparing for Series B."
+  },
+  {
+    "id": "synthetic-005",
+    "name": "Catalyze Bio",
+    "stage": "early",
+    "industry": "biotech",
+    "teamSize": 6,
+    "answerStyle": "detailed",
+    "revenue": "pre-revenue",
+    "description": "Synthetic biology startup engineering novel enzymes for industrial chemical production, founded by two MIT PhD biochemists with $1.2M seed and 3 pending patents. 6-person lab team working on first commercial partnership with a specialty chemicals manufacturer."
+  },
+  {
+    "id": "synthetic-006",
+    "name": "SwapCircle",
+    "stage": "validated",
+    "industry": "marketplace",
+    "teamSize": 9,
+    "answerStyle": "mixed",
+    "revenue": "$10-100K MRR",
+    "description": "Peer-to-peer marketplace for refurbished electronics with quality verification and warranty, at $32K MRR with 12K active users in Berlin and Amsterdam. 9-person team with a 12% take rate, planning to add logistics fulfillment."
+  },
+  {
+    "id": "synthetic-007",
+    "name": "PulseWear",
+    "stage": "concept",
+    "industry": "hardware",
+    "teamSize": 2,
+    "answerStyle": "mixed",
+    "revenue": "pre-revenue",
+    "description": "Two co-founders prototyping a wearable ECG monitor for atrial fibrillation detection in consumers over 50, with a working breadboard prototype and early manufacturer conversations in Shenzhen. Bootstrapped, no revenue."
+  },
+  {
+    "id": "synthetic-008",
+    "name": "CropSense",
+    "stage": "early",
+    "industry": "AI/ML",
+    "teamSize": 5,
+    "answerStyle": "mixed",
+    "revenue": "<$10K MRR",
+    "description": "Precision agriculture startup using drone imagery and ML to detect crop disease and predict yields, at $6K MRR from 3 pilot farms in California's Central Valley. 5-person team (2 ML engineers, 1 agronomist, 1 drone operator, 1 business lead)."
+  },
+  {
+    "id": "synthetic-009",
+    "name": "Breezy",
+    "stage": "scaling",
+    "industry": "SaaS",
+    "teamSize": 42,
+    "answerStyle": "detailed",
+    "revenue": "$100K+ MRR",
+    "description": "Workflow automation platform for mid-market HR departments at $420K MRR with 200+ customers and 15% month-over-month growth, Series B closed at $18M. 42-person team in Austin and Toronto, expanding into payroll integration."
+  },
+  {
+    "id": "synthetic-010",
+    "name": "LunchBox",
+    "stage": "validated",
+    "industry": "consumer",
+    "teamSize": 8,
+    "answerStyle": "sparse",
+    "revenue": "$10-100K MRR",
+    "description": "Meal prep subscription using local restaurant partnerships, operating in 3 US cities at $55K MRR. 8-person team exploring ghost kitchens for better unit economics."
+  },
+  {
+    "id": "synthetic-011",
+    "name": "TrustLayer",
+    "stage": "early",
+    "industry": "fintech",
+    "teamSize": 3,
+    "answerStyle": "mixed",
+    "revenue": "pre-revenue",
+    "description": "Open-source identity verification SDK for neobanks and crypto exchanges, built by three engineers (one ex-Stripe) from Y Combinator W25. Pre-revenue with LOIs from two fintech startups."
+  },
+  {
+    "id": "synthetic-012",
+    "name": "VoxTeach",
+    "stage": "concept",
+    "industry": "edtech",
+    "teamSize": 1,
+    "answerStyle": "sparse",
+    "revenue": "pre-revenue",
+    "description": "Solo founder exploring AI-powered language tutoring via voice conversations, with a rough GPT-based prototype and 20 user interviews. Unfunded, building nights and weekends."
+  },
+  {
+    "id": "synthetic-013",
+    "name": "AeroSight",
+    "stage": "validated",
+    "industry": "hardware",
+    "teamSize": 18,
+    "answerStyle": "detailed",
+    "revenue": "$10-100K MRR",
+    "description": "Industrial drone inspection platform for power lines and cell towers with custom hardware and onboard ML defect detection, at $78K MRR with contracts from 2 major US utilities. 18-person team (6 HW engineers, 4 field techs), $3.5M Series A closed."
+  },
+  {
+    "id": "synthetic-014",
+    "name": "Calmly",
+    "stage": "early",
+    "industry": "healthtech",
+    "teamSize": 5,
+    "answerStyle": "mixed",
+    "revenue": "<$10K MRR",
+    "description": "Digital therapeutics app for anxiety management using CBT and Apple Watch biofeedback, at $4K MRR from 800 subscribers with a 5-person team. Pursuing FDA De Novo pathway for prescription digital therapeutic claim."
+  },
+  {
+    "id": "synthetic-015",
+    "name": "PacketAI",
+    "stage": "scaling",
+    "industry": "AI/ML",
+    "teamSize": 28,
+    "answerStyle": "mixed",
+    "revenue": "$100K+ MRR",
+    "description": "Network security AI using unsupervised anomaly detection on packet-level data to detect zero-day threats, at $180K MRR with 35 enterprise customers. 28-person team in Tel Aviv, Series A at $12M, expanding into the US market."
+  },
+  {
+    "id": "synthetic-016",
+    "name": "Terraverde",
+    "stage": "early",
+    "industry": "climate",
+    "teamSize": 7,
+    "answerStyle": "detailed",
+    "revenue": "<$10K MRR",
+    "description": "Carbon credit verification platform using satellite imagery and ML to validate reforestation projects, at $8K MRR from 5 project developers. Nairobi-based team of 7 including 2 remote sensing scientists and 1 former carbon market trader."
+  },
+  {
+    "id": "synthetic-017",
+    "name": "NibblePay",
+    "stage": "concept",
+    "industry": "consumer",
+    "teamSize": 2,
+    "answerStyle": "mixed",
+    "revenue": "pre-revenue",
+    "description": "Two co-founders building a micro-savings app that rounds up purchases into fractional share investments, with a clickable Figma prototype being user-tested with 50 college students. No funding yet."
+  },
+  {
+    "id": "synthetic-018",
+    "name": "LoopLogic",
+    "stage": "validated",
+    "industry": "SaaS",
+    "teamSize": 14,
+    "answerStyle": "mixed",
+    "revenue": "$10-100K MRR",
+    "description": "Customer feedback analytics platform aggregating reviews, support tickets, and NPS into product insights, at $62K MRR with 120 B2B SaaS customers and 115% NRR. 14-person team exploring AI-powered auto-categorization."
+  },
+  {
+    "id": "synthetic-019",
+    "name": "GenoVault",
+    "stage": "early",
+    "industry": "biotech",
+    "teamSize": 8,
+    "answerStyle": "mixed",
+    "revenue": "$10-100K MRR",
+    "description": "Biobank-as-a-service providing curated tissue and DNA samples to pharma companies, at $18K MRR from sample processing fees with $400K in signed contracts. 8-person team with a wet lab in Boston and partnerships with 3 hospital systems."
+  },
+  {
+    "id": "synthetic-020",
+    "name": "FreightBridge",
+    "stage": "scaling",
+    "industry": "marketplace",
+    "teamSize": 55,
+    "answerStyle": "detailed",
+    "revenue": "$100K+ MRR",
+    "description": "Digital freight marketplace connecting shippers with regional carriers across Latin America, at $340K MRR processing 8,000 shipments/month with a 55-person team in Mexico City and Bogota. Series B at $25M, expanding into Brazil with proprietary route optimization."
+  },
+  {
+    "id": "synthetic-021",
+    "name": "CodeBuddy",
+    "stage": "concept",
+    "industry": "SaaS",
+    "teamSize": 1,
+    "answerStyle": "sparse",
+    "revenue": "pre-revenue",
+    "description": "Solo developer with a VS Code extension prototype for AI pair programming targeting junior developers, with 200 beta installs. No revenue model defined yet."
+  },
+  {
+    "id": "synthetic-022",
+    "name": "AquaPure",
+    "stage": "early",
+    "industry": "hardware",
+    "teamSize": 4,
+    "answerStyle": "sparse",
+    "revenue": "pre-revenue",
+    "description": "Portable UV-C LED water purification device for disaster relief and off-grid communities, built by a team of 4 engineers with first production run of 500 units in progress. Conversations with two NGOs but no signed deals."
+  },
+  {
+    "id": "synthetic-023",
+    "name": "Palette",
+    "stage": "validated",
+    "industry": "consumer",
+    "teamSize": 11,
+    "answerStyle": "mixed",
+    "revenue": "$10-100K MRR",
+    "description": "AI-powered interior design app generating room redesigns from phone photos, at $28K MRR with 15K MAU and 8% premium conversion. 11-person London team, featured in Apple's App Store, exploring B2B furniture retailer partnerships."
+  },
+  {
+    "id": "synthetic-024",
+    "name": "NeuroPharma",
+    "stage": "validated",
+    "industry": "biotech",
+    "teamSize": 15,
+    "answerStyle": "detailed",
+    "revenue": "$10-100K MRR",
+    "description": "Computational drug discovery for neurological disorders using graph neural networks, at $95K MRR from 4 pharma partnerships with 2 drug candidates in pre-clinical stage. 15-person team (8 PhDs), $6M Series A from biotech-focused VCs."
+  },
+  {
+    "id": "synthetic-025",
+    "name": "ClassPilot",
+    "stage": "early",
+    "industry": "edtech",
+    "teamSize": 3,
+    "answerStyle": "sparse",
+    "revenue": "<$10K MRR",
+    "description": "K-12 classroom management tool combining attendance, behavior tracking, and parent communication, at $2K MRR from 15 individual teachers. 3-person team trying to land school district-level contracts."
+  },
+  {
+    "id": "synthetic-026",
+    "name": "SolarStack",
+    "stage": "scaling",
+    "industry": "climate",
+    "teamSize": 30,
+    "answerStyle": "mixed",
+    "revenue": "$100K+ MRR",
+    "description": "Solar panel installation marketplace and project management software for residential installers, at $210K MRR with 400+ partners across 12 US states. 30-person team, Series A at $10M, building green energy financing integration."
+  },
+  {
+    "id": "synthetic-027",
+    "name": "HireFlux",
+    "stage": "validated",
+    "industry": "AI/ML",
+    "teamSize": 10,
+    "answerStyle": "mixed",
+    "revenue": "$10-100K MRR",
+    "description": "AI resume screening and candidate ranking engine for staffing agencies, at $40K MRR with 25 clients and proprietary NLP models trained on 2M+ job-candidate matches. 10-person Chicago team adding video interview analysis."
+  },
+  {
+    "id": "synthetic-028",
+    "name": "TradeLens",
+    "stage": "concept",
+    "industry": "fintech",
+    "teamSize": 3,
+    "answerStyle": "detailed",
+    "revenue": "pre-revenue",
+    "description": "Three ex-Goldman analysts building a real-time trade surveillance platform for compliance teams at regional banks, with a working prototype on synthetic data and warm intros to 5 pilot banks. Pre-revenue, targeting $500K pre-seed."
+  },
+  {
+    "id": "synthetic-029",
+    "name": "PetCircle",
+    "stage": "early",
+    "industry": "marketplace",
+    "teamSize": 4,
+    "answerStyle": "mixed",
+    "revenue": "<$10K MRR",
+    "description": "Local pet services marketplace in Sydney connecting owners with vetted walkers, sitters, and groomers, at $7K MRR with 300 providers onboarded. 4-person team differentiating on trust verification and insurance coverage."
+  },
+  {
+    "id": "synthetic-030",
+    "name": "SpectraLab",
+    "stage": "concept",
+    "industry": "biotech",
+    "teamSize": 2,
+    "answerStyle": "mixed",
+    "revenue": "pre-revenue",
+    "description": "Two biochemistry postdocs developing a rapid point-of-care blood test for sepsis detection using a novel biomarker panel, with lab validation ongoing and a provisional patent filed. No company entity yet, exploring NIH SBIR grant funding."
+  },
+  {
+    "id": "synthetic-031",
+    "name": "FleetPulse",
+    "stage": "scaling",
+    "industry": "SaaS",
+    "teamSize": 45,
+    "answerStyle": "detailed",
+    "revenue": "$100K+ MRR",
+    "description": "Fleet management and telematics platform (GPS, fuel optimization, ELD compliance, predictive maintenance) for mid-size trucking companies, at $350K MRR with 180 fleet customers managing 12,000+ vehicles and 130% NRR. 45-person Atlanta team, Series B at $22M."
+  },
+  {
+    "id": "synthetic-032",
+    "name": "WellNest",
+    "stage": "validated",
+    "industry": "healthtech",
+    "teamSize": 10,
+    "answerStyle": "sparse",
+    "revenue": "<$10K MRR",
+    "description": "Corporate wellness platform with mental health assessments, meditation, and therapist matching, at $9K MRR from 6 small company contracts. 10-person team with strong engagement metrics but long enterprise sales cycles."
+  },
+  {
+    "id": "synthetic-033",
+    "name": "ByteHarvest",
+    "stage": "early",
+    "industry": "AI/ML",
+    "teamSize": 3,
+    "answerStyle": "sparse",
+    "revenue": "pre-revenue",
+    "description": "Data labeling automation using active learning to cut human annotation costs by 80%, built by three ML engineers spun out of a university research lab. Working tool but no paying customers yet, applying to accelerators."
+  },
+  {
+    "id": "synthetic-034",
+    "name": "RentEasy",
+    "stage": "validated",
+    "industry": "marketplace",
+    "teamSize": 16,
+    "answerStyle": "mixed",
+    "revenue": "$10-100K MRR",
+    "description": "Construction equipment rental marketplace at $52K MRR with 200+ listings and a 15% take rate across greater Toronto, run by a 16-person team. Recently added delivery logistics and insurance, planning expansion to Vancouver and Montreal."
+  },
+  {
+    "id": "synthetic-035",
+    "name": "LumaFilm",
+    "stage": "concept",
+    "industry": "consumer",
+    "teamSize": 1,
+    "answerStyle": "sparse",
+    "revenue": "pre-revenue",
+    "description": "Solo creator with an AI video editing demo that auto-generates short-form content from long videos, posted on ProductHunt with 200 upvotes. No business plan or monetization strategy yet."
+  },
+  {
+    "id": "synthetic-036",
+    "name": "CircuitMind",
+    "stage": "early",
+    "industry": "hardware",
+    "teamSize": 6,
+    "answerStyle": "mixed",
+    "revenue": "<$10K MRR",
+    "description": "AI-assisted PCB design tool that auto-routes complex circuit boards, at $5K MRR from 40 individual licenses sold from Taipei. 6-person team (3 EE/software engineers, 1 ML researcher, 1 designer, 1 CEO) targeting consumer electronics manufacturers."
+  },
+  {
+    "id": "synthetic-037",
+    "name": "Greenchain",
+    "stage": "early",
+    "industry": "climate",
+    "teamSize": 5,
+    "answerStyle": "detailed",
+    "revenue": "<$10K MRR",
+    "description": "Supply chain Scope 3 carbon footprint tracking SaaS for CPG brands with ERP integration, at $3K MRR from 2 pilots, GHG Protocol-aligned methodology, and an $800K seed round. 5-person Amsterdam team."
+  },
+  {
+    "id": "synthetic-038",
+    "name": "ParcelHop",
+    "stage": "scaling",
+    "industry": "marketplace",
+    "teamSize": 22,
+    "answerStyle": "mixed",
+    "revenue": "$100K+ MRR",
+    "description": "Crowdsourced last-mile delivery marketplace matching e-commerce parcels with commuters and gig workers, at $150K MRR processing 50K deliveries/month in Lagos and Accra. 22-person team, Series A at $8M, expanding to Nairobi and Dar es Salaam."
+  },
+  {
+    "id": "synthetic-039",
+    "name": "Lexicon",
+    "stage": "validated",
+    "industry": "SaaS",
+    "teamSize": 8,
+    "answerStyle": "detailed",
+    "revenue": "$10-100K MRR",
+    "description": "NLP-powered contract analysis platform for mid-market legal teams that extracts key terms, flags risks, and tracks obligations, at $70K MRR with 40 customers and 95% annual retention. 8-person Denver team with an AI clause library of 10K+ contracts."
+  },
+  {
+    "id": "synthetic-040",
+    "name": "BrightMinds",
+    "stage": "validated",
+    "industry": "edtech",
+    "teamSize": 13,
+    "answerStyle": "mixed",
+    "revenue": "$10-100K MRR",
+    "description": "Adaptive math tutoring platform for middle schoolers using spaced repetition and gamification, at $36K MRR with 8,000 students across 25 schools in Brazil. 13-person Sao Paulo team piloting a district-wide rollout with the state education department."
+  },
+  {
+    "id": "synthetic-041",
+    "name": "OmniSense",
+    "stage": "concept",
+    "industry": "hardware",
+    "teamSize": 1,
+    "answerStyle": "mixed",
+    "revenue": "pre-revenue",
+    "description": "Solo hardware engineer designing a multi-modal environmental sensor array (air quality, noise, traffic, weather) for smart city deployments, with a first PCB revision in fabrication. Bootstrapped, in early talks with one municipal innovation lab and applying for an EU Horizon grant."
+  },
+  {
+    "id": "synthetic-042",
+    "name": "InsuraBot",
+    "stage": "scaling",
+    "industry": "fintech",
+    "teamSize": 25,
+    "answerStyle": "mixed",
+    "revenue": "$100K+ MRR",
+    "description": "AI-powered auto insurance claims processing (computer vision damage assessment + NLP document extraction) at $195K MRR, integrated with 6 carriers and processing 20K claims/month with 40% faster resolution. 25-person Singapore team, Series A at $14M."
+  },
+  {
+    "id": "synthetic-043",
+    "name": "Tandem",
+    "stage": "early",
+    "industry": "consumer",
+    "teamSize": 4,
+    "answerStyle": "mixed",
+    "revenue": "<$10K MRR",
+    "description": "Social fitness app pairing users with workout buddies by location and fitness level, at $8K MRR from 2,500 premium subscribers with Apple Health and Strava integrations. 4-person remote team with AI-generated training plans and real-time audio coaching."
+  },
+  {
+    "id": "synthetic-044",
+    "name": "RxRoute",
+    "stage": "scaling",
+    "industry": "healthtech",
+    "teamSize": 38,
+    "answerStyle": "detailed",
+    "revenue": "$100K+ MRR",
+    "description": "FDA Class I registered pharmacy fulfillment optimization platform using ML demand forecasting and automated dispensing for hospital systems, at $260K MRR deployed in 15 hospitals. 38-person Nashville team, Series B at $20M."
+  },
+  {
+    "id": "synthetic-045",
+    "name": "Canopy",
+    "stage": "concept",
+    "industry": "climate",
+    "teamSize": 2,
+    "answerStyle": "sparse",
+    "revenue": "pre-revenue",
+    "description": "Two environmental scientists exploring a platform connecting landowners with corporations for biodiversity offset credits. Concept stage with market research done but limited technical capability, seeking a technical co-founder."
+  },
+  {
+    "id": "synthetic-046",
+    "name": "QuickComply",
+    "stage": "validated",
+    "industry": "fintech",
+    "teamSize": 11,
+    "answerStyle": "mixed",
+    "revenue": "$10-100K MRR",
+    "description": "KYC/AML compliance automation for fintech startups with an API-first approach and pre-built banking integrations, at $48K MRR with 30 UK/EU customers and SOC 2 Type II certification. 11-person London team."
+  },
+  {
+    "id": "synthetic-047",
+    "name": "StudioAI",
+    "stage": "early",
+    "industry": "AI/ML",
+    "teamSize": 7,
+    "answerStyle": "detailed",
+    "revenue": "<$10K MRR",
+    "description": "Open-source ML model monitoring platform detecting data drift, degradation, and bias in production systems, at $9K MRR from 8 early adopters on the enterprise SaaS tier. 7-person Berlin team (4 engineers, 1 ML researcher, 1 designer, 1 founder)."
+  },
+  {
+    "id": "synthetic-048",
+    "name": "FreshRoute",
+    "stage": "validated",
+    "industry": "healthtech",
+    "teamSize": 15,
+    "answerStyle": "mixed",
+    "revenue": "$10-100K MRR",
+    "description": "HIPAA-compliant remote patient monitoring platform for chronic disease management, at $42K MRR from 12 clinic partnerships across the Pacific Northwest. 15-person team (including 3 nurses, 2 clinical data analysts) pursuing major EHR integrations."
+  },
+  {
+    "id": "synthetic-049",
+    "name": "GeneSpark",
+    "stage": "validated",
+    "industry": "biotech",
+    "teamSize": 19,
+    "answerStyle": "detailed",
+    "revenue": "$10-100K MRR",
+    "description": "CRISPR gene therapy delivery platform licensing novel lipid nanoparticle formulations, at $85K MRR from 3 pharma deals with 5 granted patents and a Phase I trial partnership with a top-10 pharma company. 19-person team with BSL-2 lab in Cambridge, MA."
+  },
+  {
+    "id": "synthetic-050",
+    "name": "WaveEd",
+    "stage": "scaling",
+    "industry": "edtech",
+    "teamSize": 24,
+    "answerStyle": "mixed",
+    "revenue": "$100K+ MRR",
+    "description": "ANCC-accredited continuing education platform for healthcare workers at $175K MRR with 50K learners and 12 nursing association partnerships. 24-person Portland team, Series A at $9M, expanding into allied health and international markets."
+  }
+]
