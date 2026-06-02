@@ -1479,21 +1479,36 @@ export default function StartupPlatform() {
         setEvaluationStatus('Matching investment types...');
       },
       onMaturityCalculated: (data) => {
-        // Update evaluation with the server-side weighted maturity score
+        // Update evaluation with the server-side weighted maturity score.
+        // Handles two formats:
+        //   LLM path (calculateMaturity): { level, name, score, performance: { score, label } }
+        //   Legacy Dify mock:             { maturity_stage, maturity_score, overall_completeness, performance_level }
         setEvaluationData((prev) => {
           if (!prev) return prev;
-          const maturityNames = { concept: 'Concept', early_traction: 'Early', validated: 'Validated', scaling: 'Scaling', market_leader: 'Leader' };
-          const perfLabels = { poor: 'Poor', fair: 'Fair', average: 'Average', good: 'Good', exceptional: 'Exceptional' };
-          const maturityLevel = { concept: 1, early_traction: 2, validated: 3, scaling: 4, market_leader: 5 }[data.maturity_stage] ?? prev.overallMaturity?.level ?? 0;
+          let maturityLevel, maturityName, perfScore, perfLabel;
+          if (data.level != null) {
+            // LLM path format
+            const maturityNames = ['', 'Concept', 'Early', 'Validated', 'Scaling', 'Leader'];
+            maturityLevel = data.level;
+            maturityName = data.name || maturityNames[data.level] || '—';
+            perfScore = data.performance?.score ?? prev.overallPerformance?.score ?? 0;
+            perfLabel = data.performance?.label || prev.overallPerformance?.label || '—';
+          } else {
+            // Legacy Dify mock format
+            const stageMap = { concept: 1, early_traction: 2, validated: 3, scaling: 4, market_leader: 5 };
+            const nameMap = { concept: 'Concept', early_traction: 'Early', validated: 'Validated', scaling: 'Scaling', market_leader: 'Leader' };
+            const perfMap = { poor: 'Poor', fair: 'Fair', average: 'Average', good: 'Good', exceptional: 'Exceptional' };
+            maturityLevel = stageMap[data.maturity_stage] ?? prev.overallMaturity?.level ?? 0;
+            maturityName = nameMap[data.maturity_stage] || prev.overallMaturity?.name || '—';
+            perfScore = data.overall_completeness > 0
+              ? Math.round((data.overall_completeness / 20) * 10) / 10
+              : prev.overallPerformance?.score ?? 0;
+            perfLabel = perfMap[data.performance_level] || prev.overallPerformance?.label || '—';
+          }
           return {
             ...prev,
-            overallMaturity: { level: maturityLevel, name: maturityNames[data.maturity_stage] || prev.overallMaturity?.name || '—' },
-            overallPerformance: {
-              score: data.overall_completeness > 0
-                ? Math.round((data.overall_completeness / 20) * 10) / 10
-                : prev.overallPerformance?.score ?? 0,
-              label: perfLabels[data.performance_level] || prev.overallPerformance?.label || '—',
-            },
+            overallMaturity: { level: maturityLevel, name: maturityName },
+            overallPerformance: { score: perfScore, label: perfLabel },
           };
         });
       },
