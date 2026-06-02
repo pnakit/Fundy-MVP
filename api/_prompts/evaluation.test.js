@@ -46,7 +46,7 @@ describe('evaluation prompts', () => {
       highlights: ['ML pipeline'],
       gaps: [{ action: 'File patents', type: 'stretch', evidence_items: [15, 16] }],
       keyMetrics: {
-        perItemAssessment: { item1: 'PROVEN', item2: 'PARTIAL' },
+        perItemAssessment: [{ item: 'item1', status: 'PROVEN' }, { item: 'item2', status: 'PARTIAL' }],
         provenCount: 12,
         partialCount: 5,
         unprovenCount: 3,
@@ -65,7 +65,7 @@ describe('evaluation prompts', () => {
       status: 'complete',
       highlights: [],
       gaps: [],
-      keyMetrics: { perItemAssessment: {}, provenCount: 0, partialCount: 0, unprovenCount: 0 },
+      keyMetrics: { perItemAssessment: [], provenCount: 0, partialCount: 0, unprovenCount: 0 },
       deepDivePrompt: 'test',
     };
     expect(() => EvalCategorySchema.parse(invalid)).toThrow();

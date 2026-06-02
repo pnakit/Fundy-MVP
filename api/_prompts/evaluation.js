@@ -18,14 +18,17 @@ export const EvalCategorySchema = z.object({
       evidence_items: z.array(z.number()),
     })
   ),
-  keyMetrics: z
-    .object({
-      perItemAssessment: z.record(z.enum(['PROVEN', 'PARTIAL', 'UNPROVEN'])),
-      provenCount: z.number(),
-      partialCount: z.number(),
-      unprovenCount: z.number(),
-    })
-    .catchall(z.unknown()),
+  keyMetrics: z.object({
+    perItemAssessment: z.array(
+      z.object({
+        item: z.string(),
+        status: z.enum(['PROVEN', 'PARTIAL', 'UNPROVEN']),
+      })
+    ),
+    provenCount: z.number(),
+    partialCount: z.number(),
+    unprovenCount: z.number(),
+  }),
   deepDivePrompt: z.string(),
 });
 
