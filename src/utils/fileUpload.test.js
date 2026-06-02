@@ -7,55 +7,87 @@ vi.mock('../api/difyApi', () => ({
   },
 }));
 
+vi.mock('./pdfExtract', () => ({
+  extractTextFromPdf: vi.fn().mockResolvedValue('extracted pdf text'),
+}));
+
 import DifyAPI from '../api/difyApi';
+import { extractTextFromPdf } from './pdfExtract';
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('uploadFiles', () => {
-  it('returns succeeded files on successful upload', async () => {
-    DifyAPI.uploadFile.mockResolvedValue({ fileId: 'f1', fileName: 'a.pdf' });
-    const file = new File([''], 'a.pdf', { type: 'application/pdf' });
-
+describe('uploadFiles — PDFs (client-side extraction)', () => {
+  it('extracts PDF text client-side without calling DifyAPI', async () => {
+    const file = new File(['%PDF'], 'deck.pdf', { type: 'application/pdf' });
     const result = await uploadFiles([file]);
 
-    expect(result.succeeded).toEqual(['a.pdf']);
-    expect(result.failed).toEqual([]);
-    expect(result.uploadedFiles).toEqual([{ fileId: 'f1', fileName: 'a.pdf' }]);
+    expect(extractTextFromPdf).toHaveBeenCalledWith(file);
+    expect(DifyAPI.uploadFile).not.toHaveBeenCalled();
+    expect(result.succeeded).toEqual(['deck.pdf']);
+    expect(result.uploadedFiles[0]).toMatchObject({
+      fileName: 'deck.pdf',
+      extractedText: 'extracted pdf text',
+    });
   });
 
-  it('returns failed files on upload error', async () => {
-    DifyAPI.uploadFile.mockRejectedValue(new Error('fail'));
-    const file = new File([''], 'b.pdf', { type: 'application/pdf' });
+  it('handles PDF extraction failure gracefully', async () => {
+    extractTextFromPdf.mockRejectedValueOnce(new Error('corrupt pdf'));
+    const file = new File(['%PDF'], 'bad.pdf', { type: 'application/pdf' });
 
     const result = await uploadFiles([file]);
 
     expect(result.succeeded).toEqual([]);
-    expect(result.failed).toEqual(['b.pdf']);
-    expect(result.uploadedFiles).toEqual([]);
+    expect(result.failed).toEqual(['bad.pdf']);
   });
 
-  it('handles mixed success and failure', async () => {
-    DifyAPI.uploadFile
-      .mockResolvedValueOnce({ fileId: 'f1', fileName: 'ok.pdf' })
-      .mockRejectedValueOnce(new Error('fail'));
+  it('detects PDFs by extension regardless of MIME type', async () => {
+    const file = new File(['%PDF'], 'deck.pdf', { type: 'application/octet-stream' });
+    const result = await uploadFiles([file]);
 
-    const files = [
-      new File([''], 'ok.pdf', { type: 'application/pdf' }),
-      new File([''], 'bad.pdf', { type: 'application/pdf' }),
-    ];
+    expect(extractTextFromPdf).toHaveBeenCalled();
+    expect(result.succeeded).toEqual(['deck.pdf']);
+  });
+});
 
-    const result = await uploadFiles(files);
+describe('uploadFiles — Office files (server-side upload)', () => {
+  it('uploads non-PDF files to DifyAPI', async () => {
+    DifyAPI.uploadFile.mockResolvedValue({ fileId: 'f1', fileName: 'report.docx' });
+    const file = new File(['content'], 'report.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
 
-    expect(result.succeeded).toEqual(['ok.pdf']);
-    expect(result.failed).toEqual(['bad.pdf']);
-    expect(result.uploadedFiles).toHaveLength(1);
+    const result = await uploadFiles([file]);
+
+    expect(DifyAPI.uploadFile).toHaveBeenCalledWith(file, 'default-user', 'onboarding');
+    expect(extractTextFromPdf).not.toHaveBeenCalled();
+    expect(result.succeeded).toEqual(['report.docx']);
+    expect(result.uploadedFiles).toEqual([{ fileId: 'f1', fileName: 'report.docx' }]);
+  });
+
+  it('returns failed files on upload error', async () => {
+    DifyAPI.uploadFile.mockRejectedValue(new Error('fail'));
+    const file = new File(['content'], 'report.docx', { type: 'application/msword' });
+
+    const result = await uploadFiles([file]);
+
+    expect(result.succeeded).toEqual([]);
+    expect(result.failed).toEqual(['report.docx']);
+  });
+
+  it('rejects oversized non-PDF files (> 4MB)', async () => {
+    const bigContent = new Uint8Array(5 * 1024 * 1024);
+    const file = new File([bigContent], 'huge.docx', { type: 'application/msword' });
+
+    const result = await uploadFiles([file]);
+
+    expect(result.oversized).toHaveLength(1);
+    expect(result.oversized[0].name).toBe('huge.docx');
+    expect(DifyAPI.uploadFile).not.toHaveBeenCalled();
   });
 
   it('passes user and workflow to DifyAPI.uploadFile', async () => {
-    DifyAPI.uploadFile.mockResolvedValue({ fileId: 'f1', fileName: 'a.pdf' });
-    const file = new File([''], 'a.pdf', { type: 'application/pdf' });
+    DifyAPI.uploadFile.mockResolvedValue({ fileId: 'f1', fileName: 'a.docx' });
+    const file = new File([''], 'a.docx', { type: 'application/msword' });
 
     await uploadFiles([file], 'user-1', 'deepdive');
 
@@ -80,7 +112,7 @@ describe('buildUploadMessages', () => {
     expect(message).toContain('it');
     expect(message).toContain('your evaluation');
     expect(prompt).toContain('report.pdf');
-    expect(prompt).toContain('review the extracted content');
+    expect(prompt).toContain('review the content');
   });
 
   it('builds plural evaluation message', () => {
@@ -96,19 +128,34 @@ describe('buildUploadMessages', () => {
     const { message, prompt } = buildUploadMessages(['doc.pdf'], 'discussion');
 
     expect(message).toContain('our discussion');
-    expect(prompt).toContain('incorporate the extracted content into our discussion');
+    expect(prompt).toContain('incorporate the content into our discussion');
   });
 
   it('builds onboarding context message', () => {
     const { message, prompt } = buildUploadMessages(['doc.pdf'], 'onboarding');
 
     expect(message).toContain('our conversation');
-    expect(prompt).toContain('extracted content to continue the onboarding');
+    expect(prompt).toContain('content to continue the onboarding');
   });
 
   it('defaults to evaluation context', () => {
     const { message } = buildUploadMessages(['x.pdf']);
 
     expect(message).toContain('your evaluation');
+  });
+
+  it('includes extracted text in prompt when provided', () => {
+    const uploadedFiles = [{ fileId: 'f1', fileName: 'deck.pdf', extractedText: 'slide content here' }];
+    const { prompt } = buildUploadMessages(['deck.pdf'], 'onboarding', uploadedFiles);
+
+    expect(prompt).toContain('--- deck.pdf ---');
+    expect(prompt).toContain('slide content here');
+  });
+
+  it('omits text block when no extracted text', () => {
+    const uploadedFiles = [{ fileId: 'f1', fileName: 'doc.docx' }];
+    const { prompt } = buildUploadMessages(['doc.docx'], 'onboarding', uploadedFiles);
+
+    expect(prompt).not.toContain('---');
   });
 });

@@ -610,7 +610,7 @@ export default function StartupPlatform() {
     setUploadedFiles((prev) => [...prev, ...newFiles]);
 
     if (succeeded.length > 0) {
-      const { message, prompt } = buildUploadMessages(succeeded, 'onboarding');
+      const { message, prompt } = buildUploadMessages(succeeded, 'onboarding', newFiles);
       setMessages((prev) => [...prev, { role: 'assistant', content: message }]);
       setInputValue(prompt);
     }
@@ -882,7 +882,7 @@ export default function StartupPlatform() {
     setUploadedFiles((prev) => [...prev, ...newFiles]);
 
     if (succeeded.length > 0) {
-      const { message, prompt } = buildUploadMessages(succeeded, 'discussion');
+      const { message, prompt } = buildUploadMessages(succeeded, 'discussion', newFiles);
       setCategoryConversations((prev) => {
         if (!prev[categoryId]) return prev;
         return {
@@ -1063,10 +1063,10 @@ export default function StartupPlatform() {
     }));
     setActionTyping(actionId);
 
-    const { succeeded, failed, oversized } = await uploadFiles(files, 'default-user', 'action_item');
+    const { succeeded, failed, oversized, uploadedFiles: newFiles } = await uploadFiles(files, 'default-user', 'action_item');
 
     if (succeeded.length > 0) {
-      const { message, prompt } = buildUploadMessages(succeeded, 'discussion');
+      const { message, prompt } = buildUploadMessages(succeeded, 'discussion', newFiles);
       setActionConversations((prev) => ({
         ...prev,
         [actionId]: {
