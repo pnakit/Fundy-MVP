@@ -290,7 +290,6 @@ export default async function handler(req, res) {
 
   // Feature flag: use direct LLM for onboarding when LLM_CHAT_MODEL is set
   const useLLMDirect = !!process.env.LLM_CHAT_MODEL;
-  console.log(`[chat] LLM_CHAT_MODEL=${process.env.LLM_CHAT_MODEL ?? 'UNSET'} useLLMDirect=${useLLMDirect}`);
 
   if (useLLMDirect && workflow === 'onboarding') {
     return handleOnboardingDirect(req, res, { query, userId });
