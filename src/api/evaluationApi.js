@@ -202,6 +202,7 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
   let buffer = '';
   let metadata = null;
   const collectedCategories = {};
+  let investmentReceivedInPhase1 = false;
 
   try {
     while (true) {
@@ -237,6 +238,22 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
             if (onCategoryComplete) onCategoryComplete(event.data);
             break;
 
+          case 'investment_matching_started':
+            onDebugLog?.('INVEST↑', 'Phase 2 started (inline)');
+            if (onInvestmentMatchingStarted) onInvestmentMatchingStarted();
+            break;
+
+          case 'maturity_calculated':
+            onDebugLog?.('MATURE', `stage=${event.data?.maturity_stage ?? event.data?.name} score=${event.data?.maturity_score ?? event.data?.score}`);
+            if (onMaturityCalculated) onMaturityCalculated(event.data);
+            break;
+
+          case 'investment_recommendations_complete':
+            onDebugLog?.('INVEST✓', `keys=${Object.keys(event.data || {}).join(',')}`);
+            investmentReceivedInPhase1 = true;
+            if (onInvestmentRecommendationsComplete) onInvestmentRecommendationsComplete(event.data);
+            break;
+
           case 'workflow_complete':
             metadata = event.metadata;
             onDebugLog?.('DONE', `tokens=${event.metadata?.total_tokens} elapsed=${event.metadata?.elapsed_time}s`);
@@ -257,8 +274,9 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
     reader.releaseLock();
   }
 
-  // Phase 2: investment matching — separate API call with collected category data
-  if (Object.keys(collectedCategories).length > 0) {
+  // Phase 2: investment matching — only needed when generate.js didn't handle it inline
+  // (i.e. when using the legacy Dify path which does investment matching in a separate workflow)
+  if (!investmentReceivedInPhase1 && Object.keys(collectedCategories).length > 0) {
     onDebugLog?.('PHASE2', `Calling investment-match with ${Object.keys(collectedCategories).length} categories`);
     const phase2Result = await runInvestmentMatch(collectedCategories, callbacks, authHeaders);
     if (!phase2Result.success) return { success: false };
