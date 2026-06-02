@@ -4,7 +4,7 @@ import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 // Configure worker once at module load
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-const MAX_CHARS = 30_000; // ~7,500 tokens — enough for a full pitch deck
+const MAX_CHARS = 150_000; // ~37,500 tokens — covers pitch decks and business plans
 
 /**
  * Extract plain text from a PDF File object in the browser.
