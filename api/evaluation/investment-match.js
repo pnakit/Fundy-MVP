@@ -1,35 +1,16 @@
 /**
  * POST /api/evaluation/investment-match
  *
- * Phase 2 of evaluation: receives the 10 evaluated category Objects from the client
- * (collected during Phase 1) and runs the investment matching Dify workflow
- * (calculate_maturity → generate_matrix → investment_recommendations).
+ * Phase 2 fallback: receives the 10 evaluated category objects from the client
+ * and returns mock investment recommendations. The primary LLM path in
+ * generate.js handles investment matching inline; this endpoint is only
+ * called when that inline path is unavailable (e.g. mock mode).
  *
  * Auth: User JWT (via _auth.js)
  * Response: text/event-stream (SSE)
- *
- * Request body:
- * {
- *   categoryResults: {
- *     eval_product_technology: { category_id, completeness, status, highlights, gaps, summary },
- *     eval_market_traction: { ... },
- *     ... (all 10 categories)
- *   }
- * }
- *
- * SSE events emitted:
- *   investment_matching_started
- *   maturity_calculated        { data: { maturity_score, maturity_stage, ... } }
- *   investment_recommendations_complete { data: { ... } }
- *   workflow_complete          { metadata: { total_tokens, elapsed_time } }
- *   error                      { message }
- *
- * Mock mode: when DIFY_INVESTMENT_API_KEY is not set, returns simulated results.
  */
 
 import { verifyAuth } from '../_auth.js';
-import { resolveApiKey } from '../_shared.js';
-import { streamEvaluation } from './_difyWorkflow.js';
 
 export const config = { runtime: 'edge' };
 
@@ -202,7 +183,6 @@ export default async function handler(req) {
     });
   }
 
-  const userId = auth.user.sub;
   const { categoryResults } = await req.json();
 
   if (!categoryResults || typeof categoryResults !== 'object') {
@@ -211,9 +191,6 @@ export default async function handler(req) {
       headers: { 'Content-Type': 'application/json' },
     });
   }
-
-  const { apiKey } = resolveApiKey('investment');
-  const useMock = !apiKey || apiKey === resolveApiKey('onboarding').apiKey;
 
   const encoder = new TextEncoder();
 
@@ -224,23 +201,7 @@ export default async function handler(req) {
       };
 
       try {
-        if (useMock) {
-          await streamMockPhase2(sendEvent);
-        } else {
-          const inputs = { ...categoryResults, user_id: userId };
-          sendEvent({ type: 'investment_matching_started' });
-          console.log(`[investment-match] Calling Dify for user ${userId}`);
-
-          for await (const event of streamEvaluation(inputs, apiKey, userId)) {
-            if (event.type === 'error') {
-              console.error(`[investment-match] Dify error: ${event.message}`);
-            }
-            sendEvent(event);
-            if (event.type === 'error' && !event.category_id) break;
-          }
-
-          console.log(`[investment-match] Dify stream complete for user ${userId}`);
-        }
+        await streamMockPhase2(sendEvent);
       } catch (err) {
         console.error(`[investment-match] Uncaught error: ${err.message}`, err.stack);
         sendEvent({ type: 'error', message: err.message || 'Investment matching failed' });

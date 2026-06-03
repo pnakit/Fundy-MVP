@@ -2153,7 +2153,7 @@ export default function StartupPlatform() {
                         <div className="invest-requirements">
                           <span className="req-label">Needs improvement in:</span>
                           <div className="req-tags">
-                            {opt.improvements_needed.map((imp, idx) => <span key={idx} className="req-tag">{imp.category.replace(/_/g, ' ')}</span>)}
+                            {opt.improvements_needed.map((imp, idx) => <span key={idx} className="req-tag">{imp.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>)}
                           </div>
                         </div>
                       )}
@@ -2176,7 +2176,7 @@ export default function StartupPlatform() {
                   <div key={item.category} className="roadmap-item">
                     <div className="roadmap-item-header">
                       <span className="roadmap-priority">#{item.priority}</span>
-                      <span className="roadmap-category">{item.category.replace(/_/g, ' ')}</span>
+                      <span className="roadmap-category">{item.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
                     </div>
                     <div className="roadmap-item-meta">
                       <span className="roadmap-score-label">Readiness</span>
@@ -2185,7 +2185,7 @@ export default function StartupPlatform() {
                     </div>
                     {item.unlocks?.length > 0 && (
                       <div className="roadmap-unlocks">
-                        Unlocks: {item.unlocks.map((u) => investmentTypeNames[u] || u).join(', ')}
+                        Unlocks: {item.unlocks.map((u) => displayInvestmentType(u)).join(', ')}
                       </div>
                     )}
                     {item.specific_actions?.length > 0 && (

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **IMPORTANT: Before starting any large project action, read `projectmemory.md` for context on past decisions and the app's evolution.**
 
-**IMPORTANT: Before building, modifying, or wiring up any Dify workflow — including node design, variable bindings, output type declarations, or SSE event handling — read `DifyTactics.md` first.** (Note: Dify workflows are being phased out in favor of direct LLM calls via Vercel AI SDK — see v5.0 migration notes below.)
+**NOTE: Dify has been fully removed (June 2026). All LLM calls use Vercel AI SDK directly. See `DifyTactics.md` for historical context only.**
 
 ## Build & Development Commands
 
@@ -42,7 +42,7 @@ src/
   api/
     supabaseClient.js       # Supabase client init (VITE_SUPABASE_URL + anon key)
     dataAccess.js            # Data access layer — auth + full persistence (read/write for summary, evaluation, investments, actions)
-    difyApi.js               # Dify API client (blocking, streaming, mock modes)
+    difyApi.js               # Chat API client (blocking, streaming, mock modes)
     evaluationApi.js         # Streaming evaluation client (SSE → progressive category rendering)
   utils/
     extractSummary.js       # LLM response parser — extracts onboarding summary JSON
@@ -70,33 +70,24 @@ See `.env.example` for the full list. Key variables:
 
 | Variable | Side | Purpose |
 |----------|------|---------|
-| `DIFY_BASE_URL` | Server | Dify API base URL (default: `https://api.dify.ai/v1`) |
-| `DIFY_ONBOARDING_API_KEY` | Server | API key for the onboarding Dify workflow |
-| `DIFY_DEEPDIVE_API_KEY` | Server | API key for the deep-dive Dify workflow |
-| `VITE_DIFY_MOCK` | Client | Set `true` to use mock responses instead of real API |
-| `VITE_DIFY_STREAMING` | Client | Set `true` to use SSE streaming mode |
 | `VITE_SUPABASE_URL` | Client | Supabase project URL (safe to expose, RLS enforced) |
 | `VITE_SUPABASE_ANON_KEY` | Client | Supabase publishable anon key |
+| `VITE_LLM_MOCK` | Client | Set `true` for client-side mock mode (no server needed) |
 | `SUPABASE_URL` | Server | Supabase project URL (for serverless functions) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server | Supabase service role key (NEVER expose to client) |
-| `DIFY_EVALUATION_API_KEY` | Server | API key for the evaluation Dify Workflow |
-| `DIFY_WEBHOOK_SECRET` | Server + Dify | Shared secret for Dify → Vercel webhook auth |
 | `OPENAI_API_KEY` | Server | Embedding generation (text-embedding-3-small) |
 | `ACTIVE_KNOWLEDGE_BASE` | Server | KB selection — `internal` (Supabase pgvector) or partner ID |
 | `LLM_CHAT_MODEL` | Server | AI SDK model for onboarding/deep-dive chat (e.g., `openai:gpt-4o-mini`) |
 | `LLM_EVAL_MODEL` | Server | AI SDK model for evaluation + investment matching |
 | `LLM_ANALYSIS_MODEL` | Server | AI SDK model for action item analysis |
-| `VITE_LLM_MOCK` | Client | Set `true` for client-side mock mode (replaces `VITE_DIFY_MOCK`) |
 
-`DIFY_*` env vars are being phased out — they still work as fallback when `LLM_*` vars are not set.
-
-Server-side vars are used by Vercel serverless functions and the Vite dev proxy. `VITE_`-prefixed vars are bundled into the client build.
+Server-side vars are used by Vercel serverless functions. `VITE_`-prefixed vars are bundled into the client build. `VITE_DIFY_MOCK` is still accepted as a legacy alias for `VITE_LLM_MOCK`.
 
 ## Architecture
 
-**Target Architecture**: See `Architecture.md` for the planned multi-tenancy, persistence, and auth architecture (Supabase unified stack). Consult that document when planning any work related to authentication, data persistence, file storage, vector search, or Dify integration updates. Summary, evaluation, investments, and action items are now persisted to Supabase and restored on login. Conversation message persistence is deferred (Phase D).
+**Target Architecture**: See `Architecture.md` for the planned multi-tenancy, persistence, and auth architecture (Supabase unified stack). Summary, evaluation, investments, and action items are now persisted to Supabase and restored on login. Conversation message persistence is deferred (Phase D).
 
-**Data Structure & Workflow Contracts**: See `datastructure.md` for the exact input/output contracts for all Dify workflows (onboarding, deep-dive, evaluation generation, investment matching), the data that flows between them, client-side validation rules, and database schema alignment. Consult that document when building or modifying Dify workflows, parsers, or persistence logic.
+**Data Structure & Workflow Contracts**: See `datastructure.md` for the input/output contracts for all workflows (onboarding, deep-dive, evaluation generation, investment matching), the data that flows between them, client-side validation rules, and database schema alignment.
 
 React 18 single-page app built with Vite. No routing library, no state management library.
 
@@ -108,12 +99,9 @@ React 18 single-page app built with Vite. No routing library, no state managemen
 - `'summary'` → `renderOnboardingSummary()` — category cards with progress rings
 - `'deep-dive'` → `renderDeepDive()` — per-category follow-up chat with separate conversation state per category
 
-**Dify API** (`src/api/difyApi.js`) supports three modes controlled by env vars:
-- `VITE_DIFY_MOCK=true` → mock responses with simulated delays (triggers summary on "summary"/"finish" keywords)
-- `VITE_DIFY_STREAMING=true` → SSE streaming mode with `parseSSELine()` buffer management
-- Default → blocking mode via `/api/chat` proxy
+**Chat API** (`src/api/difyApi.js`) handles client-side chat communication. Supports mock mode (`VITE_LLM_MOCK=true`) with simulated delays, or real mode via `/api/chat` serverless endpoint with SSE streaming.
 
-**AI SDK Migration (v5.0):** Onboarding, deep-dive, evaluation, and investment matching workflows have direct LLM paths via Vercel AI SDK (`streamText`, `generateObject`). Feature-flagged: set `LLM_CHAT_MODEL` and `LLM_EVAL_MODEL` env vars to activate. Legacy Dify paths remain as fallback when these vars are unset. Prompts live in `api/_prompts/`, LLM abstraction in `api/_llm.js`.
+**LLM Backend:** All LLM calls use Vercel AI SDK (`streamText`, `generateObject`) via provider-agnostic abstraction in `api/_llm.js`. Prompts live in `api/_prompts/`. Requires `LLM_CHAT_MODEL` and `LLM_EVAL_MODEL` env vars.
 
 **Authentication** uses Supabase Auth with email + OTP (8-digit codes). `LoginScreen` handles the two-step flow (email entry → OTP verification). `App.jsx` listens for auth state changes via `onAuthStateChange` and stores the session. All API calls include the JWT in the `Authorization` header. Serverless functions validate JWTs via `api/_auth.js` using Supabase JWKS.
 
@@ -123,7 +111,6 @@ Production API routing lives in `/api`. These are Vercel serverless functions, n
 
 ```
 api/
-  _shared.js              # resolveApiKey(workflow) + getDifyBaseUrl() — shared by Dify endpoints (legacy)
   _llm.js                 # Provider-agnostic LLM abstraction (Vercel AI SDK)
   _prompts/
     onboarding.js          # Onboarding chat system prompt + message builder
@@ -132,17 +119,16 @@ api/
     investment.js          # Investment recommendation prompt + Zod schema
   _auth.js                # JWT validation middleware (Supabase JWKS via jose)
   _supabase.js            # Supabase admin client (service_role key, cached)
-  _webhookAuth.js         # Webhook secret validation (Dify → Vercel auth)
+  _webhookAuth.js         # Webhook secret validation (for external → Vercel callbacks)
   _chunking.js            # Text chunking utilities (conversations, summaries, files)
-  chat.js                 # POST /api/chat — direct LLM (when LLM_CHAT_MODEL set) or Dify fallback
-  upload.js               # POST /api/upload — file text extraction (officeparser) + Dify fallback
-  chat/stop.js            # POST /api/chat/stop → Dify /chat-messages/{task_id}/stop
+  chat.js                 # POST /api/chat — onboarding, deep-dive, action item chat (AI SDK streamText)
+  upload.js               # POST /api/upload — file text extraction (officeparser)
   knowledge/
     _knowledgeBase.js     # KB abstraction layer (swappable internal/external pgvector)
     _embeddings.js        # OpenAI embedding client (text-embedding-3-small)
     _search.js            # Vector search endpoint (unused, `_`-prefixed to save Vercel function slot)
     embed.js              # POST /api/knowledge/embed — embedding ingestion endpoint
-    context.js            # GET/POST /api/knowledge/context — per-category context for Dify
+    _search.js            # Vector search endpoint (unused, `_`-prefixed to save function slot)
   summary.js              # POST /api/summary — upsert onboarding summary + embed into pgvector
   account/
     delete.js             # POST /api/account/delete — reset all user data (preserves auth account)
@@ -151,24 +137,21 @@ api/
     refresh.js            # POST /api/action-items/refresh — vector search + LLM analysis per action item
     _analyze.js           # LLM helper — GPT-4o-mini classification of action item status
   evaluation/
-    generate.js           # POST /api/evaluation/generate — orchestrates retrieval + Dify + SSE
+    generate.js           # POST /api/evaluation/generate — LLM evaluation + investment matching (SSE)
     save.js               # POST /api/evaluation/save — persist evaluation results to DB
-    investment-match.js   # POST /api/evaluation/investment-match — investment matching endpoint
+    investment-match.js   # POST /api/evaluation/investment-match — mock fallback for Phase 2
     _categoryContext.js   # Per-category context assembly (10 parallel KB searches)
-    _difyWorkflow.js      # Dify Workflow API + SSE stream transformation (legacy)
-    _maturity.js            # Maturity calculation + investment matrix (ported from Dify Python)
+    _maturity.js          # Maturity calculation + investment matrix
 ```
 
-**Vercel function limit**: Hobby plan allows 12 serverless functions. Every non-`_`-prefixed `.js` file under `api/` becomes a function. Helpers and test files MUST be `_`-prefixed to avoid counting toward the limit. Current count: exactly 12.
+**Vercel function limit**: Hobby plan allows 12 serverless functions. Every non-`_`-prefixed `.js` file under `api/` becomes a function. Helpers and test files MUST be `_`-prefixed to avoid counting toward the limit. Current count: 10 (2 slots available).
 
-**Dual code paths (v5.0):** Serverless functions check for `LLM_*` env vars first and use Vercel AI SDK (`streamText`, `generateObject`) when available. If unset, they fall back to the legacy Dify API path. Both paths coexist — set `LLM_CHAT_MODEL` / `LLM_EVAL_MODEL` to activate the direct LLM path, or leave them unset to keep using Dify.
-
-**Workflow routing (legacy Dify path)**: request body includes a `workflow` field (`'onboarding'`, `'deepdive'`, or `'evaluation'`). `resolveApiKey()` maps this to the correct `DIFY_*_API_KEY` env var, falling back to the onboarding key if the requested workflow key is missing.
+**Workflow routing**: request body includes a `workflow` field (`'onboarding'`, `'deepdive'`, or `'action_item'`). `chat.js` dispatches to the appropriate handler.
 
 ### Dev vs Production API Routing
 
-- **Production (Vercel)**: `/api/chat` hits the serverless function in `api/chat.js`, which reads the `workflow` field from the request body and routes to the correct Dify API key.
-- **Development (Vite)**: `vite.config.js` proxies `/api/chat` → Dify directly, but always uses the onboarding key (the proxy can't easily parse the request body). Deep-dive workflow routing only works fully in production.
+- **Production (Vercel)**: `/api/chat` hits the serverless function in `api/chat.js`, which routes by `workflow` field to the appropriate LLM handler.
+- **Development (Vite)**: No API proxy. Set `VITE_LLM_MOCK=true` for local dev without Vercel, or use `vercel dev` to run serverless functions locally.
 - **Evaluation in dev**: No Vite proxy for `/api/evaluation/generate`. The client-side `evaluationApi.js` detects the 404 and automatically falls back to client-side mock mode.
 
 ### Key Patterns
@@ -183,33 +166,30 @@ api/
 
 ### Knowledge Retrieval & Evaluation Pipeline
 
-**Architecture**: Retrieval happens in our API, not Dify. The `/api/evaluation/generate` endpoint queries the knowledge base, assembles per-category context, and passes pre-retrieved content to Dify as input variables. This lets us swap between internal Supabase pgvector and external partner databases without changing the Dify workflow.
+**Architecture**: `/api/evaluation/generate` embeds deep-dive conversations, then runs per-category LLM evaluations (batched in groups of 3), followed by deterministic maturity calculation and LLM-powered investment matching.
 
 **Knowledge base abstraction** (`api/knowledge/_knowledgeBase.js`): Config-driven adapter pattern with a unified `semanticSearch()` interface. Default KB from `ACTIVE_KNOWLEDGE_BASE` env var.
 
-**Evaluation flow**: Frontend → `/api/evaluation/generate` (JWT auth) → 10 parallel KB searches → context assembly → Dify Workflow API (streaming) → SSE events → frontend progressive rendering. See `dify-evaluation-workflow.md` for the Dify workflow setup guide.
+**Evaluation flow**: Frontend → `/api/evaluation/generate` (JWT auth) → deep-dive embedding → 10 batched LLM evaluations (generateObject + Zod schema) → maturity calculation → investment matching → SSE events → frontend progressive rendering.
 
 **Maturity inference** (Step 1b in the prompt): After initial scoring, UNPROVEN items at lower maturity gates are auto-promoted when higher-gate items are PROVEN. Tiered: 2+ gates apart → PROVEN, 1 gate apart → PARTIAL. Inferred items are excluded from gap recommendations. This prevents penalizing companies for not explicitly mentioning foundational capabilities they've clearly surpassed.
 
 **Evaluation state**: `evaluationData` and `actionItems` start as `null`/`[]`. The evaluation page shows a placeholder until the user runs "Generate Evaluation". A "Use Sample Data" button loads `MOCK_ONBOARDING_SUMMARY` for testing without completing onboarding.
 
 **Evaluation mock mode**: Three fallback layers:
-1. `VITE_DIFY_MOCK=true` → client-side mock (never hits server)
+1. `VITE_LLM_MOCK=true` → client-side mock (never hits server)
 2. `/api/evaluation/generate` returns 404 in dev → client auto-falls back to mock
-3. Server has no `DIFY_EVALUATION_API_KEY` → server-side mock from onboarding data
-4. OpenAI quota exceeded → falls back to onboarding-only context (no KB search)
-
-**Dify node naming**: `eval_product_technology`, `eval_market_traction`, etc. — parsed from `node_finished` events to map to category IDs.
+3. Server has no `LLM_EVAL_MODEL` → server-side mock from onboarding data
 
 **Chunking** (`api/_chunking.js`): Conversations chunked as message-pair windows with overlap; summaries chunked as one chunk per category; files chunked as ~2000 char windows with 400 char overlap.
 
 **Database**: 12 tables in `supabase/migrations/001_initial_schema.sql`. Includes pgvector `document_embeddings` table with HNSW index and `search_embeddings()` Postgres function.
 
-**Webhook auth** (`api/_webhookAuth.js`): Separate from JWT auth — for future Dify → Vercel callbacks. Validates `DIFY_WEBHOOK_SECRET` with timing-safe comparison.
+**Webhook auth** (`api/_webhookAuth.js`): Separate from JWT auth — for external → Vercel callbacks. Validates shared secret with timing-safe comparison.
 
 ### Action Item Refresh
 
-**Architecture**: User-triggered "Refresh Status" button searches the vector DB for evidence relevant to each action item, then runs a lightweight LLM classification (GPT-4o-mini, direct OpenAI call — not Dify) to assess whether each item has been addressed.
+**Architecture**: User-triggered "Refresh Status" button searches the vector DB for evidence relevant to each action item, then runs a lightweight LLM classification (GPT-4o-mini) to assess whether each item has been addressed.
 
 **Flow**: Frontend → `POST /api/action-items/refresh` (JWT auth) → batch embed all queries (single OpenAI call) → parallel semantic search per item (topK=5, threshold=0.5) → parallel LLM analysis (max 10 concurrent) → persist to `action_items.custom_data` JSONB → return results.
 
@@ -217,7 +197,7 @@ api/
 
 **Action item chat embedding**: Each chat exchange in an action item's ChatPanel is fire-and-forget embedded via `POST /api/action-items/embed` (uses `source_type: 'conversation'` with `actionItemId` in metadata). These embeddings are then discoverable by the refresh search.
 
-**Mock mode**: Same three-layer fallback as evaluation — `VITE_DIFY_MOCK=true` → client mock, 404 in dev → client mock, no `OPENAI_API_KEY` → server mock.
+**Mock mode**: Same fallback as evaluation — `VITE_LLM_MOCK=true` → client mock, 404 in dev → client mock, no `OPENAI_API_KEY` → server mock.
 
 **Client state**: Action items carry `customData` (mapped from DB `custom_data` in `mapDbActionToState`). Refresh results are merged via `setActionItems` after the API call returns. Badges display on action cards with status-specific colors (green/orange/red/gray).
 
@@ -243,13 +223,12 @@ Test files live alongside their source files (`*.test.js` / `*.test.jsx`).
 Current test coverage (198 tests, 14 files):
 - `extractSummary.test.js` — 26 tests: JSON parsing, validation, normalization, edge cases, SSE parser
 - `colors.test.js` — 23 tests: all color helper functions including maturity/performance helpers
-- `difyApi.test.js` — 7 tests: mock response structure, summary triggers, file upload
+- `difyApi.test.js` — 7 tests: chat API mock response structure, summary triggers, file upload
 - `LoginScreen.test.jsx` — 8 tests: email + OTP flow, error handling, back navigation
 - `InvestmentToggle.test.jsx` — 6 tests: select/deselect, action cleanup, multi-investment, metadata
 - `actionItems.test.js` — 12 tests: add/remove investment actions, metadata, immutability, edge cases
 - `fileUpload.test.js` — 10 tests: upload, failure, mixed results, message building
 - `_chunking.test.js` — 13 tests: conversation/summary/file chunking, overlap, edge cases
-- `_difyWorkflow.test.js` — 25 tests: SSE parsing, node mapping, category extraction, error events, case-insensitive matching
 - `dataAccess.test.js` — 25 tests: createConversation, updateDifyId, saveMessages, loadMessages, loadOnboarding, loadDeepDive, saveActionItem customData, loadActionItems
 - `_analyze.test.js` — 18 tests: LLM response parsing, confidence clamping, status validation, markdown fence stripping, no-evidence shortcut
 - `refresh.test.js` — 8 tests: auth, empty items, full pipeline, partial failures, mock mode, ID filtering

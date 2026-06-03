@@ -3,26 +3,22 @@
  *
  * Main evaluation endpoint. Orchestrates:
  * 1. Deep dive conversation embedding (enriches KB before retrieval)
- * 2. Dify Workflow execution (streaming) — Dify iteration handles KB retrieval
- * 3. SSE stream transformation back to frontend
+ * 2. Per-category LLM evaluation (generateObject with Zod schema)
+ * 3. Maturity calculation + investment matching
+ * 4. SSE stream to frontend for progressive rendering
  *
  * Auth: User JWT (via _auth.js)
  * Response: text/event-stream (SSE)
  *
- * Mock mode: When DIFY_EVALUATION_API_KEY is not set, returns simulated
- * streaming results derived from the onboarding summary. This lets you
- * test the full pipeline (frontend → API → SSE) without a Dify workflow
- * configured.
+ * Requires LLM_EVAL_MODEL env var. Falls back to mock mode when unset.
  */
 
 import { verifyAuth } from '../_auth.js';
 
 export const config = { runtime: 'edge' };
 import { getSupabaseAdmin } from '../_supabase.js';
-import { resolveApiKey } from '../_shared.js';
 import { chunkConversation } from '../_chunking.js';
 import { generateEmbeddings } from '../knowledge/_embeddings.js';
-import { streamEvaluation } from './_difyWorkflow.js';
 import { generateObject } from 'ai';
 import { getModel } from '../_llm.js';
 import { buildEvalPrompt, EvalCategorySchema, CATEGORY_TITLES } from '../_prompts/evaluation.js';
@@ -58,13 +54,7 @@ export default async function handler(req) {
 
   // Step 2: Determine evaluation mode
   const useLLMDirect = !!process.env.LLM_EVAL_MODEL;
-
-  // Only resolve Dify API key when not using direct LLM path
-  let useMock = false;
-  if (!useLLMDirect) {
-    const { apiKey } = resolveApiKey('evaluation');
-    useMock = !apiKey || apiKey === resolveApiKey('onboarding').apiKey;
-  }
+  const useMock = !useLLMDirect;
 
   // Set up SSE stream using Web Streams API (required for Edge Runtime)
   const encoder = new TextEncoder();
@@ -172,34 +162,6 @@ export default async function handler(req) {
           sendEvent({ type: 'status', message: 'Mock mode — generating evaluation from onboarding data...' });
 
           await streamMockEvaluation(sendEvent, onboardingSummary);
-        } else {
-          // ── Real mode: embed deep dive conversations, then run Dify workflow ──
-          // Dify's own iteration handles KB retrieval; we just ensure deep dive
-          // conversations are embedded so they're available for vector search.
-          sendEvent({ type: 'status', message: 'Preparing knowledge base...' });
-          await embedDeepDiveConversations(userId);
-
-          const { apiKey } = resolveApiKey('evaluation');
-
-          const inputs = {
-            company_name: companyName,
-            user_id: userId,
-          };
-
-          sendEvent({ type: 'status', message: 'Starting evaluation workflow...' });
-          console.log(`[generate] Calling Dify workflow for user ${userId}, company="${companyName}"`);
-
-          for await (const event of streamEvaluation(inputs, apiKey, userId)) {
-            if (event.type === 'error') {
-              console.error(`[generate] Dify error event: ${event.message}`);
-            }
-            sendEvent(event);
-            if (event.type === 'error' && !event.category_id) {
-              break;
-            }
-          }
-
-          console.log(`[generate] Dify workflow stream complete for user ${userId}`);
         }
       } catch (err) {
         console.error(`[generate] Uncaught error: ${err.message}`, err.stack);
