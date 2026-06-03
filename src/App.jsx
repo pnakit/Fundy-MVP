@@ -1989,12 +1989,19 @@ export default function StartupPlatform() {
     // Display names for investment type IDs
     const investmentTypeNames = {
       grant_funding: 'Grant Funding',
+      grants: 'Grants',
       pre_seed: 'Pre-Seed',
       seed: 'Seed',
       series_a: 'Series A',
+      series_b: 'Series B',
       venture_debt: 'Venture Debt',
       revenue_based_financing: 'Revenue-Based Financing',
+      crowdfunding: 'Crowdfunding',
+      angel: 'Angel Investment',
+      strategic: 'Strategic Investment',
     };
+    const displayInvestmentType = (id) =>
+      investmentTypeNames[id] || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
     if (!investmentData) {
       return (
@@ -2089,7 +2096,7 @@ export default function StartupPlatform() {
                     <div key={inv.investment_type} className={`investment-card ${isSelected ? 'selected' : ''}`}>
                       <div className="invest-card-header">
                         <div className="invest-type">
-                          <h3>{investmentTypeNames[inv.investment_type] || inv.investment_type}</h3>
+                          <h3>{displayInvestmentType(inv.investment_type)}</h3>
                           <span className="invest-status" style={{ background: `${getStatusColor(status)}22`, color: getStatusColor(status) }}>
                             {inv.rating.replace(/_/g, ' ')}
                           </span>
@@ -2134,7 +2141,7 @@ export default function StartupPlatform() {
                     <div key={opt.investment_type} className={`investment-card conditional ${isSelected ? 'selected' : ''}`}>
                       <div className="invest-card-header">
                         <div className="invest-type">
-                          <h3>{investmentTypeNames[opt.investment_type] || opt.investment_type}</h3>
+                          <h3>{displayInvestmentType(opt.investment_type)}</h3>
                           <span className="invest-status" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>conditional</span>
                         </div>
                         <div className="suitability-ring">
@@ -2202,7 +2209,7 @@ export default function StartupPlatform() {
                   return (
                     <div key={item.investment_type} className={`not-rec-item ${isSelected ? 'selected' : ''}`}>
                       <div className="not-rec-info">
-                        <span className="not-rec-name">{investmentTypeNames[item.investment_type] || item.investment_type}</span>
+                        <span className="not-rec-name">{displayInvestmentType(item.investment_type)}</span>
                         <span className="not-rec-reason">{item.reason}</span>
                       </div>
                       <button
