@@ -124,11 +124,10 @@ describe('generateEvaluation (mock mode)', () => {
 
     expect(cbs.onMaturityCalculated).toHaveBeenCalledWith(
       expect.objectContaining({
-        maturity_score: 320,
-        maturity_stage: 'early_traction',
-        maturity_label: 'Early Traction (201-400)',
-        performance_level: 'average',
-        overall_completeness: 55,
+        level: 3,
+        name: 'Validated',
+        score: 320,
+        performance: { score: 3, label: 'Average' },
       }),
     );
   });

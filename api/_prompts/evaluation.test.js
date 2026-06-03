@@ -29,7 +29,20 @@ describe('evaluation prompts', () => {
     expect(system).toContain('PROVEN');
     expect(system).toContain('PARTIAL');
     expect(system).toContain('UNPROVEN');
+    expect(system).toContain('NOT_APPLICABLE');
     expect(user).toContain('Some context about the product');
+  });
+
+  it('buildEvalPrompt appends documentContext when provided', () => {
+    const { user } = buildEvalPrompt('product_technology', 'onboarding ctx', 'raw pdf text here');
+    expect(user).toContain('onboarding ctx');
+    expect(user).toContain('Supporting Document Content');
+    expect(user).toContain('raw pdf text here');
+  });
+
+  it('buildEvalPrompt omits document section when documentContext is empty', () => {
+    const { user } = buildEvalPrompt('product_technology', 'ctx', '');
+    expect(user).not.toContain('Supporting Document Content');
   });
 
   it('buildEvalPrompt throws for unknown category', () => {
@@ -46,10 +59,15 @@ describe('evaluation prompts', () => {
       highlights: ['ML pipeline'],
       gaps: [{ action: 'File patents', type: 'stretch', evidence_items: [15, 16] }],
       keyMetrics: {
-        perItemAssessment: [{ item: 'item1', status: 'PROVEN' }, { item: 'item2', status: 'PARTIAL' }],
+        perItemAssessment: [
+          { item: 'item1', status: 'PROVEN' },
+          { item: 'item2', status: 'PARTIAL' },
+          { item: 'item3', status: 'NOT_APPLICABLE' },
+        ],
         provenCount: 12,
         partialCount: 5,
         unprovenCount: 3,
+        notApplicableCount: 0,
       },
       deepDivePrompt: 'Let us explore your technical architecture.',
     };
@@ -65,7 +83,7 @@ describe('evaluation prompts', () => {
       status: 'complete',
       highlights: [],
       gaps: [],
-      keyMetrics: { perItemAssessment: [], provenCount: 0, partialCount: 0, unprovenCount: 0 },
+      keyMetrics: { perItemAssessment: [], provenCount: 0, partialCount: 0, unprovenCount: 0, notApplicableCount: 0 },
       deepDivePrompt: 'test',
     };
     expect(() => EvalCategorySchema.parse(invalid)).toThrow();

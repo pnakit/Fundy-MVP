@@ -47,7 +47,7 @@ export default async function handler(req) {
   }
 
   const userId = auth.user.sub;
-  const { companyName, onboardingSummary } = await req.json();
+  const { companyName, onboardingSummary, documentContext } = await req.json();
 
   if (!companyName) {
     return new Response(JSON.stringify({ error: 'companyName is required' }), {
@@ -93,6 +93,7 @@ export default async function handler(req) {
             const { system, user } = buildEvalPrompt(
               categoryId,
               onboardingSummary ? JSON.stringify(onboardingSummary) : '',
+              documentContext || '',
             );
 
             try {
@@ -243,7 +244,7 @@ async function streamMockEvaluation(sendEvent, onboardingSummary) {
 
     const onboardingCat = categoriesMap[categoryId];
     const completeness = onboardingCat?.completeness ?? Math.floor(Math.random() * 60 + 20);
-    const status = completeness >= 70 ? 'proven' : completeness >= 40 ? 'partial' : 'unproven';
+    const status = completeness >= 70 ? 'complete' : completeness >= 40 ? 'needs_attention' : 'incomplete';
 
     sendEvent({
       type: 'category_complete',

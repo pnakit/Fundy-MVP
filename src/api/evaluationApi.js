@@ -47,33 +47,26 @@ function shouldUseMock() {
 
 /**
  * Generate an evaluation by calling the streaming evaluation endpoint,
- * or run a client-side mock if VITE_DIFY_MOCK is true (for dev without Vercel).
+ * or run a client-side mock if VITE_LLM_MOCK / VITE_DIFY_MOCK is true (for dev without Vercel).
  *
  * @param {string} companyName - Company name
  * @param {object} onboardingSummary - Onboarding summary with categories
- * @param {object} callbacks
- * @param {function} callbacks.onCategoryStarted - (categoryId) => void
- * @param {function} callbacks.onCategoryComplete - (categoryData) => void
- * @param {function} [callbacks.onInvestmentMatchingStarted] - () => void
- * @param {function} [callbacks.onMaturityCalculated] - (data) => void
- * @param {function} [callbacks.onInvestmentRecommendationsComplete] - (data) => void
- * @param {function} callbacks.onError - (error) => void
- * @param {function} callbacks.onStatus - (message) => void
- * @param {function} [callbacks.onDebugLog] - (label, detail) => void — optional debug hook
+ * @param {object} callbacks - Event callbacks for streaming progress
  * @param {string} [knowledgeBaseId] - Optional KB override
+ * @param {string} [documentContext] - Raw text from uploaded documents
  * @returns {Promise<{success: boolean, metadata?: object}>}
  */
-export async function generateEvaluation(companyName, onboardingSummary, callbacks, knowledgeBaseId) {
+export async function generateEvaluation(companyName, onboardingSummary, callbacks, knowledgeBaseId, documentContext) {
   if (shouldUseMock()) {
     return generateEvaluationMock(onboardingSummary, callbacks);
   }
 
-  return generateEvaluationReal(companyName, onboardingSummary, callbacks, knowledgeBaseId);
+  return generateEvaluationReal(companyName, onboardingSummary, callbacks, knowledgeBaseId, documentContext);
 }
 
 /**
  * Client-side mock: simulates streaming evaluation from onboarding summary.
- * Used when VITE_DIFY_MOCK=true (dev mode without Vercel serverless).
+ * Used when VITE_LLM_MOCK=true or VITE_DIFY_MOCK=true (dev mode without Vercel serverless).
  */
 async function generateEvaluationMock(onboardingSummary, callbacks) {
   const {
@@ -102,7 +95,7 @@ async function generateEvaluationMock(onboardingSummary, callbacks) {
 
     const cat = categoriesMap[categoryId];
     const completeness = cat?.completeness ?? Math.floor(Math.random() * 60 + 20);
-    const status = completeness >= 70 ? 'proven' : completeness >= 40 ? 'partial' : 'unproven';
+    const status = completeness >= 70 ? 'complete' : completeness >= 40 ? 'needs_attention' : 'incomplete';
 
     if (onCategoryComplete) {
       onCategoryComplete({
@@ -125,12 +118,10 @@ async function generateEvaluationMock(onboardingSummary, callbacks) {
 
   if (onMaturityCalculated) {
     onMaturityCalculated({
-      maturity_score: 320,
-      maturity_stage: 'early_traction',
-      maturity_label: 'Early Traction (201-400)',
-      performance_level: 'average',
-      performance_label: 'Average',
-      overall_completeness: 55,
+      level: 3,
+      name: 'Validated',
+      score: 320,
+      performance: { score: 3, label: 'Average' },
     });
   }
 
@@ -146,7 +137,7 @@ async function generateEvaluationMock(onboardingSummary, callbacks) {
 /**
  * Real mode: calls the serverless evaluation endpoint with SSE streaming.
  */
-async function generateEvaluationReal(companyName, onboardingSummary, callbacks, knowledgeBaseId) {
+async function generateEvaluationReal(companyName, onboardingSummary, callbacks, knowledgeBaseId, documentContext) {
   const {
     onCategoryStarted,
     onCategoryComplete,
@@ -171,6 +162,7 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
         companyName,
         onboardingSummary,
         knowledgeBaseId: knowledgeBaseId || undefined,
+        documentContext: documentContext || undefined,
       }),
     });
   } catch (fetchErr) {
@@ -275,7 +267,6 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
   }
 
   // Phase 2: investment matching — only needed when generate.js didn't handle it inline
-  // (i.e. when using the legacy Dify path which does investment matching in a separate workflow)
   if (!investmentReceivedInPhase1 && Object.keys(collectedCategories).length > 0) {
     onDebugLog?.('PHASE2', `Calling investment-match with ${Object.keys(collectedCategories).length} categories`);
     const phase2Result = await runInvestmentMatch(collectedCategories, callbacks, authHeaders);

@@ -43,6 +43,7 @@ import {
 import ErrorBoundary from './components/ErrorBoundary';
 import DebugPanel from './components/DebugPanel';
 import { uploadFiles, buildUploadMessages, DIFY_MAX_FILES, DIFY_MAX_FILE_SIZE_MB } from './utils/fileUpload';
+import { extractTextFromPdf } from './utils/pdfExtract';
 import { generateEvaluation } from './api/evaluationApi';
 import { refreshActionItems } from './api/actionItemRefreshApi';
 
@@ -156,6 +157,7 @@ export default function StartupPlatform() {
   const [activeCategory, setActiveCategory] = useState(null);
   const [categoryConversations, setCategoryConversations] = useState({});
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [documentTexts, setDocumentTexts] = useState([]);
   const [expandedDimension, setExpandedDimension] = useState(null);
   const [debugLogs, setDebugLogs] = useState([]);
   const [actionConversations, setActionConversations] = useState({});
@@ -608,6 +610,15 @@ export default function StartupPlatform() {
 
     const { succeeded, failed, oversized, uploadedFiles: newFiles } = await uploadFiles(files);
     setUploadedFiles((prev) => [...prev, ...newFiles]);
+
+    // Extract text from PDFs so document content is available for evaluation
+    const pdfFiles = files.filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    if (pdfFiles.length > 0) {
+      const texts = await Promise.all(
+        pdfFiles.map((f) => extractTextFromPdf(f).catch(() => '')),
+      );
+      setDocumentTexts((prev) => [...prev, ...texts.filter(Boolean)]);
+    }
 
     if (succeeded.length > 0) {
       const { message, prompt } = buildUploadMessages(succeeded, 'onboarding', newFiles);
@@ -1589,7 +1600,7 @@ export default function StartupPlatform() {
       },
       onError: (message) => setEvaluationError(message),
       onDebugLog: debugEnabled ? addDebugLog : undefined,
-    });
+    }, undefined, documentTexts.length > 0 ? documentTexts.join('\n\n---\n\n') : undefined);
 
     setEvaluationLoading(false);
     setEvaluationStatus(null);
