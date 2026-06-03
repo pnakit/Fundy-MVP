@@ -244,7 +244,7 @@ async function streamMockEvaluation(sendEvent, onboardingSummary) {
 
     const onboardingCat = categoriesMap[categoryId];
     const completeness = onboardingCat?.completeness ?? Math.floor(Math.random() * 60 + 20);
-    const status = completeness >= 70 ? 'proven' : completeness >= 40 ? 'partial' : 'unproven';
+    const status = completeness >= 70 ? 'complete' : completeness >= 40 ? 'needs_attention' : 'incomplete';
 
     sendEvent({
       type: 'category_complete',
