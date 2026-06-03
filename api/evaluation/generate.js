@@ -47,7 +47,7 @@ export default async function handler(req) {
   }
 
   const userId = auth.user.sub;
-  const { companyName, onboardingSummary } = await req.json();
+  const { companyName, onboardingSummary, documentContext } = await req.json();
 
   if (!companyName) {
     return new Response(JSON.stringify({ error: 'companyName is required' }), {
@@ -93,6 +93,7 @@ export default async function handler(req) {
             const { system, user } = buildEvalPrompt(
               categoryId,
               onboardingSummary ? JSON.stringify(onboardingSummary) : '',
+              documentContext || '',
             );
 
             try {

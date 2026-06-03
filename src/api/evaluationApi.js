@@ -63,12 +63,12 @@ function shouldUseMock() {
  * @param {string} [knowledgeBaseId] - Optional KB override
  * @returns {Promise<{success: boolean, metadata?: object}>}
  */
-export async function generateEvaluation(companyName, onboardingSummary, callbacks, knowledgeBaseId) {
+export async function generateEvaluation(companyName, onboardingSummary, callbacks, knowledgeBaseId, documentContext) {
   if (shouldUseMock()) {
     return generateEvaluationMock(onboardingSummary, callbacks);
   }
 
-  return generateEvaluationReal(companyName, onboardingSummary, callbacks, knowledgeBaseId);
+  return generateEvaluationReal(companyName, onboardingSummary, callbacks, knowledgeBaseId, documentContext);
 }
 
 /**
@@ -146,7 +146,7 @@ async function generateEvaluationMock(onboardingSummary, callbacks) {
 /**
  * Real mode: calls the serverless evaluation endpoint with SSE streaming.
  */
-async function generateEvaluationReal(companyName, onboardingSummary, callbacks, knowledgeBaseId) {
+async function generateEvaluationReal(companyName, onboardingSummary, callbacks, knowledgeBaseId, documentContext) {
   const {
     onCategoryStarted,
     onCategoryComplete,
@@ -171,6 +171,7 @@ async function generateEvaluationReal(companyName, onboardingSummary, callbacks,
         companyName,
         onboardingSummary,
         knowledgeBaseId: knowledgeBaseId || undefined,
+        documentContext: documentContext || undefined,
       }),
     });
   } catch (fetchErr) {
