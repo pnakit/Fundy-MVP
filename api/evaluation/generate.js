@@ -85,9 +85,11 @@ export default async function handler(req) {
 
           const CATEGORY_IDS = Object.keys(CATEGORY_TITLES);
           const evalModel = getModel('LLM_EVAL_MODEL');
+          const BATCH_SIZE = 3;
 
-          // 10 parallel evaluation calls
-          const evalPromises = CATEGORY_IDS.map(async (categoryId) => {
+          const categoryResults = {};
+
+          async function evaluateCategory(categoryId) {
             sendEvent({ type: 'category_started', category_id: categoryId });
 
             const { system, user } = buildEvalPrompt(
@@ -111,25 +113,20 @@ export default async function handler(req) {
               object.category_title = CATEGORY_TITLES[categoryId];
 
               sendEvent({ type: 'category_complete', category_id: categoryId, data: object });
-              return { categoryId, data: object, error: null };
+              categoryResults[categoryId] = object;
             } catch (err) {
               sendEvent({
                 type: 'error',
                 category_id: categoryId,
                 message: `Failed to evaluate ${categoryId}: ${err.message}`,
               });
-              return { categoryId, data: null, error: err.message };
             }
-          });
+          }
 
-          const evalResults = await Promise.allSettled(evalPromises);
-          const categoryResults = {};
-          for (const result of evalResults) {
-            const val =
-              result.status === 'fulfilled'
-                ? result.value
-                : { categoryId: 'unknown', data: null, error: result.reason };
-            if (val.data) categoryResults[val.categoryId] = val.data;
+          // Evaluate in batches to stay within TPM rate limits
+          for (let i = 0; i < CATEGORY_IDS.length; i += BATCH_SIZE) {
+            const batch = CATEGORY_IDS.slice(i, i + BATCH_SIZE);
+            await Promise.allSettled(batch.map(evaluateCategory));
           }
 
           // Maturity calculation (deterministic, no LLM)
