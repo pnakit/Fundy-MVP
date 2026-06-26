@@ -86,15 +86,18 @@ Vercel project settings, never expose them to the client).
 | `VITE_SUPABASE_URL` | Client | Supabase project URL (safe to expose, RLS enforced) |
 | `VITE_SUPABASE_ANON_KEY` | Client | Supabase publishable anon key |
 | `VITE_LLM_MOCK` | Client | `true` for client-side mock mode (no server needed) |
+| `VITE_DIFY_MOCK` | Client | Legacy alias for `VITE_LLM_MOCK` |
+| `VITE_DIFY_STREAMING` | Client | `true` to use SSE streaming for chat responses |
+| `VITE_DEMO_USER_EMAIL` / `VITE_DEMO_USER_PASSWORD` | Client | Public demo login (intentionally bundled) |
 | `SUPABASE_URL` | Server | Supabase project URL (for serverless functions) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server | Supabase service-role key (**never** expose to client) |
-| `OPENAI_API_KEY` | Server | Embedding generation (`text-embedding-3-small`) |
+| `OPENAI_API_KEY` | Server | Embeddings (`text-embedding-3-small`) and the provider for any `openai:*` model spec |
+| `LLM_CHAT_MODEL` | Server | AI SDK `provider:model` for onboarding/deep-dive chat (e.g. `openai:gpt-4o-mini`) |
+| `LLM_EVAL_MODEL` | Server | AI SDK `provider:model` for evaluation + investment matching |
+| `LLM_ANALYSIS_MODEL` | Server | AI SDK `provider:model` for action-item analysis |
 | `ACTIVE_KNOWLEDGE_BASE` | Server | KB selection — `internal` (Supabase pgvector) or a partner ID |
-| `LLM_CHAT_MODEL` | Server | AI SDK model for onboarding/deep-dive chat (e.g. `openai:gpt-4o-mini`) |
-| `LLM_EVAL_MODEL` | Server | AI SDK model for evaluation + investment matching |
-| `LLM_ANALYSIS_MODEL` | Server | AI SDK model for action-item analysis |
-
-`VITE_DIFY_MOCK` is still accepted as a legacy alias for `VITE_LLM_MOCK`.
+| `DIFY_WEBHOOK_SECRET` | Server | Shared secret for external → Vercel callbacks on `/api/knowledge` endpoints |
+| `DEMO_USER_EMAIL` / `DEMO_USER_PASSWORD` | Server | Demo credentials for the `seed:demo` script |
 
 ## Project Structure
 
