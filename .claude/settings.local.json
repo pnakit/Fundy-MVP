@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install:*)",
+      "Bash(npm install)",
+      "Bash(npm ci)",
       "Bash(npx eslint:*)",
       "Bash(npm run build:*)",
       "Bash(npx vite build:*)",
@@ -39,7 +40,6 @@
       "Bash(npx supabase --version)",
       "Bash(npx supabase db execute --sql \"ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS investment_data jsonb;\")",
       "Bash(npx vitest run api/evaluation/_difyWorkflow.test.js)",
-      "Bash(node -e \":*)",
       "Bash(ls -la \"c:\\\\Users\\\\jamot\\\\OneDrive\\\\Nusu Git LOCAL\\\\Fundy-MVP\\\\api\\\\account\"\" 2>/dev/null || echo \"No account directory found \")",
       "Bash(vercel env add VITE_DEMO_USER_EMAIL production)",
       "Bash(npx vitest run src/components/LoginScreen.test.jsx)",
@@ -52,7 +52,6 @@
       "Bash(npm ls -g vercel)",
       "Bash(node -e \"import\\(''./api/action-items/_analyze.js''\\)\")",
       "Bash(node -e \"import\\(''./api/action-items/refresh.js''\\)\")",
-      "Bash(python3:*)",
       "Bash(grep -E \"\\\\.\\(md|txt|json\\)$\")",
       "Bash(npm run test:run -- src/components/LoginScreen.test.jsx)",
       "Bash(npx vitest run src/utils/fileUpload.test.js)",
